@@ -1,3 +1,16 @@
+## 2026-05-03 - Redirect Typebot: url_direct, HTTP 200 e HANDOFF_PUBLIC_BASE_URL
+
+- Handoff devolve **200** e JSON com **`url_direct`** (raiz + `data`) para alinhar com Redirect `{{url_direct}}`.
+- Env **`HANDOFF_PUBLIC_BASE_URL`**: base fixa dos links do handoff quando o Host da requisição é túnel/local errado.
+- Patch do schema Typebot: blocos **Webhook** e **HTTP Request**; `bodyPath` de URLs antigas normalizado para **`url_direct`**; só patch se existir `options.webhook` objeto.
+- Ver `doc/LOG-2026-05-03__220000__fix-typebot-redirect-url-direct-handoff-public-url.md`.
+
+### Palavras-chave
+
+- `HANDOFF_PUBLIC_BASE_URL`
+- `url_direct`
+- `handoff-status-200`
+
 ## 2026-05-03 - Handoff / Redirect Typebot: resolver tenant por publicId e viewer URL
 
 - `POST /api/typebot/handoff` passou a associar fluxos pelo **publicId** (`typebotPublicId` ou ultimo segmento da URL do viewer), pelo **displayLabel**, pela URL que contem `/{token}`, alem do **nickname**.

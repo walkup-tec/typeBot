@@ -199,7 +199,13 @@ const attendantsForQueueRouting = (
 };
 
 export const registerQueueRoutes = (app: Express) => {
+  /**
+   * URL pública da API usada em links do handoff (evita localhost quando o Typebot
+   * chama via túnel e o Host não é o domínio real).
+   */
   const getPublicBaseUrl = (req: Request) => {
+    const fixedBase = String(process.env.HANDOFF_PUBLIC_BASE_URL ?? "").trim().replace(/\/$/, "");
+    if (fixedBase) return fixedBase;
     const proto = req.header("x-forwarded-proto") ?? req.protocol;
     const host = req.header("x-forwarded-host") ?? req.header("host");
     return `${proto}://${host}`;
@@ -1077,12 +1083,15 @@ export const registerQueueRoutes = (app: Express) => {
         payload.contactName,
       )}&flow=${encodeURIComponent(displayFlowLabel)}${typebotQuery}${leadContextQuery}${visualQuery}`;
 
-      return res.status(201).json({
+      // 200: alguns clientes HTTP do Typebot tratam melhor 200 do que 201 no fluxo síncrono.
+      return res.status(200).json({
         ...item,
         tenantId: resolvedTenantId,
         handoffUrl,
         redirectUrl: handoffUrl,
         url: handoffUrl,
+        /** Alias para Redirect `{{url_direct}}` quando o mapeamento usa bodyPath `url_direct`. */
+        url_direct: handoffUrl,
         // Compatibilidade com mapeamentos de webhook no Typebot que leem em `data.*`.
         data: {
           handoffUrl,
@@ -1091,6 +1100,7 @@ export const registerQueueRoutes = (app: Express) => {
           handoffUrlFlat: handoffUrl,
           redirectUrlFlat: handoffUrl,
           urlFlat: handoffUrl,
+          url_direct: handoffUrl,
         },
         // Campos no nível raiz para integrações (Typebot) que expõem o JSON como `data`
         // e tornam ambíguo acessar `data.url` quando também existe `data.data.url`.

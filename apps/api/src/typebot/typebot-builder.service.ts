@@ -184,6 +184,11 @@ const normalizeTypebotWebhookBody = (rawBody: string, tenantId: string): string 
   return nextBody;
 };
 
+const isWebhookLikeHttpBlock = (blockType: string): boolean => {
+  const n = blockType.trim().toLowerCase();
+  return n === "webhook" || n === "http request";
+};
+
 const patchHandoffWebhookAndRedirectConfig = (
   schema: Record<string, unknown>,
   tenant: Tenant,
@@ -199,17 +204,13 @@ const patchHandoffWebhookAndRedirectConfig = (
       if (!block || typeof block !== "object") return block;
       const blockRecord = { ...(block as Record<string, unknown>) };
       const type = String(blockRecord.type ?? "").trim();
-      if (type !== "Webhook") return blockRecord;
+      if (!isWebhookLikeHttpBlock(type)) return blockRecord;
       const optionsRaw = blockRecord.options;
-      const options =
-        optionsRaw && typeof optionsRaw === "object"
-          ? ({ ...(optionsRaw as Record<string, unknown>) } as Record<string, unknown>)
-          : {};
+      if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
+      const options = { ...(optionsRaw as Record<string, unknown>) };
       const webhookRaw = options.webhook;
-      const webhook =
-        webhookRaw && typeof webhookRaw === "object"
-          ? ({ ...(webhookRaw as Record<string, unknown>) } as Record<string, unknown>)
-          : {};
+      if (!webhookRaw || typeof webhookRaw !== "object") return blockRecord;
+      const webhook = { ...(webhookRaw as Record<string, unknown>) };
       if (TYPEBOT_HANDOFF_WEBHOOK_URL) {
         webhook.url = TYPEBOT_HANDOFF_WEBHOOK_URL;
       }
@@ -223,8 +224,19 @@ const patchHandoffWebhookAndRedirectConfig = (
             if (!row || typeof row !== "object") return row;
             const item = { ...(row as Record<string, unknown>) };
             const path = String(item.bodyPath ?? "").trim().toLowerCase();
-            if (path === "urlflat" || path === "url" || path === "data.url") {
-              item.bodyPath = "data.urlFlat";
+            // Resposta do handoff expõe `url_direct` na raiz (e em data) para combinar com Redirect `{{url_direct}}`.
+            if (
+              path === "urlflat" ||
+              path === "url" ||
+              path === "data.url" ||
+              path === "data.urlflat" ||
+              path === "handoffurl" ||
+              path === "redirecturl" ||
+              path === "urldirect" ||
+              path === "url_direct" ||
+              path === "data.url_direct"
+            ) {
+              item.bodyPath = "url_direct";
             }
             return item;
           })
