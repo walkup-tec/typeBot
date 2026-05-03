@@ -12,6 +12,8 @@ import { registerAuthRoutes } from "./auth/auth.routes";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 
 const app = express();
+/** Traefik/Easypanel enviam `X-Forwarded-Proto`; necessário para `req.secure` e cabeçalhos HTTPS. */
+app.set("trust proxy", 1);
 const port = Number(process.env.PORT ?? 3333);
 const TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS =
   String(process.env.TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS ?? "true").trim().toLowerCase() !== "false";
@@ -41,6 +43,33 @@ app.use(
     credentials: true,
   }),
 );
+
+/**
+ * Reforço HTTPS no browser: HSTS (após visita HTTPS válida), CSP upgrade-insecure-requests,
+ * cabeçalhos básicos. Não substitui certificado TLS nem remove avisos de conteúdo misto no HTML de outros hosts.
+ */
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Content-Security-Policy", "upgrade-insecure-requests");
+
+  const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "")
+    .split(",")[0]
+    .trim();
+  const isHttps = req.secure || forwardedProto === "https";
+  if (isHttps) {
+    const maxAge = Number(process.env.HSTS_MAX_AGE_SEC ?? "31536000");
+    const safeMaxAge = Number.isFinite(maxAge) && maxAge > 0 ? Math.min(maxAge, 63072000) : 31536000;
+    const includeSubdomains = String(process.env.HSTS_INCLUDE_SUBDOMAINS ?? "").trim() === "1";
+    const hsts = includeSubdomains
+      ? `max-age=${safeMaxAge}; includeSubDomains`
+      : `max-age=${safeMaxAge}`;
+    res.setHeader("Strict-Transport-Security", hsts);
+  }
+  next();
+});
+
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => {
