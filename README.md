@@ -40,6 +40,10 @@ npm run dev:api
 npm run dev:admin
 ```
 
+**Produção:** o admin precisa de `VITE_API_BASE_URL` no build (ver `apps/admin/.env.example`). Sem isso o bundle continua a apontar para `localhost:3333`.
+
+Deploy no VPS com domínio próprio: `doc/DEPLOY-VPS-chattypebot-com.md`.
+
 5. Rode o widget de chat:
 
 ```bash

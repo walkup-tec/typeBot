@@ -1,3 +1,14 @@
+## 2026-05-03 - Deploy VPS chattypebot.com e admin com VITE_API_BASE_URL
+
+- Admin deixa de fixar `localhost:3333`: usa **`VITE_API_BASE_URL`** no build (`apps/admin/.env.example`).
+- Guia `doc/DEPLOY-VPS-chattypebot-com.md`: mesmo VPS que outros sites, hostname novo, API/admin/widget, Nginx, PM2, `HANDOFF_PUBLIC_BASE_URL`.
+- LOG: `doc/LOG-2026-05-03__230000__admin-vite-api-base-and-deploy-chattypebot-com.md`.
+
+### Palavras-chave
+
+- `DEPLOY-VPS-chattypebot-com`
+- `VITE_API_BASE_URL`
+
 ## 2026-05-03 - Redirect Typebot: url_direct, HTTP 200 e HANDOFF_PUBLIC_BASE_URL
 
 - Handoff devolve **200** e JSON com **`url_direct`** (raiz + `data`) para alinhar com Redirect `{{url_direct}}`.

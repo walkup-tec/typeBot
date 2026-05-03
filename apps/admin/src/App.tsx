@@ -117,7 +117,7 @@ type AuthSession = {
   masterProfile: MasterProfile;
 };
 
-const apiBase = "http://localhost:3333";
+const apiBase = import.meta.env.VITE_API_BASE_URL?.trim() || "http://localhost:3333";
 const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
 /** Builder Typebot da matriz (Master do Sistema): abre em nova aba a partir do header. */
 const SYSTEM_MASTER_TYPEBOT_BUILDER_URL =
