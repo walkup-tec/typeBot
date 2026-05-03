@@ -47,6 +47,13 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", service: "typebot-saas-api" });
 });
 
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    service: "typebot-saas-api",
+    message: "Use /health for readiness or the documented API routes.",
+  });
+});
+
 registerTenantRoutes(app);
 registerFlowRoutes(app);
 registerAttendantRoutes(app);
