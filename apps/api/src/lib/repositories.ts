@@ -1,0 +1,8 @@
+import { FlowRepository } from "../flows/flow.repository";
+import { AttendantRepository } from "../attendants/attendant.repository";
+import { TenantRepository } from "../tenants/tenant.repository";
+
+/** Instâncias únicas para manter cache em memória alinhado entre rotas. */
+export const flowRepository = new FlowRepository();
+export const tenantRepository = new TenantRepository();
+export const attendantRepository = new AttendantRepository();

@@ -1,0 +1,17 @@
+node_modules/
+.turbo/
+dist/
+build/
+.next/
+coverage/
+.env
+.env.local
+.DS_Store
+npm-debug.log*
+pnpm-lock.yaml
+yarn.lock
+
+# Runtime / secrets (não versionar)
+apps/api/data/
+tmp_typebot.json
+API Key Asaas.txt

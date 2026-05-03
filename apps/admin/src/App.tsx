@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type TenantDefaultChatTheme = {
   templateName?: string;
@@ -7,6 +7,7 @@ type TenantDefaultChatTheme = {
   chatBg?: string;
   botBubbleBg?: string;
 };
+type QueueDistributionMode = "assign_per_incoming" | "shared_pool" | "random";
 
 type Tenant = {
   id: string;
@@ -16,6 +17,11 @@ type Tenant = {
   status: "active" | "blocked";
   profileImageUrl?: string;
   chatDisplayName?: string;
+  shareImageUrl?: string;
+  useWhatsappSecondOption?: boolean;
+  queueDistributionMode?: QueueDistributionMode;
+  /** Sem outros atendentes: distribuição e chat tratam só o Master assinante. */
+  noSeparateAttendants?: boolean;
   typebotOwnerEmail?: string;
   typebotWorkspaceId?: string;
   typebotWorkspaceName?: string;
@@ -33,8 +39,10 @@ type QueueContact = {
   contactName: string;
   source: "typebot" | "widget";
   sourceFlowLabel: string;
+  leadContext?: Record<string, string | number | boolean>;
   status: "waiting" | "in_service";
   assignedAgentId?: string;
+  assignedAgentName?: string;
   updatedAt: string;
 };
 
@@ -44,6 +52,10 @@ type SavedFlow = {
   createdAt: string;
   nickname: string;
   displayLabel?: string;
+  /** Id do typebot na Builder API (fluxo criado no workspace). */
+  typebotRemoteId?: string;
+  /** Alias / publicId do Typebot (viewer); enviado em `source-flows`. */
+  typebotPublicId?: string;
   shortShareCode?: string;
   librarySourceId?: string;
   url: string;
@@ -106,20 +118,26 @@ type AuthSession = {
 };
 
 const apiBase = "http://localhost:3333";
-const publicApiBase = import.meta.env.VITE_PUBLIC_API_BASE_URL?.trim() || apiBase;
 const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
+/** Builder Typebot da matriz (Master do Sistema): abre em nova aba a partir do header. */
+const SYSTEM_MASTER_TYPEBOT_BUILDER_URL =
+  "https://soma-typebot-walkup-builder.achpyp.easypanel.host/pt-BR/typebots";
 const AUTH_STORAGE_KEY = "typebot-saas-auth-session";
 const widgetBaseUrlFromEnv = import.meta.env.VITE_WIDGET_BASE_URL?.trim();
 const widgetBaseUrl =
   widgetBaseUrlFromEnv && !widgetBaseUrlFromEnv.includes("loca.lt") ? widgetBaseUrlFromEnv : "http://localhost:5174";
-const getAgentViewUrl = (tenantId: string, contactId: string, agent: string) =>
+const getAgentViewUrl = (tenantId: string, contactId: string, agent: string, agentName?: string) =>
   `${widgetBaseUrl}/?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
     contactId,
-  )}&agentId=${encodeURIComponent(agent)}`;
-const TYPEBOT_DASHBOARD_URL = "https://app.typebot.io/typebots";
+  )}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(agentName?.trim() || agent)}`;
 const getTenantUserTypeLabel = (ownerEmail: string): "Master do Sistema" | "Master Assinante" =>
   ownerEmail.trim().toLowerCase() === SYSTEM_MASTER_EMAIL ? "Master do Sistema" : "Master Assinante";
 const getTenantStatusLabel = (status: Tenant["status"]): "Ativo" | "Bloqueado" => (status === "active" ? "Ativo" : "Bloqueado");
+
+/** Workspace Typebot realmente ligado ao assinante (evita mostrar “Provisionado” só pelo estado derivado). */
+const isTenantTypebotProvisioned = (tenant: Tenant): boolean =>
+  tenant.typebotProvisionStatus === "provisioned" &&
+  Boolean(String(tenant.typebotWorkspaceId ?? "").trim());
 
 async function extractDominantHexFromImageSrc(src: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -135,24 +153,34 @@ async function extractDominantHexFromImageSrc(src: string): Promise<string | nul
         ctx.drawImage(img, 0, 0, size, size);
         const data = ctx.getImageData(0, 0, size, size).data;
         const buckets = new Map<string, number>();
+        const weightedBuckets = new Map<string, number>();
         for (let i = 0; i < data.length; i += 4) {
           const a = data[i + 3] ?? 255;
           if (a < 40) continue;
           const r = data[i] ?? 0;
           const g = data[i + 1] ?? 0;
           const b = data[i + 2] ?? 0;
+          // Ignora extremos que distorcem branding (fundo preto/branco).
+          if (r + g + b < 90) continue;
           if (r > 248 && g > 248 && b > 248) continue;
           const rq = Math.round(r / 28) * 28;
           const gq = Math.round(g / 28) * 28;
           const bq = Math.round(b / 28) * 28;
           const key = `${rq},${gq},${bq}`;
           buckets.set(key, (buckets.get(key) ?? 0) + 1);
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const saturation = max === 0 ? 0 : (max - min) / max;
+          const brightness = (r + g + b) / 765;
+          const weight = Math.max(0.2, saturation * 2.4 + brightness * 0.4);
+          weightedBuckets.set(key, (weightedBuckets.get(key) ?? 0) + weight);
         }
         let bestKey = "";
-        let max = 0;
+        let maxWeight = 0;
         for (const [key, count] of buckets) {
-          if (count > max) {
-            max = count;
+          const weight = (weightedBuckets.get(key) ?? 0) * (1 + count * 0.05);
+          if (weight > maxWeight) {
+            maxWeight = weight;
             bestKey = key;
           }
         }
@@ -169,6 +197,63 @@ async function extractDominantHexFromImageSrc(src: string): Promise<string | nul
   });
 }
 
+async function resizeImageForShare(file: File, targetWidth = 1200, targetHeight = 630): Promise<string> {
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Falha ao carregar imagem."));
+      el.src = sourceUrl;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas indisponível.");
+
+    // Cover: preenche todo o frame 1200x630 sem bordas.
+    const scale = Math.max(targetWidth / img.width, targetHeight / img.height);
+    const drawWidth = img.width * scale;
+    const drawHeight = img.height * scale;
+    const dx = (targetWidth - drawWidth) / 2;
+    const dy = (targetHeight - drawHeight) / 2;
+    ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
+    return canvas.toDataURL("image/jpeg", 0.88);
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
+async function resizeImageForLogo(file: File, targetSize = 500): Promise<string> {
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Falha ao carregar logo."));
+      el.src = sourceUrl;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = targetSize;
+    canvas.height = targetSize;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas indisponível.");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    const scale = Math.max(targetSize / img.width, targetSize / img.height);
+    const drawWidth = img.width * scale;
+    const drawHeight = img.height * scale;
+    const dx = (targetSize - drawWidth) / 2;
+    const dy = (targetSize - drawHeight) / 2;
+    ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
+    return canvas.toDataURL("image/png");
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 const formatWhatsapp = (value: string) => {
   const digits = value.replace(/\D/g, "").slice(0, 13);
   if (!digits) return "";
@@ -178,6 +263,28 @@ const formatWhatsapp = (value: string) => {
   return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
 };
 
+/** Texto curto para a tabela (URL completa em `title` / `href`); parecido com preview de link no editor. */
+function abbreviateUrlForDisplay(raw: string, maxLen = 56): string {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length <= maxLen) return trimmed;
+  try {
+    const u = new URL(trimmed);
+    const origin = `${u.protocol}//${u.host}`;
+    const rest = `${u.pathname}${u.search}${u.hash}` || "/";
+    const full = origin + rest;
+    if (full.length <= maxLen) return full;
+    const sep = "…";
+    const suffixChars = maxLen - origin.length - sep.length;
+    if (suffixChars >= 6 && rest.length > suffixChars) {
+      return `${origin}${sep}${rest.slice(-suffixChars)}`;
+    }
+    const headChars = Math.max(16, maxLen - 10 - sep.length);
+    return `${trimmed.slice(0, headChars)}${sep}${trimmed.slice(-9)}`;
+  } catch {
+    return `${trimmed.slice(0, maxLen - 1)}…`;
+  }
+}
+
 export function App() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>("master");
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -186,7 +293,12 @@ export function App() {
   const [newTenantName, setNewTenantName] = useState("");
   const [newTenantEmail, setNewTenantEmail] = useState("");
   const [newTenantWhatsapp, setNewTenantWhatsapp] = useState("");
+  const [newTenantPassword, setNewTenantPassword] = useState("");
   const [isSubscriberModalOpen, setIsSubscriberModalOpen] = useState(false);
+  const [isLeadContextModalOpen, setIsLeadContextModalOpen] = useState(false);
+  const [selectedLeadContext, setSelectedLeadContext] = useState<Record<string, string | number | boolean> | null>(null);
+  const [selectedLeadContextContactName, setSelectedLeadContextContactName] = useState("");
+  const [isSavingSubscriber, setIsSavingSubscriber] = useState(false);
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
   const [agentId, setAgentId] = useState("atendente-01");
   const [savedFlowsByTenant, setSavedFlowsByTenant] = useState<Record<string, SavedFlow[]>>({});
@@ -207,8 +319,15 @@ export function App() {
   const [didMigrateLocalFlows, setDidMigrateLocalFlows] = useState(false);
   const [tenantProfileImageUrl, setTenantProfileImageUrl] = useState("");
   const [leadChatDisplayName, setLeadChatDisplayName] = useState("");
+  const [shareImageUrl, setShareImageUrl] = useState("");
+  const [primaryWhatsapp, setPrimaryWhatsapp] = useState("");
+  const [useWhatsappSecondOption, setUseWhatsappSecondOption] = useState(true);
+  const [queueDistributionMode, setQueueDistributionMode] = useState<QueueDistributionMode>("shared_pool");
+  const [noSeparateAttendants, setNoSeparateAttendants] = useState(false);
   const [subscriberStatusFilter, setSubscriberStatusFilter] = useState<"all" | "active" | "blocked">("all");
+  const [isLoadingTenants, setIsLoadingTenants] = useState(false);
   const [attendants, setAttendants] = useState<AttendantRow[]>([]);
+  const [isLoadingAttendants, setIsLoadingAttendants] = useState(false);
   const [attendantUsername, setAttendantUsername] = useState("");
   const [attendantEmail, setAttendantEmail] = useState("");
   const [attendantDisplayName, setAttendantDisplayName] = useState("");
@@ -219,6 +338,9 @@ export function App() {
   const [flowLibrary, setFlowLibrary] = useState<FlowLibraryItem[]>([]);
   const [sourceMasterFlows, setSourceMasterFlows] = useState<SavedFlow[]>([]);
   const [systemMasterLibrary, setSystemMasterLibrary] = useState<SystemMasterLibraryItem[]>([]);
+  /** Títulos digitados na Biblioteca Master antes de promover cada fluxo ativo (obrigatório ≥2 caracteres). */
+  const [masterPromoteTitles, setMasterPromoteTitles] = useState<Record<string, string>>({});
+  const [editingMasterTitleFlowId, setEditingMasterTitleFlowId] = useState<string | null>(null);
   const [selectedLibraryId, setSelectedLibraryId] = useState("");
   /** Etapa atual (1–3) no fluxo de configuração do workspace. */
   const [masterWizardStep, setMasterWizardStep] = useState(1);
@@ -228,6 +350,8 @@ export function App() {
   const [profileImageUploadedInStep, setProfileImageUploadedInStep] = useState(false);
   /** Etapa 2 só conclui quando usuário clica em "Continuar". */
   const [step2ConfirmedByTenant, setStep2ConfirmedByTenant] = useState<Record<string, true>>({});
+  const lastPendingCountRef = useRef(0);
+  const isPendingCountBootstrappedRef = useRef(false);
 
   const selectedTenantObject = useMemo(
     () => tenants.find((tenant) => tenant.id === selectedTenant),
@@ -241,10 +365,11 @@ export function App() {
     }
     return "subscriber_master";
   }, [authSession, selectedTenantObject]);
-  const allowedScreens = useMemo<ScreenId[]>(
-    () => (masterProfile === "system_master" ? ["masterLibrary", "subscribers"] : ["master", "liveQueue"]),
-    [masterProfile],
-  );
+  const allowedScreens = useMemo<ScreenId[]>(() => {
+    const role = authSession?.user?.role;
+    if (role === "attendant") return ["liveQueue"];
+    return masterProfile === "system_master" ? ["masterLibrary", "subscribers"] : ["master", "liveQueue"];
+  }, [masterProfile, authSession]);
   const filteredTenants = useMemo(
     () =>
       tenants.filter((tenant) => {
@@ -270,6 +395,11 @@ export function App() {
     () => selectedTenantFlows.filter((flow) => Boolean(flow.librarySourceId)),
     [selectedTenantFlows],
   );
+  /** Fluxos criados no builder Typebot do workspace (sem item da Biblioteca Master). */
+  const workspaceOnlyFlows = useMemo(
+    () => selectedTenantFlows.filter((flow) => Boolean(flow.typebotRemoteId)),
+    [selectedTenantFlows],
+  );
   const activeLibraryFlows = useMemo(
     () =>
       libraryLinkedFlows.filter((flow) => {
@@ -278,29 +408,54 @@ export function App() {
       }),
     [libraryLinkedFlows, flowStatuses],
   );
+  const normalizeFlowText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
   const libraryFlowRows = useMemo(
     () =>
       selectableFlowLibrary.map((item) => {
+        const normalizedTitle = normalizeFlowText(item.title);
+        const normalizedSuggestedNickname = normalizeFlowText(item.suggestedNickname);
+        const matchingFlows = libraryLinkedFlows.filter((flow) => {
+          const flowLabel = normalizeFlowText(flow.displayLabel ?? flow.nickname);
+          const flowNickname = normalizeFlowText(flow.nickname);
+          const byLibraryId = flow.librarySourceId === item.id;
+          const byLabel =
+            (normalizedTitle && flowLabel === normalizedTitle) ||
+            (normalizedSuggestedNickname && flowNickname === normalizedSuggestedNickname);
+          const byMasterViewer = flow.url.trim() === item.viewerUrl.trim();
+          return byLibraryId || byLabel || byMasterViewer;
+        });
         const linkedFlow =
-          libraryLinkedFlows.find((flow) => flow.librarySourceId === item.id) ??
-          libraryLinkedFlows.find((flow) => flow.url.trim() === item.viewerUrl.trim()) ??
+          matchingFlows.find((flow) => flow.url.trim() !== item.viewerUrl.trim()) ??
+          matchingFlows.find((flow) => flow.librarySourceId === item.id) ??
+          matchingFlows.find((flow) => flow.url.trim() === item.viewerUrl.trim()) ??
           null;
-        const status = linkedFlow ? (flowStatuses[linkedFlow.id] ?? "checking") : "inactive";
+        const healthStatus = linkedFlow ? (flowStatuses[linkedFlow.id] ?? "checking") : "inactive";
+        const status: FlowStatus = linkedFlow ? "active" : "inactive";
         return {
           item,
           linkedFlow,
           status,
-          isIncluded: Boolean(linkedFlow) && status !== "inactive",
+          healthStatus,
+          isIncluded: Boolean(linkedFlow),
         };
       }),
     [selectableFlowLibrary, libraryLinkedFlows, flowStatuses],
   );
   const unpublishedSourceMasterFlows = useMemo(
     () =>
-      sourceMasterFlows.filter(
-        (flow) => !systemMasterLibrary.some((item) => item.sourceFlowId === flow.id),
-      ),
+      sourceMasterFlows.filter((flow) => {
+        const flowUrl = flow.url.trim().toLowerCase();
+        return !systemMasterLibrary.some((item) => {
+          const bySourceId = item.sourceFlowId === flow.id;
+          const byViewerUrl = item.viewerUrl.trim().toLowerCase() === flowUrl;
+          return bySourceId || byViewerUrl;
+        });
+      }),
     [sourceMasterFlows, systemMasterLibrary],
+  );
+  const systemDefaultLibraryIds = useMemo(
+    () => new Set(systemMasterLibrary.filter((item) => item.isSystemDefault).map((item) => item.id)),
+    [systemMasterLibrary],
   );
   const activeCreatedFlows = useMemo(
     () => selectedTenantFlows.filter((flow) => flowStatuses[flow.id] === "active"),
@@ -332,35 +487,71 @@ export function App() {
       ),
     [selectedTenantObject],
   );
-  const isStep2Completed = Boolean(selectedTenant && step2ConfirmedByTenant[selectedTenant]);
+  const isStep1FormReady = useMemo(
+    () =>
+      Boolean(
+        tenantProfileImageUrl.trim() &&
+          shareImageUrl.trim() &&
+          primaryWhatsapp.trim() &&
+          leadChatDisplayName.trim().length >= 2,
+      ),
+    [tenantProfileImageUrl, shareImageUrl, primaryWhatsapp, leadChatDisplayName],
+  );
+  const isStep2Completed = Boolean(
+    selectedTenant &&
+      (step2ConfirmedByTenant[selectedTenant] === true || selectedTenantObject?.noSeparateAttendants === true),
+  );
   const isStep3Completed = selectedTenantFlows.length > 0;
+  const pendingQueueCount = useMemo(
+    () => queueItems.filter((item) => item.status === "waiting").length,
+    [queueItems],
+  );
 
-  const getTypebotAccessUrl = (tenant: Tenant) => {
-    const explicit = String(tenant.typebotAccessUrl ?? "").trim();
-    if (explicit) {
-      const normalized = explicit
-        .replace("https://app.typebot.com", "https://app.typebot.io")
-        .replace("http://app.typebot.com", "https://app.typebot.io");
-      if (normalized.includes("/signup?")) return TYPEBOT_DASHBOARD_URL;
-      return normalized;
+  function playPendingLeadAlertTone(repeats = 1) {
+    try {
+      const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextCtor) return;
+      const audioContext = new AudioContextCtor();
+      const now = audioContext.currentTime;
+      const totalRepeats = Math.max(1, Math.min(3, repeats));
+      for (let i = 0; i < totalRepeats; i += 1) {
+        const start = now + i * 0.24;
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(880, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.18, start + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.2);
+      }
+      window.setTimeout(() => {
+        void audioContext.close().catch(() => undefined);
+      }, 1200);
+    } catch {
+      // ignore audio restrictions
     }
-    const ownerEmail = String(tenant.typebotOwnerEmail || tenant.ownerEmail || "")
-      .trim()
-      .toLowerCase();
-    if (tenant.typebotProvisionStatus === "pending_manual" && ownerEmail) {
-      return TYPEBOT_DASHBOARD_URL;
-    }
-    return TYPEBOT_DASHBOARD_URL;
-  };
+  }
 
   async function loadTenants() {
-    const response = await fetch(`${apiBase}/api/master/tenants`);
-    const data = (await response.json()) as Tenant[];
-    setTenants(data);
-    if (!selectedTenant && data[0]) {
-      const preferredTenantId = authSession?.tenant?.id;
-      const preferred = preferredTenantId ? data.find((tenant) => tenant.id === preferredTenantId) : null;
-      setSelectedTenant(preferred?.id ?? data[0].id);
+    setIsLoadingTenants(true);
+    try {
+      const response = await fetch(`${apiBase}/api/master/tenants`);
+      if (!response.ok) {
+        throw new Error("Falha ao carregar assinantes");
+      }
+      const data = (await response.json()) as Tenant[];
+      setTenants(data);
+      if (!selectedTenant && data[0]) {
+        const preferredTenantId = authSession?.tenant?.id;
+        const preferred = preferredTenantId ? data.find((tenant) => tenant.id === preferredTenantId) : null;
+        setSelectedTenant(preferred?.id ?? data[0].id);
+      }
+    } finally {
+      setIsLoadingTenants(false);
     }
   }
 
@@ -370,7 +561,22 @@ export function App() {
       headers: { "x-tenant-id": tenantId },
     });
     const data = (await response.json()) as QueueContact[];
-    setQueueItems(data);
+    const attendantByUsername = new Map(
+      attendants.map((row) => [String(row.username ?? "").trim().toLowerCase(), row.displayName]),
+    );
+    const normalized = data.map((item) => {
+      const assignedAgentId = String(item.assignedAgentId ?? "").trim();
+      const assignedAgentName =
+        String(item.assignedAgentName ?? "").trim() ||
+        (assignedAgentId && attendantByUsername.has(assignedAgentId.toLowerCase())
+          ? attendantByUsername.get(assignedAgentId.toLowerCase())
+          : undefined);
+      return {
+        ...item,
+        assignedAgentName,
+      };
+    });
+    setQueueItems(normalized);
   }
 
   async function loadFlows(tenantId: string) {
@@ -385,10 +591,17 @@ export function App() {
 
   async function loadAttendants(tenantId: string) {
     if (!tenantId) return;
-    const response = await fetch(`${apiBase}/api/master/tenants/${tenantId}/attendants`);
-    if (!response.ok) return;
-    const data = (await response.json()) as AttendantRow[];
-    setAttendants(data);
+    setIsLoadingAttendants(true);
+    try {
+      const response = await fetch(`${apiBase}/api/master/tenants/${tenantId}/attendants`);
+      if (!response.ok) {
+        throw new Error("Falha ao carregar atendentes");
+      }
+      const data = (await response.json()) as AttendantRow[];
+      setAttendants(data);
+    } finally {
+      setIsLoadingAttendants(false);
+    }
   }
 
   async function loadFlowLibrary() {
@@ -460,14 +673,55 @@ export function App() {
 
   useEffect(() => {
     if (!selectedTenant) return;
-    Promise.all([loadQueue(selectedTenant), loadFlows(selectedTenant), loadAttendants(selectedTenant)]).catch(() =>
-      setStatusMessage("Falha ao carregar dados do assinante"),
-    );
+    const run = async () => {
+      await loadAttendants(selectedTenant);
+      await loadQueue(selectedTenant);
+      await loadFlows(selectedTenant);
+    };
+    run().catch(() => setStatusMessage("Falha ao carregar dados do assinante"));
   }, [selectedTenant]);
+
+  /** Na etapa 3, inclui automaticamente na biblioteca do assinante cada fluxo marcado como padrão na Master. */
+  useEffect(() => {
+    if (masterWizardStep !== 3 || !selectedTenant || masterProfile !== "subscriber_master") return;
+    const defaultIds = systemMasterLibrary.filter((item) => item.isSystemDefault).map((item) => item.id);
+    if (defaultIds.length === 0) return;
+    const flows = savedFlowsByTenant[selectedTenant] ?? [];
+    const missingId = defaultIds.find((libId) => !flows.some((flow) => flow.librarySourceId === libId));
+    if (!missingId) return;
+
+    void (async () => {
+      const response = await fetch(`${apiBase}/api/master/tenants/${selectedTenant}/flows/from-library`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ libraryItemId: missingId }),
+      });
+      if (!response.ok) {
+        const err = (await response.json().catch(() => ({}))) as { message?: string };
+        setStatusMessage(err.message ?? "Falha ao incluir fluxo padrão na biblioteca do assinante.");
+        return;
+      }
+      const created = (await response.json()) as SavedFlow;
+      setFlowStatuses((current) => ({ ...current, [created.id]: "active" }));
+      setStatusMessage("Fluxo padrão incluído na biblioteca.");
+      await loadFlows(selectedTenant);
+    })();
+  }, [
+    masterWizardStep,
+    selectedTenant,
+    masterProfile,
+    systemMasterLibrary,
+    savedFlowsByTenant,
+  ]);
 
   useEffect(() => {
     setTenantProfileImageUrl(selectedTenantObject?.profileImageUrl ?? "");
-    setLeadChatDisplayName("");
+    setLeadChatDisplayName(selectedTenantObject?.chatDisplayName ?? "");
+    setShareImageUrl(selectedTenantObject?.shareImageUrl ?? "");
+    setPrimaryWhatsapp(selectedTenantObject?.whatsapp ?? "");
+    setUseWhatsappSecondOption(selectedTenantObject?.useWhatsappSecondOption !== false);
+    setQueueDistributionMode(selectedTenantObject?.queueDistributionMode ?? "shared_pool");
+    setNoSeparateAttendants(selectedTenantObject?.noSeparateAttendants === true);
   }, [selectedTenantObject]);
 
   useEffect(() => {
@@ -504,12 +758,24 @@ export function App() {
   }, [selectedTenant, isStep1Completed, isStep2Completed, isStep3Completed]);
 
   useEffect(() => {
-    if (!selectedTenant || activeScreen !== "liveQueue") return;
+    if (!selectedTenant) return;
     const timer = window.setInterval(() => {
       loadQueue(selectedTenant).catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [activeScreen, selectedTenant]);
+  }, [selectedTenant, attendants]);
+
+  useEffect(() => {
+    if (!isPendingCountBootstrappedRef.current) {
+      lastPendingCountRef.current = pendingQueueCount;
+      isPendingCountBootstrappedRef.current = true;
+      return;
+    }
+    if (pendingQueueCount > lastPendingCountRef.current) {
+      playPendingLeadAlertTone(pendingQueueCount - lastPendingCountRef.current);
+    }
+    lastPendingCountRef.current = pendingQueueCount;
+  }, [pendingQueueCount]);
 
   useEffect(() => {
     if (allowedScreens.includes(activeScreen)) return;
@@ -593,6 +859,7 @@ export function App() {
         name: newTenantName,
         ownerEmail: newTenantEmail,
         whatsapp: newTenantWhatsapp,
+        initialPassword: newTenantPassword,
       }),
     });
 
@@ -614,6 +881,7 @@ export function App() {
     setNewTenantName("");
     setNewTenantEmail("");
     setNewTenantWhatsapp("");
+    setNewTenantPassword("");
     setEditingTenantId(null);
   }
 
@@ -635,37 +903,46 @@ export function App() {
       setStatusMessage("Preencha nome, e-mail e WhatsApp do assinante.");
       return;
     }
+    if (!editingTenantId && newTenantPassword.trim().length < 4) {
+      setStatusMessage("Informe a senha inicial com no mínimo 4 caracteres.");
+      return;
+    }
 
-    if (!editingTenantId) {
-      const created = await createTenant();
-      if (created) {
-        setIsSubscriberModalOpen(false);
+    setIsSavingSubscriber(true);
+    try {
+      if (!editingTenantId) {
+        const created = await createTenant();
+        if (created) {
+          setIsSubscriberModalOpen(false);
+        }
+        return;
       }
-      return;
+
+      const response = await fetch(`${apiBase}/api/master/tenants/${editingTenantId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: newTenantName,
+          ownerEmail: newTenantEmail,
+          whatsapp: newTenantWhatsapp,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => ({ message: "Não foi possível atualizar assinante" }))) as {
+          message?: string;
+        };
+        setStatusMessage(errorData.message ?? "Não foi possível atualizar assinante");
+        return;
+      }
+
+      setStatusMessage("Assinante atualizado com sucesso");
+      setIsSubscriberModalOpen(false);
+      resetSubscriberForm();
+      await loadTenants();
+    } finally {
+      setIsSavingSubscriber(false);
     }
-
-    const response = await fetch(`${apiBase}/api/master/tenants/${editingTenantId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: newTenantName,
-        ownerEmail: newTenantEmail,
-        whatsapp: newTenantWhatsapp,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = (await response.json().catch(() => ({ message: "Não foi possível atualizar assinante" }))) as {
-        message?: string;
-      };
-      setStatusMessage(errorData.message ?? "Não foi possível atualizar assinante");
-      return;
-    }
-
-    setStatusMessage("Assinante atualizado com sucesso");
-    setIsSubscriberModalOpen(false);
-    resetSubscriberForm();
-    await loadTenants();
   }
 
   async function toggleStatus(tenant: Tenant) {
@@ -686,13 +963,18 @@ export function App() {
   }
 
   async function assignContact(contactId: string) {
+    const useMasterOnly = selectedTenantObject?.noSeparateAttendants === true;
+    const masterUsername = authSession?.user?.username?.trim();
+    const resolvedAgentId =
+      useMasterOnly && masterUsername ? masterUsername : agentId;
+    const loggedAgentName = authSession?.user?.displayName?.trim() || resolvedAgentId;
     const response = await fetch(`${apiBase}/api/chat/queue/${contactId}/assign`, {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
         "x-tenant-id": selectedTenant,
       },
-      body: JSON.stringify({ agentId }),
+      body: JSON.stringify({ agentId: resolvedAgentId, agentName: loggedAgentName }),
     });
 
     if (!response.ok) {
@@ -701,8 +983,14 @@ export function App() {
     }
 
     setStatusMessage("Atendimento assumido com sucesso");
-    window.open(getAgentViewUrl(selectedTenant, contactId, agentId), "_blank");
+    window.open(getAgentViewUrl(selectedTenant, contactId, resolvedAgentId, loggedAgentName), "_blank");
     await loadQueue(selectedTenant);
+  }
+
+  function openLeadContextModal(item: QueueContact) {
+    setSelectedLeadContext(item.leadContext ?? null);
+    setSelectedLeadContextContactName(item.contactName);
+    setIsLeadContextModalOpen(true);
   }
 
   async function saveTenantFlow() {
@@ -751,10 +1039,22 @@ export function App() {
     }
     const trimmed = imageData.trim();
     if (!trimmed) return false;
+    /** Mantém no mesmo PATCH dados já preenchidos no formulário para não perder preview ao recarregar o tenant. */
+    const profilePatch: Record<string, unknown> = { profileImageUrl: trimmed };
+    const shareTrimmed = shareImageUrl.trim();
+    if (shareTrimmed) profilePatch.shareImageUrl = shareTrimmed;
+    const whatsappTrimmed = primaryWhatsapp.trim();
+    if (whatsappTrimmed.length >= 8) profilePatch.whatsapp = whatsappTrimmed;
+    const chatNameTrimmed = leadChatDisplayName.trim();
+    if (chatNameTrimmed.length >= 2) profilePatch.chatDisplayName = chatNameTrimmed;
+    profilePatch.useWhatsappSecondOption = useWhatsappSecondOption;
+    profilePatch.queueDistributionMode = queueDistributionMode;
+    profilePatch.noSeparateAttendants = noSeparateAttendants;
+
     const response = await fetch(`${apiBase}/api/master/tenants/${selectedTenant}/profile-image`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ profileImageUrl: trimmed }),
+      body: JSON.stringify(profilePatch),
     });
     if (!response.ok) {
       setStatusMessage("Falha ao guardar imagem de perfil.");
@@ -817,10 +1117,63 @@ export function App() {
     return true;
   }
 
+  async function saveShareMetadata(): Promise<boolean> {
+    if (!selectedTenant) return false;
+    const response = await fetch(`${apiBase}/api/master/tenants/${selectedTenant}/profile-image`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        shareImageUrl: shareImageUrl.trim(),
+        whatsapp: primaryWhatsapp.trim(),
+        useWhatsappSecondOption,
+        queueDistributionMode,
+        noSeparateAttendants,
+      }),
+    });
+    if (!response.ok) {
+      setStatusMessage("Falha ao salvar metadados de compartilhamento.");
+      return false;
+    }
+    await loadTenants().catch(() => undefined);
+    return true;
+  }
+
+  async function saveNoSeparateAttendantsFlag(next: boolean): Promise<void> {
+    if (!selectedTenant) {
+      setStatusMessage("Selecione um assinante.");
+      return;
+    }
+    const response = await fetch(`${apiBase}/api/master/tenants/${selectedTenant}/profile-image`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ noSeparateAttendants: next }),
+    });
+    if (!response.ok) {
+      setStatusMessage("Falha ao salvar opção de atendimento.");
+      return;
+    }
+    if (next) {
+      setStep2ConfirmedByTenant((current) => {
+        const nextMap = { ...current, [selectedTenant]: true as const };
+        try {
+          localStorage.setItem("master-step2-confirmed-by-tenant", JSON.stringify(nextMap));
+        } catch {
+          // ignore localStorage write errors
+        }
+        return nextMap;
+      });
+      setStatusMessage("Novos atendimentos serão direcionados ao Master assinante.");
+    } else {
+      setStatusMessage("Opção atualizada: você pode cadastrar outros atendentes.");
+    }
+    await loadTenants().catch(() => undefined);
+  }
+
   function goToAttendantsStepFromProfile() {
     setMasterWizardUnlocked((previous) => Math.max(previous, 2));
     setMasterWizardStep(2);
     void saveLeadChatDisplayName();
+    void saveShareMetadata();
   }
 
   function continueMasterWizard(fromStep: number) {
@@ -892,7 +1245,7 @@ export function App() {
   }
 
   useEffect(() => {
-    if (masterWizardStep !== 2 || !selectedTenant) return;
+    if (masterWizardStep !== 2 || !selectedTenant || noSeparateAttendants) return;
     const username = attendantUsername.trim();
     const email = attendantEmail.trim().toLowerCase();
     const display = attendantDisplayName.trim();
@@ -927,6 +1280,7 @@ export function App() {
     attendantRole,
     isAutoCreatingAttendant,
     lastAutoAttendantDraftKey,
+    noSeparateAttendants,
   ]);
 
   async function removeAttendant(id: string) {
@@ -977,21 +1331,22 @@ export function App() {
     if (selectedTenant) await loadFlows(selectedTenant);
   }
 
-  async function copyFlowShareLink(flowId: string) {
-    const codeRes = await fetch(`${apiBase}/api/master/flows/${flowId}/share-code`, { method: "POST" });
-    if (!codeRes.ok) {
-      setStatusMessage("Falha ao gerar link curto.");
+  async function copyFlowShareLink(flowUrl: string, flowId?: string) {
+    if (flowId) {
+      const currentStatus = flowStatuses[flowId] ?? "checking";
+      if (currentStatus !== "active") {
+        setStatusMessage("Link indisponível no momento: fluxo ainda não está ativo no viewer.");
+        return;
+      }
+    }
+    const url = flowUrl.trim();
+    if (!url) {
+      setStatusMessage("URL do fluxo indisponível para cópia.");
       return;
     }
-    const { shortShareCode } = (await codeRes.json()) as { shortShareCode?: string };
-    if (!shortShareCode) {
-      setStatusMessage("Código curto indisponível.");
-      return;
-    }
-    const url = `${publicApiBase.replace(/\/$/, "")}/r/${shortShareCode}`;
     try {
       await navigator.clipboard.writeText(url);
-      setStatusMessage("Link de divulgação copiado.");
+      setStatusMessage("Link copiado.");
     } catch {
       setStatusMessage(url);
     }
@@ -1031,17 +1386,28 @@ export function App() {
     await loadFlows(selectedTenant);
   }
 
-  async function promoteFlowToSystemLibrary(flow: SavedFlow) {
+  async function promoteFlowToSystemLibrary(flow: SavedFlow, fallbackTitle?: string) {
+    const title = (masterPromoteTitles[flow.id] ?? fallbackTitle ?? "").trim();
+    if (title.length < 2) {
+      setStatusMessage("Informe um título com pelo menos 2 caracteres ao lado do fluxo.");
+      return;
+    }
     const response = await fetch(`${apiBase}/api/master/system-library/promote`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sourceFlowId: flow.id, title: flow.displayLabel ?? flow.nickname }),
+      body: JSON.stringify({ sourceFlowId: flow.id, title }),
     });
     if (!response.ok) {
-      setStatusMessage("Não foi possível promover o fluxo para Padrão Sistema.");
+      const err = (await response.json().catch(() => ({}))) as { message?: string };
+      setStatusMessage(err.message ?? "Não foi possível definir o fluxo como padrão.");
       return;
     }
-    setStatusMessage("Fluxo definido como Padrão Sistema.");
+    setStatusMessage("Fluxo definido como padrão e disponibilizado aos assinantes.");
+    setMasterPromoteTitles((current) => {
+      const next = { ...current };
+      delete next[flow.id];
+      return next;
+    });
     await Promise.all([loadSystemMasterLibrary(), loadFlowLibrary()]);
   }
 
@@ -1139,6 +1505,10 @@ export function App() {
     setStatusMessage("Sessão encerrada.");
   }
 
+  function openSystemMasterTypebotBuilder() {
+    window.open(SYSTEM_MASTER_TYPEBOT_BUILDER_URL, "_blank", "noopener,noreferrer");
+  }
+
   const statusToneClass = useMemo(() => {
     const message = statusMessage.trim().toLowerCase();
     if (!message) return "error";
@@ -1233,7 +1603,7 @@ export function App() {
           <p>Type Bot e Chat de atendimento</p>
         </div>
         <nav className="menu-nav">
-          {masterProfile === "subscriber_master" ? (
+          {masterProfile === "subscriber_master" && authSession?.user?.role !== "attendant" ? (
             <button
               className={`menu-btn ${activeScreen === "master" ? "active" : ""}`}
               onClick={() => setActiveScreen("master")}
@@ -1263,18 +1633,38 @@ export function App() {
               onClick={() => setActiveScreen("liveQueue")}
             >
               Fila ao vivo
+              {pendingQueueCount > 0 ? <span className="menu-badge">{pendingQueueCount}</span> : null}
             </button>
           ) : null}
         </nav>
       </aside>
 
       <main className="content">
+        {pendingQueueCount > 0 ? (
+          <section className="pending-summary-alert" role="status" aria-live="polite">
+            <div className="pending-summary-alert__content">
+              <strong>{pendingQueueCount} atendimento(s) pendente(s)</strong>
+              <span>Lead aguardando atendimento na fila ao vivo.</span>
+            </div>
+            {activeScreen !== "liveQueue" ? (
+              <button type="button" className="pending-summary-alert__action" onClick={() => setActiveScreen("liveQueue")}>
+                Ir para Fila ao Vivo
+              </button>
+            ) : null}
+          </section>
+        ) : null}
         <header className="top-header">
           <div>
             <h2>Painel Master</h2>
             <p>Gerencie assinantes, assinatura e bloqueio de acesso</p>
           </div>
-          <div className="user-menu-wrap">
+          <div className="top-header-actions">
+            {masterProfile === "system_master" ? (
+              <button type="button" className="ghost-btn top-typebot-link-btn" onClick={openSystemMasterTypebotBuilder}>
+                Acesso Typebot
+              </button>
+            ) : null}
+            <div className="user-menu-wrap">
             <button
               type="button"
               className="user-menu-btn"
@@ -1312,6 +1702,7 @@ export function App() {
                 </button>
               </div>
             ) : null}
+            </div>
           </div>
         </header>
 
@@ -1349,42 +1740,214 @@ export function App() {
               <p className="muted">Nenhum assinante carregado para este acesso.</p>
             )}
             {selectedTenantObject && masterWizardStep === 1 ? (
-              <div className="tenant-profile-card">
-                <h4>Configuração do perfil</h4>
-                <div className="grid-form">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => {
-                        const result = typeof reader.result === "string" ? reader.result : "";
-                        setTenantProfileImageUrl(result);
-                        void persistProfileImageToServer(result);
-                      };
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Nome a ser exibido no chat do lead"
-                    value={leadChatDisplayName}
-                    onChange={(event) => setLeadChatDisplayName(event.target.value)}
-                  />
-                </div>
-                {tenantProfileImageUrl ? (
-                  <div className="tenant-profile-preview">
-                    <img src={tenantProfileImageUrl} alt="Prévia perfil" />
-                    <span>Essa imagem será utilizada para identificar o seu negócio no chat de atendimento.</span>
+              <div className="tenant-profile-card tenant-profile-card--profile">
+                <div className="profile-step">
+                  <header className="profile-step__header">
+                    <h4>Configuração do perfil</h4>
+                    <p>Configure como sua marca aparece no chat e nos compartilhamentos.</p>
+                  </header>
+
+                  <div className="profile-grid">
+                    <article className="profile-card profile-card--share">
+                      <div className="profile-card__top">
+                        <label className="field-label field-label--primary">Logo da marca</label>
+                        <span className="field-help">500×500 px recomendado</span>
+                      </div>
+                      <label className="upload-dropzone">
+                        {tenantProfileImageUrl ? (
+                          <img src={tenantProfileImageUrl} alt="Preview da logo" className="upload-preview" />
+                        ) : (
+                          <div className="upload-placeholder">
+                            <span className="upload-icon">+</span>
+                            <strong>Enviar logo</strong>
+                            <small>Clique para selecionar</small>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp"
+                          className="sr-only"
+                          onChange={async (event) => {
+                            const file = event.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const optimized = await resizeImageForLogo(file);
+                              setTenantProfileImageUrl(optimized);
+                              void persistProfileImageToServer(optimized);
+                            } catch {
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                const result = typeof reader.result === "string" ? reader.result : "";
+                                setTenantProfileImageUrl(result);
+                                void persistProfileImageToServer(result);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                      <div className="file-feedback">
+                        <span className={tenantProfileImageUrl ? "file-ok" : "file-muted"}>
+                          {tenantProfileImageUrl ? "Arquivo carregado com sucesso." : "Nenhum arquivo selecionado."}
+                        </span>
+                      </div>
+                    </article>
+
+                    <article className="profile-card">
+                      <div className="profile-card__top">
+                        <label className="field-label field-label--secondary">Imagem de compartilhamento</label>
+                        <span className="field-help">1200x630 recomendado</span>
+                      </div>
+                      <label className="upload-dropzone upload-dropzone--share">
+                        {shareImageUrl ? (
+                          <img src={shareImageUrl} alt="Preview compartilhamento" className="upload-preview upload-preview--share" />
+                        ) : (
+                          <div className="upload-placeholder">
+                            <span className="upload-icon">+</span>
+                            <strong>Enviar imagem</strong>
+                            <small>Usada em compartilhamentos</small>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp"
+                          className="sr-only"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (!file) return;
+                            void (async () => {
+                              try {
+                                const optimized = await resizeImageForShare(file, 1200, 630);
+                                setShareImageUrl(optimized);
+                              } catch {
+                                setStatusMessage("Falha ao processar imagem de compartilhamento.");
+                              }
+                            })();
+                          }}
+                        />
+                      </label>
+                      <div className="file-feedback">
+                        <span className={shareImageUrl ? "file-ok" : "file-muted"}>
+                          {shareImageUrl ? "Arquivo carregado com sucesso." : "Nenhum arquivo selecionado."}
+                        </span>
+                      </div>
+                    </article>
+
+                    <article className="profile-card profile-card--text">
+                      <div className="profile-card__top">
+                        <label className="field-label field-label--secondary">WhatsApp Principal</label>
+                        <span className="field-help">Telefone com DDD</span>
+                      </div>
+                      <input
+                        type="text"
+                        className="glass-input"
+                        placeholder="(00) 00000-0000"
+                        value={primaryWhatsapp}
+                        onChange={(event) => setPrimaryWhatsapp(formatWhatsapp(event.target.value))}
+                      />
+                      <div className="profile-card__top profile-card__top--spaced">
+                        <label className="field-label field-label--secondary">Nome no chat</label>
+                        <span className="field-help">Mín. 2 caracteres</span>
+                      </div>
+                      <input
+                        type="text"
+                        className="glass-input"
+                        placeholder="Nome exibido no chat do lead"
+                        value={leadChatDisplayName}
+                        onChange={(event) => setLeadChatDisplayName(event.target.value)}
+                      />
+                      <div className="profile-card__top profile-card__top--spaced">
+                        <label className="field-label field-label--secondary">Ordem para fila de atendimento</label>
+                        <span className="field-help">Selecione como os atendimentos serão distribuídos</span>
+                      </div>
+                      <div className="queue-distribution-options">
+                        <label className={`queue-distribution-choice ${queueDistributionMode === "assign_per_incoming" ? "is-selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name="queue-distribution-mode"
+                            checked={queueDistributionMode === "assign_per_incoming"}
+                            onChange={() => setQueueDistributionMode("assign_per_incoming")}
+                          />
+                          <span>Cada atendimento entrante é distribuído para um atendente</span>
+                        </label>
+                        <label className={`queue-distribution-choice ${queueDistributionMode === "shared_pool" ? "is-selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name="queue-distribution-mode"
+                            checked={queueDistributionMode === "shared_pool"}
+                            onChange={() => setQueueDistributionMode("shared_pool")}
+                          />
+                          <span>Os atendimentos ficam disponíveis para todos os atendentes</span>
+                        </label>
+                        <label className={`queue-distribution-choice ${queueDistributionMode === "random" ? "is-selected" : ""}`}>
+                          <input
+                            type="radio"
+                            name="queue-distribution-mode"
+                            checked={queueDistributionMode === "random"}
+                            onChange={() => setQueueDistributionMode("random")}
+                          />
+                          <span>Os atendimentos são distribuídos aleatoriamente</span>
+                        </label>
+                      </div>
+                    </article>
+                    <article className="profile-card profile-card--full profile-card--whatsapp-option">
+                      <div className="profile-card__top">
+                        <label className="field-label field-label--secondary">Utilizar WhatsApp como segunda opção de atendimento?</label>
+                      </div>
+                      <p className="field-tip field-tip--intro">
+                        Essas telas abaixo mostram como é a tela de atendimento ao vivo que aparece para o seu Lead. Após ele responder o fluxo do typebot, ele é direcionado para essa tela. Nela você tem a opção do seu Lead acessar o WhatsApp. Selecione a melhor opção para você.
+                      </p>
+                      <div className="whatsapp-layout-options">
+                        <label className={`whatsapp-layout-choice ${useWhatsappSecondOption ? "is-selected" : ""}`}>
+                          <span className="whatsapp-layout-choice__head">
+                            <input
+                              type="radio"
+                              name="whatsapp-second-option"
+                              checked={useWhatsappSecondOption}
+                              onChange={() => setUseWhatsappSecondOption(true)}
+                            />
+                            <strong>Com WhatsApp</strong>
+                          </span>
+                          <div className="whatsapp-preview">
+                            <span className="whatsapp-preview__badge">Atendimento ao vivo ativo</span>
+                            <strong className="whatsapp-preview__title">Você está na fila e um atendente já está com o seu atendimento.</strong>
+                            <p className="whatsapp-preview__subtitle">Aguarde nesta tela para continuar o atendimento.</p>
+                            <div className="whatsapp-preview__alert">Não feche esta página para não perder sua posição na fila.</div>
+                            <div className="whatsapp-preview__chips">
+                              <span>Nome: Lead</span>
+                              <span>WhatsApp: +55...</span>
+                            </div>
+                            <div className="whatsapp-preview__button">Quero atendimento imediato no WhatsApp</div>
+                          </div>
+                        </label>
+
+                        <label className={`whatsapp-layout-choice ${!useWhatsappSecondOption ? "is-selected" : ""}`}>
+                          <span className="whatsapp-layout-choice__head">
+                            <input
+                              type="radio"
+                              name="whatsapp-second-option"
+                              checked={!useWhatsappSecondOption}
+                              onChange={() => setUseWhatsappSecondOption(false)}
+                            />
+                            <strong>Sem WhatsApp</strong>
+                          </span>
+                          <div className="whatsapp-preview">
+                            <span className="whatsapp-preview__badge">Atendimento ao vivo ativo</span>
+                            <strong className="whatsapp-preview__title">Você está na fila e um atendente já está com o seu atendimento.</strong>
+                            <p className="whatsapp-preview__subtitle">Aguarde nesta tela para continuar o atendimento.</p>
+                            <div className="whatsapp-preview__alert">Não feche esta página para não perder sua posição na fila.</div>
+                            <div className="whatsapp-preview__chips">
+                              <span>Nome: Lead</span>
+                              <span>WhatsApp: +55...</span>
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                    </article>
                   </div>
-                ) : (
-                  <p className="muted">Adicione uma imagem para personalizar o avatar e as cores do chat.</p>
-                )}
+                </div>
                 <div className="wizard-step-actions">
-                  {(Boolean(tenantProfileImageUrl.trim()) || profileImageUploadedInStep || isStep1Completed) &&
-                  leadChatDisplayName.trim().length >= 2 ? (
+                  {isStep1FormReady ? (
                     <button
                       type="button"
                       onClick={() => void goToAttendantsStepFromProfile()}
@@ -1398,51 +1961,80 @@ export function App() {
 
             {selectedTenant && masterWizardStep === 2 ? (
               <div className="tenant-profile-card">
-                <h4>Etapa 2 — Adicionar atendente</h4>
-                <div className="grid-form">
+                <h4>Etapa 2 — Atendentes</h4>
+                <label className="queue-distribution-choice" style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
                   <input
-                    placeholder="Nome usuário (login)"
-                    value={attendantUsername}
-                    onChange={(event) => setAttendantUsername(event.target.value)}
+                    type="checkbox"
+                    checked={noSeparateAttendants}
+                    onChange={(event) => void saveNoSeparateAttendantsFlag(event.target.checked)}
+                    style={{ marginTop: "4px" }}
                   />
-                  <input
-                    type="email"
-                    placeholder="E-mail do usuário"
-                    value={attendantEmail}
-                    onChange={(event) => setAttendantEmail(event.target.value)}
-                  />
-                  <input
-                    placeholder="Nome exibição no chat"
-                    value={attendantDisplayName}
-                    onChange={(event) => setAttendantDisplayName(event.target.value)}
-                  />
-                  <input
-                    type="password"
-                    placeholder="Senha"
-                    value={attendantPassword}
-                    onChange={(event) => setAttendantPassword(event.target.value)}
-                  />
-                  <select value={attendantRole} onChange={(event) => setAttendantRole(event.target.value as AttendantRow["role"] | "")}>
-                    <option value="">Selecione</option>
-                    <option value="master">Master</option>
-                    <option value="manager">Gerente</option>
-                    <option value="attendant">Atendente</option>
-                  </select>
-                </div>
-                <p className="muted muted-subtle">
-                  {isAutoCreatingAttendant ? (
-                    <span className="processing-inline-wrap" aria-live="polite">
-                      <i className="processing-inline-dot" aria-hidden="true" />
-                      Salvando atendente automaticamente...
+                  <span>
+                    <strong>Não tenho atendente</strong>
+                    <span className="muted muted-subtle" style={{ display: "block", marginTop: "6px", fontWeight: 400 }}>
+                      Com esta opção, quem responde no chat ao vivo é o próprio Master assinante (login do titular). Novos contatos na fila são
+                      distribuídos só para usuários com perfil Master deste workspace.
                     </span>
-                  ) : (
-                    "Preencha os campos. Ao completar os dados, o atendente é salvo automaticamente."
-                  )}
-                </p>
-                {visibleAttendants.length > 0 ? (
+                  </span>
+                </label>
+                {!noSeparateAttendants ? (
+                  <>
+                    <div className="grid-form">
+                      <input
+                        placeholder="Nome usuário (login)"
+                        value={attendantUsername}
+                        onChange={(event) => setAttendantUsername(event.target.value)}
+                      />
+                      <input
+                        type="email"
+                        placeholder="E-mail do usuário"
+                        value={attendantEmail}
+                        onChange={(event) => setAttendantEmail(event.target.value)}
+                      />
+                      <input
+                        placeholder="Nome exibição no chat"
+                        value={attendantDisplayName}
+                        onChange={(event) => setAttendantDisplayName(event.target.value)}
+                      />
+                      <input
+                        type="password"
+                        placeholder="Senha"
+                        value={attendantPassword}
+                        onChange={(event) => setAttendantPassword(event.target.value)}
+                      />
+                      <select value={attendantRole} onChange={(event) => setAttendantRole(event.target.value as AttendantRow["role"] | "")}>
+                        <option value="">Selecione</option>
+                        <option value="master">Master</option>
+                        <option value="manager">Gerente</option>
+                        <option value="attendant">Atendente</option>
+                      </select>
+                    </div>
+                    <p className="muted muted-subtle">
+                      {isLoadingAttendants ? (
+                        <span className="processing-inline-wrap" aria-live="polite">
+                          <i className="processing-inline-dot" aria-hidden="true" />
+                          Carregando atendentes...
+                        </span>
+                      ) : isAutoCreatingAttendant ? (
+                        <span className="processing-inline-wrap" aria-live="polite">
+                          <i className="processing-inline-dot" aria-hidden="true" />
+                          Salvando atendente automaticamente...
+                        </span>
+                      ) : (
+                        "Preencha os campos. Ao completar os dados, o atendente é salvo automaticamente."
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <p className="muted muted-subtle" style={{ marginTop: "12px" }}>
+                    Cadastro de novos atendentes está oculto. Para incluir equipe, desmarque a opção acima.
+                  </p>
+                )}
+                {!isLoadingAttendants && visibleAttendants.length > 0 ? (
                   <div className="saved-flows-table attendants-table">
                     <div className="saved-flows-header attendants-header">
                       <span>Usuário</span>
+                        <span>E-mail</span>
                       <span>Nome no chat</span>
                       <span>Tipo</span>
                       <span />
@@ -1450,6 +2042,7 @@ export function App() {
                     {visibleAttendants.map((row) => (
                       <div key={row.id} className="saved-flows-row attendants-row">
                         <span>{row.username}</span>
+                          <span>{row.email?.trim() || "—"}</span>
                         <span>{row.displayName}</span>
                         <span>
                           {row.role === "master" ? "Master" : row.role === "manager" ? "Gerente" : "Atendente"}
@@ -1462,7 +2055,14 @@ export function App() {
                       </div>
                     ))}
                   </div>
-                ) : (
+                ) : isLoadingAttendants ? (
+                  <p className="muted muted-subtle">
+                    <span className="processing-inline-wrap" aria-live="polite">
+                      <i className="processing-inline-dot" aria-hidden="true" />
+                      Processando dados dos atendentes...
+                    </span>
+                  </p>
+                ) : noSeparateAttendants ? null : (
                   <p className="muted muted-subtle">Nenhum atendente cadastrado para este assinante.</p>
                 )}
                 <div className="wizard-step-actions">
@@ -1479,19 +2079,27 @@ export function App() {
             {selectedTenant && masterWizardStep === 3 ? (
               <div className="tenant-profile-card">
                 <h4>Etapa 3 — Biblioteca de fluxos</h4>
-                <div className="grid-form">
-                  <select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)}>
-                    <option value="">Selecionar</option>
-                    {selectableFlowLibrary.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.title}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={() => void activateFlowFromLibrary()} disabled={!selectedLibraryId}>
-                    Ativar da biblioteca
-                  </button>
-                </div>
+                <p className="muted muted-subtle">
+                  Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
+                  <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
+                </p>
+                {selectableFlowLibrary.some((item) => !systemDefaultLibraryIds.has(item.id)) ? (
+                  <div className="grid-form">
+                    <select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)}>
+                      <option value="">Selecionar</option>
+                      {selectableFlowLibrary
+                        .filter((item) => !systemDefaultLibraryIds.has(item.id))
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.title}
+                          </option>
+                        ))}
+                    </select>
+                    <button type="button" onClick={() => void activateFlowFromLibrary()} disabled={!selectedLibraryId}>
+                      Ativar da biblioteca
+                    </button>
+                  </div>
+                ) : null}
                 <div className="tenant-profile-card">
                   <h4>Fluxos ativos na biblioteca</h4>
                   {libraryFlowRows.length === 0 ? (
@@ -1504,41 +2112,111 @@ export function App() {
                         <span>URL</span>
                         <span>Ações</span>
                       </div>
-                      {libraryFlowRows.map(({ item, linkedFlow, isIncluded }) => (
-                        <div key={item.id} className="saved-flows-row library-active-row">
-                          <span>{linkedFlow?.displayLabel ?? linkedFlow?.nickname ?? item.title}</span>
-                          <span className={`flow-status ${isIncluded ? "active" : "inactive"}`}>
-                            <i />
-                            {isIncluded ? "Ativo" : "Inativo"}
-                          </span>
-                          <span className="flow-url-cell">
-                            <a href={linkedFlow?.url ?? item.viewerUrl} target="_blank" rel="noreferrer">
-                              {linkedFlow?.url ?? item.viewerUrl}
-                            </a>
-                          </span>
-                          <span className="flow-row-actions">
-                            <button
-                              type="button"
-                              className={`compact-action-btn ${
-                                isIncluded ? "compact-action-btn-danger" : "compact-action-btn-success"
-                              }`}
-                              onClick={() => void toggleLibraryFlow(item.id, linkedFlow?.id)}
-                            >
-                              {isIncluded ? "Remover" : "Incluir"}
-                            </button>
-                            <button
-                              type="button"
-                              className={`compact-action-btn ${
-                                isIncluded ? "compact-action-btn-success" : "compact-action-btn-secondary"
-                              }`}
-                              disabled={!linkedFlow || !isIncluded}
-                              onClick={() => (linkedFlow ? void copyFlowShareLink(linkedFlow.id) : undefined)}
-                            >
-                              Link curto
-                            </button>
-                          </span>
-                        </div>
-                      ))}
+                      {libraryFlowRows.map(({ item, linkedFlow, isIncluded, healthStatus }) => {
+                        const isSystemDefaultRow = systemDefaultLibraryIds.has(item.id);
+                        const canCopyLink = Boolean(linkedFlow) && isIncluded && healthStatus === "active";
+                        return (
+                          <div key={item.id} className="saved-flows-row library-active-row">
+                            <span>{linkedFlow?.displayLabel ?? linkedFlow?.nickname ?? item.title}</span>
+                            <span className={`flow-status ${isIncluded ? "active" : "inactive"}`}>
+                              <i />
+                              {isIncluded ? "Ativo" : "Inativo"}
+                            </span>
+                            <span className="flow-url-cell">
+                              <a
+                                href={linkedFlow?.url ?? item.viewerUrl}
+                                title={linkedFlow?.url ?? item.viewerUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {abbreviateUrlForDisplay(linkedFlow?.url ?? item.viewerUrl)}
+                              </a>
+                            </span>
+                            <span className="flow-row-actions">
+                              {isSystemDefaultRow ? (
+                                <button
+                                  type="button"
+                                  className={`compact-action-btn ${
+                                    isIncluded ? "compact-action-btn-success" : "compact-action-btn-secondary"
+                                  }`}
+                                  disabled={!canCopyLink}
+                                  onClick={() => (linkedFlow ? void copyFlowShareLink(linkedFlow.url, linkedFlow.id) : undefined)}
+                                >
+                                  Copiar link
+                                </button>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className={`compact-action-btn ${
+                                      isIncluded ? "compact-action-btn-danger" : "compact-action-btn-success"
+                                    }`}
+                                    onClick={() => void toggleLibraryFlow(item.id, linkedFlow?.id)}
+                                  >
+                                    {isIncluded ? "Remover" : "Incluir"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`compact-action-btn ${
+                                      isIncluded ? "compact-action-btn-success" : "compact-action-btn-secondary"
+                                    }`}
+                                    disabled={!canCopyLink}
+                                    onClick={() => (linkedFlow ? void copyFlowShareLink(linkedFlow.url, linkedFlow.id) : undefined)}
+                                  >
+                                    Copiar link
+                                  </button>
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="tenant-profile-card">
+                  <h4>Fluxos do workspace Typebot</h4>
+                  <p className="muted muted-subtle">
+                    Criados direto no builder no workspace deste assinante; aparecem aqui para copiar o link público.
+                  </p>
+                  {workspaceOnlyFlows.length === 0 ? (
+                    <p className="muted muted-subtle">Nenhum fluxo apenas do workspace.</p>
+                  ) : (
+                    <div className="saved-flows-table">
+                      <div className="saved-flows-header library-active-row">
+                        <span>Nome</span>
+                        <span>Status</span>
+                        <span>URL</span>
+                        <span>Ações</span>
+                      </div>
+                      {workspaceOnlyFlows.map((flow) => {
+                        const healthStatus = flowStatuses[flow.id] ?? "checking";
+                        const canCopyLink = healthStatus === "active";
+                        return (
+                          <div key={flow.id} className="saved-flows-row library-active-row">
+                            <span>{flow.displayLabel ?? flow.nickname}</span>
+                            <span className={`flow-status ${healthStatus === "active" ? "active" : "inactive"}`}>
+                              <i />
+                              {healthStatus === "checking" ? "Verificando…" : healthStatus === "active" ? "Ativo" : "Inativo"}
+                            </span>
+                            <span className="flow-url-cell">
+                              <a href={flow.url} title={flow.url} target="_blank" rel="noreferrer">
+                                {abbreviateUrlForDisplay(flow.url)}
+                              </a>
+                            </span>
+                            <span className="flow-row-actions">
+                              <button
+                                type="button"
+                                className={`compact-action-btn ${canCopyLink ? "compact-action-btn-success" : "compact-action-btn-secondary"}`}
+                                disabled={!canCopyLink}
+                                onClick={() => void copyFlowShareLink(flow.url, flow.id)}
+                              >
+                                Copiar link
+                              </button>
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1555,29 +2233,70 @@ export function App() {
         {activeScreen === "masterLibrary" ? (
           <section className="card">
             <h3>Biblioteca Master</h3>
-            <p className="muted">
-              Fluxos da conta <strong>walkup@walkuptec.com.br</strong>. Ao marcar como <strong>Padrão Sistema</strong>, o item fica
-              disponível para o assinante em "Ativar da biblioteca".
-            </p>
 
             <div className="saved-flows-table master-library-table">
               <div className="saved-flows-header master-library-row">
+                <span>Título</span>
                 <span>Fluxo origem</span>
                 <span>URL</span>
                 <span>Ação</span>
               </div>
               {unpublishedSourceMasterFlows.map((flow) => {
+                const promoteTitle = masterPromoteTitles[flow.id] ?? flow.displayLabel ?? "";
+                const canPromote = promoteTitle.trim().length >= 2;
+                const flowOriginAlias =
+                  flow.typebotPublicId?.trim() || flow.displayLabel?.trim() || flow.nickname;
                 return (
                   <div key={flow.id} className="saved-flows-row master-library-row">
-                    <span>{flow.displayLabel ?? flow.nickname}</span>
+                    <span>
+                      {editingMasterTitleFlowId === flow.id ? (
+                        <input
+                          type="text"
+                          className="master-promote-title-input master-promote-title-input-inline"
+                          placeholder="Mín. 2 caracteres"
+                          value={promoteTitle}
+                          autoFocus
+                          onChange={(event) =>
+                            setMasterPromoteTitles((current) => ({ ...current, [flow.id]: event.target.value }))
+                          }
+                          onBlur={() => setEditingMasterTitleFlowId(null)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === "Escape") {
+                              setEditingMasterTitleFlowId(null);
+                            }
+                          }}
+                          aria-label={`Título para promover ${flowOriginAlias}`}
+                        />
+                      ) : (
+                        <span className="master-title-display-row">
+                          <span className="master-title-display">{promoteTitle || "Sem título"}</span>
+                          <button
+                            type="button"
+                            className="master-title-edit-btn"
+                            onClick={() => setEditingMasterTitleFlowId(flow.id)}
+                            aria-label={`Editar título de ${flowOriginAlias}`}
+                            title="Editar título"
+                          >
+                            ✎
+                          </button>
+                        </span>
+                      )}
+                    </span>
+                    <span className="master-flow-origin-alias" title={flow.displayLabel ?? flow.nickname}>
+                      {flowOriginAlias}
+                    </span>
                     <span className="flow-url-cell">
-                      <a href={flow.url} target="_blank" rel="noreferrer">
-                        {flow.url}
+                      <a href={flow.url} title={flow.url} target="_blank" rel="noreferrer">
+                        {abbreviateUrlForDisplay(flow.url)}
                       </a>
                     </span>
                     <span>
-                      <button type="button" onClick={() => void promoteFlowToSystemLibrary(flow)}>
-                        Definir como Padrão Sistema
+                      <button
+                        type="button"
+                        disabled={!canPromote}
+                        onClick={() => void promoteFlowToSystemLibrary(flow, promoteTitle)}
+                      >
+                        Definir como Padrão
                       </button>
                     </span>
                   </div>
@@ -1589,7 +2308,7 @@ export function App() {
             </div>
 
             <div className="tenant-profile-card">
-              <h4>Fluxos já publicados na Biblioteca Master</h4>
+              <h4>Fluxos compartilhados</h4>
               {systemMasterLibrary.length === 0 ? (
                 <p className="muted">Nenhum fluxo padrão publicado ainda.</p>
               ) : (
@@ -1604,8 +2323,8 @@ export function App() {
                     <div className="saved-flows-row master-library-published-row" key={item.id}>
                       <span>{item.title}</span>
                       <span className="flow-url-cell">
-                        <a href={item.viewerUrl} target="_blank" rel="noreferrer">
-                          {item.viewerUrl}
+                        <a href={item.viewerUrl} title={item.viewerUrl} target="_blank" rel="noreferrer">
+                          {abbreviateUrlForDisplay(item.viewerUrl)}
                         </a>
                       </span>
                       <span>{new Date(item.updatedAt).toLocaleString("pt-BR")}</span>
@@ -1662,6 +2381,14 @@ export function App() {
 
             <section className="card">
               <h3>Assinantes</h3>
+              {isLoadingTenants ? (
+                <p className="muted muted-subtle">
+                  <span className="processing-inline-wrap" aria-live="polite">
+                    <i className="processing-inline-dot" aria-hidden="true" />
+                    Carregando assinantes...
+                  </span>
+                </p>
+              ) : null}
               <div className="table">
                 <div className="table-row table-header subscribers-table-row">
                   <span>Assinante</span>
@@ -1677,15 +2404,19 @@ export function App() {
                         <strong>{tenant.name}</strong>
                         <small>{tenant.ownerEmail}</small>
                         <small>{tenant.whatsapp || "Sem WhatsApp"}</small>
-                        <small>
-                          Typebot:{" "}
-                          {tenant.typebotProvisionStatus === "provisioned"
-                            ? "Provisionado"
-                            : tenant.typebotProvisionStatus === "pending_manual"
-                              ? "Pendente de ativação"
-                              : tenant.typebotProvisionStatus === "failed"
-                                ? "Falha"
-                                : "Não iniciado"}
+                        <small
+                          className={
+                            isTenantTypebotProvisioned(tenant) ? "subscriber-typebot-ready" : "subscriber-typebot-pending"
+                          }
+                          title={
+                            isTenantTypebotProvisioned(tenant)
+                              ? undefined
+                              : (tenant.typebotProvisionError?.trim() ||
+                                  "Workspace Typebot pendente ou com erro na criação.") ||
+                                undefined
+                          }
+                        >
+                          Typebot: {isTenantTypebotProvisioned(tenant) ? "Provisionado" : "Pendente"}
                         </small>
                       </span>
                     </span>
@@ -1701,16 +2432,14 @@ export function App() {
                       <button className="ghost-btn" onClick={() => openEditSubscriberModal(tenant)}>
                         Editar
                       </button>
-                      <button
-                        className="ghost-btn typebot-access-btn"
-                        onClick={() => window.open(getTypebotAccessUrl(tenant), "_blank", "noopener,noreferrer")}
-                      >
-                        Acessar Typebot
-                      </button>
                     </span>
                   </div>
                 ))}
-                {filteredTenants.length === 0 ? <p className="muted">Nenhum assinante encontrado para os filtros aplicados.</p> : null}
+                {filteredTenants.length === 0 ? (
+                  <p className="muted">
+                    {isLoadingTenants ? "Buscando assinantes..." : "Nenhum assinante encontrado para os filtros aplicados."}
+                  </p>
+                ) : null}
               </div>
             </section>
           </>
@@ -1723,7 +2452,7 @@ export function App() {
               <div className="table-row table-header queue-table-row">
                 <span>Contato</span>
                 <span>Fluxo de origem</span>
-                <span>Status</span>
+                <span>Atendente</span>
                 <span>Atualizado em</span>
                 <span>Ação</span>
               </div>
@@ -1731,20 +2460,37 @@ export function App() {
                 <div className="table-row queue-table-row" key={item.contactId}>
                   <span>{item.contactName}</span>
                   <span>{item.sourceFlowLabel}</span>
-                  <span>{item.status === "waiting" ? "Aguardando" : `Em atendimento (${item.assignedAgentId})`}</span>
+                  <span>{item.status === "in_service" ? item.assignedAgentName ?? item.assignedAgentId ?? "-" : "-"}</span>
                   <span>{new Date(item.updatedAt).toLocaleString("pt-BR")}</span>
-                  <span>
-                    {item.status === "waiting" ? (
-                      <button onClick={() => assignContact(item.contactId)}>Assumir atendimento</button>
-                    ) : (
-                      <button
-                        onClick={() =>
-                          window.open(getAgentViewUrl(selectedTenant, item.contactId, item.assignedAgentId ?? agentId), "_blank")
-                        }
-                      >
-                        Abrir atendimento
-                      </button>
-                    )}
+                  <span className="queue-actions">
+                    <button
+                      className="queue-icon-btn queue-icon-btn--lead"
+                      onClick={() => openLeadContextModal(item)}
+                      title="Ver dados do Lead"
+                      aria-label="Ver dados do Lead"
+                      disabled={!item.leadContext || Object.keys(item.leadContext).length === 0}
+                    >
+                      <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path
+                          d="M11 4a7 7 0 1 0 4.384 12.46l3.578 3.579a1 1 0 0 0 1.414-1.415l-3.578-3.578A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      className={`queue-icon-btn queue-chat-icon ${item.status === "waiting" ? "queue-chat-icon--pulse" : ""}`}
+                      onClick={() => assignContact(item.contactId)}
+                      title={item.status === "waiting" ? "Iniciar atendimento" : "Atendimento já iniciado"}
+                      aria-label={item.status === "waiting" ? "Iniciar atendimento" : "Atendimento já iniciado"}
+                      disabled={item.status !== "waiting"}
+                    >
+                      <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path
+                          d="M6.5 5A4.5 4.5 0 0 0 2 9.5v5A4.5 4.5 0 0 0 6.5 19H8v2.25c0 .4.44.64.77.42L12.7 19H17.5a4.5 4.5 0 0 0 4.5-4.5v-5A4.5 4.5 0 0 0 17.5 5h-11Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
                   </span>
                 </div>
               ))}
@@ -1790,6 +2536,7 @@ export function App() {
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
+                  if (isSavingSubscriber) return;
                   saveSubscriber().catch(() => setStatusMessage("Falha ao salvar assinante."));
                 }}
               >
@@ -1814,6 +2561,7 @@ export function App() {
                     placeholder="Nome do assinante"
                     value={newTenantName}
                     onChange={(event) => setNewTenantName(event.target.value)}
+                    disabled={isSavingSubscriber}
                     required
                   />
                   <input
@@ -1821,19 +2569,41 @@ export function App() {
                     placeholder="E-mail de cadastro"
                     value={newTenantEmail}
                     onChange={(event) => setNewTenantEmail(event.target.value)}
+                    disabled={isSavingSubscriber}
                     required
                   />
                   <input
                     placeholder="WhatsApp de cadastro"
                     value={newTenantWhatsapp}
                   onChange={(event) => setNewTenantWhatsapp(formatWhatsapp(event.target.value))}
+                    disabled={isSavingSubscriber}
                     required
                   />
+                  {!editingTenantId ? (
+                    <input
+                      type="password"
+                      placeholder="Senha inicial de acesso"
+                      value={newTenantPassword}
+                      onChange={(event) => setNewTenantPassword(event.target.value)}
+                      disabled={isSavingSubscriber}
+                      minLength={4}
+                      required
+                    />
+                  ) : null}
                 </div>
+                {isSavingSubscriber ? (
+                  <p className="muted muted-subtle">
+                    <span className="processing-inline-wrap" aria-live="polite">
+                      <i className="processing-inline-dot" aria-hidden="true" />
+                      Processando cadastro do assinante...
+                    </span>
+                  </p>
+                ) : null}
                 <div className="modal-actions">
                   <button
                     type="button"
                     className="ghost-btn"
+                    disabled={isSavingSubscriber}
                     onClick={() => {
                       setIsSubscriberModalOpen(false);
                       resetSubscriberForm();
@@ -1841,12 +2611,61 @@ export function App() {
                   >
                     Cancelar
                   </button>
-                  <button type="submit">{editingTenantId ? "Salvar alterações" : "Criar assinante"}</button>
+                  <button type="submit" disabled={isSavingSubscriber}>
+                    {isSavingSubscriber
+                      ? editingTenantId
+                        ? "Salvando..."
+                        : "Criando..."
+                      : editingTenantId
+                        ? "Salvar alterações"
+                        : "Criar assinante"}
+                  </button>
                 </div>
               </form>
             </div>
           </div>
         ) : null}
+
+        {isLeadContextModalOpen ? (
+          <div
+            className="modal-overlay"
+            onClick={() => {
+              setIsLeadContextModalOpen(false);
+              setSelectedLeadContext(null);
+              setSelectedLeadContextContactName("");
+            }}
+          >
+            <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+              <h3>Dados informados pelo Lead</h3>
+              <p className="muted">Contato: {selectedLeadContextContactName || "-"}</p>
+              {selectedLeadContext && Object.keys(selectedLeadContext).length > 0 ? (
+                <div className="lead-context-list">
+                  {Object.entries(selectedLeadContext).map(([key, value]) => (
+                    <div className="lead-context-row" key={key}>
+                      <span>{key}</span>
+                      <strong>{String(value ?? "")}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">Este contato não possui dados estruturados salvos.</p>
+              )}
+              <div className="modal-actions">
+                <button
+                  className="ghost-btn"
+                  onClick={() => {
+                    setIsLeadContextModalOpen(false);
+                    setSelectedLeadContext(null);
+                    setSelectedLeadContextContactName("");
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
       </main>
     </div>
   );

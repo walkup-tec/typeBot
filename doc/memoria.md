@@ -1,3 +1,1250 @@
+## 2026-05-03 - Handoff / Redirect Typebot: resolver tenant por publicId e viewer URL
+
+- `POST /api/typebot/handoff` passou a associar fluxos pelo **publicId** (`typebotPublicId` ou ultimo segmento da URL do viewer), pelo **displayLabel**, pela URL que contem `/{token}`, alem do **nickname**.
+- Se o body trouxer **`typebotViewerUrl`**, o publicId extraido dessa URL tambem e usado para bater com o fluxo salvo (uteis quando `sourceFlowLabel` no Typebot nao bate com o apelido do painel).
+- Fluxos duplicados na lista sao deduplicados por `id`.
+- Ver LOG: `doc/LOG-2026-05-03__213000__fix-handoff-tenant-resolution-publicid-viewer-url.md`.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-handoff-tenant-resolution`
+- `sourceFlowLabel-publicId`
+- `typebotViewerUrl-handoff`
+
+## 2026-05-03 - Fluxos criados no Typebot entram na biblioteca do assinante
+
+- Funcao `importManualWorkspaceTypebotsIntoTenantFlows`: lista typebots do workspace do tenant e cria `SavedFlow` em falta (dedupe por `typebotRemoteId` / publicId / URL).
+- So inclui fluxos com viewer URL ativa; sem `librarySourceId`.
+- Chamada no `GET .../tenants/:tenantId/flows` e no fim de `syncSystemDefaultsToRealTypebotWorkspace`.
+- Campo opcional `typebotRemoteId` em `SavedFlow`.
+
+### Palavras-chave para pesquisa futura
+
+- `import-manual-workspace-typebots`
+- `typebotRemoteId`
+
+## 2026-05-03 - Opcao "Nao tenho atendente" (fila so para Master)
+
+- Flag por tenant: `noSeparateAttendants` via PATCH de perfil (`profile-image`).
+- Fila: `attendantsForQueueRouting` em `queue.routes.ts` restringe distribuicao automatica a usuarios `role === "master"` quando a flag esta ativa.
+- Admin Etapa 2: checkbox, oculta cadastro de novos atendentes, `assignContact` usa login do Master como `agentId`.
+- Ver LOG: `doc/LOG-2026-05-03__160000__feat-no-separate-attendants-master-only-queue.md`.
+
+### Palavras-chave para pesquisa futura
+
+- `no-separate-attendants`
+- `master-only-queue-routing`
+- `nao-tenho-atendente`
+
+## 2026-05-03 - Logo da marca nao apaga mais imagem de compartilhamento
+
+- Ao salvar a logo, o PATCH inclui `shareImageUrl` e outros campos ja preenchidos no formulario para nao perder a preview antes de "Proxima etapa".
+- Hint na logo: **500x500 px recomendado**.
+
+### Palavras-chave para pesquisa futura
+
+- `share-image-lost-on-logo-upload`
+- `persist-profile-merge-share-image`
+
+## 2026-04-28 - Configuracao de ordem da fila substituindo descricao
+
+- Campo `Descricao` do perfil foi removido e substituido por `Ordem para fila de atendimento`.
+- Novas opcoes por tenant:
+  - `assign_per_incoming` (distribuicao ciclica / round-robin)
+  - `shared_pool` (todos os atendimentos disponiveis para todos)
+  - `random` (distribuicao aleatoria)
+- A regra agora e aplicada no momento de entrada de novos atendimentos (handoff e enqueue manual).
+
+### Palavras-chave para pesquisa futura
+
+- `ordem-fila-atendimento`
+- `queue-distribution-mode-tenant`
+- `shared-pool-round-robin-random`
+
+## 2026-04-28 - Opcao de WhatsApp na tela de espera do handoff
+
+- Adicionada configuracao por tenant para definir se o WhatsApp aparece como segunda opcao de atendimento.
+- Master Console recebeu seletor com as duas opcoes:
+  - com botao WhatsApp
+  - sem botao WhatsApp
+- Tela `/handoff-view` passou a respeitar essa preferencia ao renderizar o bloco de acoes.
+
+### Palavras-chave para pesquisa futura
+
+- `usewhatsappsecondoption`
+- `handoff-wait-whatsapp-toggle`
+- `master-console-whatsapp-second-option`
+
+## 2026-04-28 - Alertas de pendencia na Fila ao Vivo (badge + resumo + som)
+
+- Implementado `badge` com contagem de pendentes no menu `Fila ao vivo`.
+- Implementado alerta visual persistente no topo com resumo de pendencias e atalho para abrir a fila.
+- Implementado aviso sonoro ao detectar aumento de pendentes na fila.
+- Ajustado polling da fila para atualizar em todas as telas (com tenant selecionado), nao apenas quando a tela da fila esta ativa.
+
+### Palavras-chave para pesquisa futura
+
+- `fila-ao-vivo-badge-pendentes`
+- `resumo-pendente-persistente`
+- `notificacao-sonora-novo-lead`
+- `polling-fila-todas-telas`
+
+## 2026-04-28 - Ajuste de tunel para teste do fluxo Ideal Cred
+
+- URL publica anterior do webhook de handoff estava indisponivel (erro de gateway).
+- Novo tunel Serveo foi gerado e aplicado em `TYPEBOT_HANDOFF_WEBHOOK_URL`.
+- API local reiniciada para recarregar `.env`, restaurando caminho de teste para redirect/handoff.
+
+### Palavras-chave para pesquisa futura
+
+- `tunnel-refresh-idealcred`
+- `typebot-handoff-webhook-url-update`
+- `serveo-handoff-fix`
+
+## 2026-04-28 - Endpoint manual de backfill para nome de atendente
+
+- Criado endpoint de manutencao `POST /api/master/queue/backfill-agent-names` para forcar a hidratacao de `assignedAgentName` em registros antigos da fila.
+- Resolucao de tenant por `body.tenantId` (prioritario) com fallback para contexto de tenant da requisicao.
+- Build da API validado apos ajuste (`npm run build:api`).
+
+### Palavras-chave para pesquisa futura
+
+- `manual-backfill-agent-names`
+- `queue-assignedagentname-hydration`
+- `api-master-queue-backfill-agent-names`
+
+## 2026-04-28 - Recuperacao de tunel e redirect (nova rotacao)
+
+- Tunel anterior caiu e gerou falha de redirect.
+- Novo tunel Serveo ativo configurado e aplicado no `.env` da API.
+- API reiniciada e tenant Ideal Cred re-sincronizado para reaplicar webhook no Typebot.
+- Validado webhook do fluxo publicado apontando para URL nova.
+- POST publico no handoff retornando `201` com `urlFlat`.
+
+### Palavras-chave para pesquisa futura
+
+- `tunnel-rotation-redirect-recovery`
+- `serveo-new-url-handoff`
+- `sync-defaults-after-env-change`
+
+## 2026-04-28 - Novo layout da fila com acoes por icones
+
+- Tela de fila ajustada para manter colunas em uma unica linha no desktop.
+- Coluna `Ação` passou a usar dois icones:
+  - `🔍` para abrir dados do Lead;
+  - `💬` para iniciar atendimento.
+- Icone de conversa pulsa quando o contato esta pendente (`waiting`).
+- Apos iniciar atendimento (`in_service`), icone de conversa fica neutro e bloqueado.
+- Build e linter do admin validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `fila-icone-lupa-conversa`
+- `conversa-pulsando-pendente`
+- `conversa-neutra-bloqueada-atendido`
+- `queue-grid-single-line`
+
+## 2026-04-28 - Visualizacao dos dados do Lead na fila ao vivo
+
+- Fila ao vivo recebeu acao `Ver dados do Lead` por contato.
+- Botao abre modal com dados estruturados (`leadContext`) em formato chave/valor.
+- Acao fica desabilitada quando o contato nao possui contexto salvo.
+- Estilos dedicados adicionados para leitura limpa no modal.
+- Build e linter do admin validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `ver-dados-do-lead-fila`
+- `leadcontext-modal-ui`
+- `acao-por-linha-livequeue`
+
+## 2026-04-28 - Persistencia de dados do Lead no backend da fila
+
+- Implementada persistencia de `leadContext` diretamente no contato da fila (`QueueContact`).
+- `enqueueSchema` foi ampliado para aceitar `leadContext` opcional.
+- No handoff, `leadContext` resolvido agora e salvo no `enqueue` (alem de seguir para `handoff-view`).
+- Build da API e linter validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `leadcontext-persistido-fila`
+- `queuecontact-leadcontext`
+- `handoff-enqueue-com-contexto`
+
+## 2026-04-28 - Fila ao vivo ajustada (ordem, contato, fluxo, status e atendente)
+
+- Fila passou a ser ordenada por `updatedAt` decrescente (mais recentes no topo).
+- Handoff agora resolve nome real do lead e salva como `contactName` na fila.
+- `sourceFlowLabel` da fila passou a priorizar `flowAlias` (nome amigavel do fluxo Typebot).
+- Tabela da fila no admin separou `Status` e `Atendente` em colunas distintas.
+- Mapeamento `assignedAgentId -> displayName` aplicado na lista para mostrar nome do atendente.
+- Build de `api` e `admin` validado sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `fila-mais-recentes-primeiro`
+- `nome-lead-no-contato`
+- `flowalias-fila-origem`
+- `coluna-atendente-separada-status`
+
+## 2026-04-28 - Auto-scroll no envio de imagem (Lead e Atendente)
+
+- Implementado auto-scroll para o final da conversa em ambos os chats quando mensagem de imagem chega.
+- No widget, scroll ocorre ao atualizar `messages` e novamente no `onLoad` da imagem.
+- No `handoff-view`, adicionados listeners de `load` para `img.msg-image` antes do scroll final.
+- Resultado: conversa acompanha automaticamente a imagem carregada no fim da thread.
+- Build de `api` e `widget` validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `auto-scroll-imagem-lead-atendente`
+- `onload-image-scroll-chat`
+- `scroll-bottom-messages-update`
+
+## 2026-04-28 - Redirect corrigido com hardening de .env + patch de webhook
+
+- Investigacao mostrou que o fluxo publicado mantinha URL antiga no bloco `Webhook` mesmo apos sync.
+- Causa raiz: carregamento de ambiente inconsistente ao subir API pela raiz (valor de `apps/api/.env` nao aplicado de forma confiavel).
+- Backend recebeu loader dedicado (`load-env`) e `server.ts` passou a iniciar com esse bootstrap.
+- Sync ganhou hardening para patchar/publicar webhook de handoff em fluxos existentes.
+- Validado no schema publicado: URL do webhook atualizada para o tunel ativo e handoff publico retornando `201` com `urlFlat`.
+
+### Palavras-chave para pesquisa futura
+
+- `hardening-dotenv-monorepo-api`
+- `webhook-antigo-pos-sync`
+- `patch-handoff-existing-typebot`
+- `redirect-recovery-after-tunnel-change`
+
+## 2026-04-28 - Falha de redirect por tunel indisponivel (503) corrigida
+
+- Diagnostico confirmou API local `200` e URL publica antiga do webhook com `503`.
+- Novo tunel ativo configurado via Serveo para `localhost:3333`.
+- `TYPEBOT_HANDOFF_WEBHOOK_URL` atualizado no `.env` para a nova URL publica.
+- API reiniciada e tenant Ideal Cred re-sincronizado para reaplicar webhook/config no Typebot.
+- POST de validacao no endpoint publico de handoff retornou `201`.
+
+### Palavras-chave para pesquisa futura
+
+- `redirect-503-tunnel-unavailable`
+- `serveo-handoff-webhook`
+- `restart-api-after-env-handoff`
+- `sync-defaults-idealcred-tunnel`
+
+## 2026-04-28 - Botao "+" no chat com envio de imagem
+
+- Adicionado botao `+` na barra de mensagem do widget para selecionar imagem.
+- Fluxo de upload implementado com compressao/redimensionamento no frontend antes do envio.
+- Mensagens com `data:image/` agora sao renderizadas como imagem dentro da bolha.
+- Backend teve limite de `content` ampliado para aceitar payload de imagem compactada.
+- Builds de `api` e `widget` validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `botao-mais-upload-chat`
+- `mensagem-imagem-dataurl-widget`
+- `content-max-300000-queue`
+
+## 2026-04-28 - Sistema ainda mais discreto
+
+- Realizado segundo ajuste fino para reduzir ainda mais o destaque da bolha `Sistema`.
+- Borda, fundo e textos foram aproximados do tom base do painel.
+- Mantida legibilidade com hierarquia suave de tipografia.
+- Build e linter do widget validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `sistema-ainda-mais-discreto`
+- `second-pass-system-softening`
+- `low-contrast-system-bubble`
+
+## 2026-04-28 - Suavizacao do bloco Sistema (menos destaque)
+
+- Bloco `Sistema` recebeu ajuste de paleta para ficar mais discreto.
+- Saturacao e contraste reduzidos em borda, fundo e textos.
+- Layout estrutural foi preservado, alterando somente intensidade visual.
+- Build e linter do widget validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `sistema-mais-discreto`
+- `menos-destaque-bolha-sistema`
+- `ajuste-fino-paleta-sistema`
+
+## 2026-04-28 - Layout de mensagens do sistema alinhado com referencia
+
+- Mensagens `Sistema` no chat receberam novo visual para aderir ao mock enviado.
+- Ajustados fundo e borda para tom azul escuro com destaque.
+- Hierarquia de texto refinada em `strong`, `p` e `small` para reproduzir contraste da referencia.
+- Sem alteracoes nos blocos do lead e da Ideal Cred.
+- Build e linter do widget validados.
+
+### Palavras-chave para pesquisa futura
+
+- `layout-sistema-chat-azul`
+- `system-message-contrast-tuning`
+- `live-message-system-reference`
+
+## 2026-04-28 - Ajuste do icone do lead para igualar referencia
+
+- Icone do avatar do lead foi ajustado para ficar visualmente mais proximo do modelo enviado.
+- Emoji foi removido e substituido por desenho vetorial em CSS (cabeca + tronco).
+- Cores do avatar do lead foram refinadas para melhor aderencia ao padrao solicitado.
+- Build e linter do widget validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `icone-lead-css-vetorial`
+- `avatar-lead-head-body`
+- `match-icon-reference-left-chat`
+
+## 2026-04-28 - Lado esquerdo do chat no padrao da referencia
+
+- Ajustado somente o lado esquerdo (lead) para o visual da referencia enviada.
+- Mensagens do lead receberam bolha azul com tipografia adequada ao mock.
+- Avatar do lead foi adicionado no lado esquerdo das mensagens do visitante.
+- Lado direito (Ideal Cred) foi mantido sem alteracoes adicionais.
+- Build e linter do widget validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `lead-left-side-reference-style`
+- `visitor-blue-bubble-widget`
+- `keep-right-side-unchanged`
+
+## 2026-04-28 - Nova reversao para configuracao antiga do chat
+
+- Revertido novamente o ajuste de alinhamento da direita (`row-reverse`) a pedido do usuario.
+- Layout do chat voltou para a configuracao anterior.
+- Build e linter do widget validados sem erro.
+
+### Palavras-chave para pesquisa futura
+
+- `nova-reversao-chat-direita`
+- `rollback-row-reverse`
+- `restaurar-config-antiga-widget`
+
+## 2026-04-28 - Ajuste pontual do lado direito conforme referencia
+
+- Aplicado ajuste pontual no lado direito do chat para alinhamento fiel ao desenho.
+- Regra `.live-message-row.mine` recebeu `flex-direction: row-reverse`.
+- Mudanca restrita ao posicionamento de avatar/balao da direita, sem alterar tema global.
+- Build do widget validado com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `lado-direito-chat-row-reverse`
+- `ajuste-pontual-referencia-layout`
+- `mine-message-alignment`
+
+## 2026-04-28 - Reversao do ajuste visual do lado direito no chat
+
+- Revertido ajuste visual recente do lado direito a pedido do usuario.
+- Widget voltou ao comportamento anterior de bolha/avatar (antes da tentativa de fidelidade adicional).
+- Classes de sender (`agent`/`visitor`) foram restauradas nas mensagens.
+- Build do widget validado sem erros apos a reversao.
+
+### Palavras-chave para pesquisa futura
+
+- `rollback-ajuste-visual-lado-direito`
+- `restore-widget-chat-style`
+- `reverter-fidelidade-chat`
+
+## 2026-04-28 - Fallback do nome do atendente no widget
+
+- Corrigido caso em que o rodape ainda mostrava `atendente-01`.
+- Widget passou a resolver `displayName` via endpoint de atendentes do tenant quando `agentName` nao vier valido.
+- Matching implementado por `username` (e fallback por `id`) contra `sessionAgentId`.
+- Mantido fallback seguro para `agentId` quando a consulta nao estiver disponivel.
+- Build do widget validado com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `fallback-nome-atendente-widget`
+- `resolve-displayname-attendants-endpoint`
+- `agentid-para-displayname`
+
+## 2026-04-28 - Fidelidade visual do lado direito no chat ao vivo
+
+- Lado direito ajustado para refletir melhor o desenho de referencia (icone + cor do assinante).
+- Avatar da direita agora usa estilo dinamico do branding (borda/fundo) e contraste coerente.
+- Posicionamento do avatar da direita corrigido para o extremo direito com `row-reverse` nas mensagens `mine`.
+- Lado esquerdo foi neutralizado para manter padrao fixo do sistema, sem variacao por sender.
+- Build do widget validado com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `fidelidade-lado-direito-chat`
+- `avatar-direita-row-reverse`
+- `left-side-system-neutral`
+
+## 2026-04-28 - Nome dinamico do atendente no widget
+
+- Rodape do modo agente no widget deixou de exibir valor fixo (`atendente-01`).
+- Admin passou a abrir o widget com `agentName` na querystring, usando `authSession.user.displayName`.
+- Widget atualizado para ler `agentName` e aplicar fallback para `agentId` quando necessario.
+- Build do `admin` e `widget` validado com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `atendente-dinamico-widget`
+- `agentname-displayname-livechat`
+- `footer-atendente-logado`
+
+## 2026-04-28 - Botao Enviar com cor do assinante
+
+- Botao `Enviar` do chat ao vivo passou a usar a cor predominante do assinante.
+- Aplicado em ambos os modos (agente e visitante).
+- Cor de fonte do botao continua com contraste automatico para legibilidade.
+
+### Palavras-chave para pesquisa futura
+
+- `send-button-tenant-color`
+- `livechat-enviar-branding`
+- `cta-contrast-assinante`
+
+## 2026-04-28 - Painel ao vivo com lado direito no branding do assinante
+
+- Ajustado widget de atendimento ao vivo para manter lado esquerdo padrao do sistema.
+- Mensagens do lado direito agora usam identidade do assinante: cor predominante + logo/avatar.
+- Implementado calculo automatico de contraste para fonte e timestamp nos baloes da direita.
+- Incluidos fallbacks de iniciais e cor padrao para casos sem branding completo.
+
+### Palavras-chave para pesquisa futura
+
+- `chat-live-right-tenant-branding`
+- `left-system-right-tenant-pattern`
+- `dynamic-contrast-live-messages`
+
+## 2026-04-28 - Compatibilidade final para Redirect do fluxo CLT
+
+- Investigacao mostrou que a variavel `url_direct` nao estava sendo preenchida em execucoes reais.
+- Endpoint de handoff ajustado para retornar URL tanto na raiz (`urlFlat`) quanto em `data.urlFlat`.
+- Mapping do Webhook no Typebot ajustado para `data.urlFlat` e fluxo republicado.
+- Validado endpoint publico ativo retornando os dois formatos de payload para robustez.
+
+### Palavras-chave para pesquisa futura
+
+- `url-direct-nao-preenchida`
+- `handoff-response-data-urlflat`
+- `redirect-clt-compatibilidade-final`
+
+## 2026-04-28 - Redirect do fluxo CLT restaurado com webhook publico ativo
+
+- Detectado que o Redirect nao funcionava por webhook herdado da origem Walkup com tunnel inativo.
+- Configurado novo endpoint publico ativo para `/api/typebot/handoff` e aplicado no fluxo da IdealCred.
+- Confirmado retorno `urlFlat` no webhook e mapping correto no Typebot (`bodyPath: urlFlat`).
+- Registrado em `.env` `TYPEBOT_HANDOFF_WEBHOOK_URL` para reduzir reincidencia.
+
+### Palavras-chave para pesquisa futura
+
+- `redirect-falha-por-webhook-inativo`
+- `typebot-urlflat-com-tunnel`
+- `idealcred-clt-handoff-restaurado`
+
+## 2026-04-28 - Correcao do Redirect no fluxo CLT (mapping + tenant)
+
+- Identificado que o Redirect falhava por mapping legado (`data.urlFlat`) e `tenantId` incorreto no webhook do Typebot.
+- Corrigido no fluxo publicado para usar `bodyPath: urlFlat` e `tenantId` da IdealCred.
+- Aplicado hardening no backend para normalizar esse padrão em sync/import futuros.
+- Confirmado: URL atual do webhook está inativa (`404`), exigindo endpoint público ativo para o redirect funcionar em produção.
+
+### Palavras-chave para pesquisa futura
+
+- `redirect-webhook-urlflat`
+- `tenantid-correto-no-handoff`
+- `webhook-public-endpoint-404`
+
+## 2026-04-28 - Verificacao operacional da rotina anti-404 no fluxo IdealCred
+
+- Reexecutada rotina completa: forcar `publicId`, publicar e sincronizar tenant.
+- Validado em tempo real que a URL solicitada (`...-38esudn`) responde `HTTP 200`.
+- Fluxo local do tenant continua apontando para o slug solicitado.
+- Mantido monitoramento para diferenciar indisponibilidade real vs cache local do navegador.
+
+### Palavras-chave para pesquisa futura
+
+- `recheck-idealcred-404`
+- `publicid-publish-sync-verify`
+- `viewer-http200-confirmado`
+
+## 2026-04-28 - Cor do botao corrigida para a marca do assinante
+
+- Identificado que o botao permanecia preto porque `defaultChatTheme.userBubbleBg` estava `#000000`.
+- Melhorada extracao de cor da logo no Admin para evitar predominancia de tons escuros/fundo.
+- Cor da Ideal Cred ajustada e reaplicada no Typebot (`#f7941d`) com sync validado.
+- Schema publicado passou a refletir `chat.buttons` e `customCss` na cor correta.
+
+### Palavras-chave para pesquisa futura
+
+- `cor-botao-preto-regressao`
+- `extract-logo-color-priorizar-destaque`
+- `ideal-cred-f7941d`
+
+## 2026-04-28 - Reaplicacao forcada de avatar e cores em fluxos existentes
+
+- Corrigido gap de sync onde fluxo ja existente podia nao receber novamente avatar e cores do tenant.
+- Reaplicacao visual passou a rodar mesmo sem overwrite, incluindo `hostAvatar` e `chat.buttons`.
+- Build e sync validados no Ideal Cred com campos visuais presentes no schema publicado.
+
+### Palavras-chave para pesquisa futura
+
+- `avatar-cores-existing-flow-sync`
+- `hostavatar-reapply-no-overwrite`
+- `chat-buttons-theme-persist`
+
+## 2026-04-28 - Correcao de regressao visual (avatar e cores) apos rotina de publicacao
+
+- Identificada regressao onde avatar/logo e cores do tenant se perdiam apos sync/publicacao.
+- Ajustada rotina para nao limpar icon/metadata quando nao houver URL nova segura.
+- Implementado fallback para endpoint publico de logo/share-image quando tenant usa `data:image` e houver `TYPEBOT_AVATAR_PUBLIC_BASE_URL`.
+- Validado no fluxo Ideal Cred: `hostAvatar` ativo e `buttons`/`customCss` com cores corretas.
+
+### Palavras-chave para pesquisa futura
+
+- `regressao-avatar-cores-pos-sync`
+- `preservar-metadata-typebot`
+- `public-logo-endpoint-fallback`
+
+## 2026-04-28 - Rotina definitiva de publicacao e acessibilidade pos-import
+
+- Implementada rotina obrigatoria no backend para todo fluxo importado/sincronizado sair operacional.
+- A rotina agora forca `publicId` deterministico, publica no Typebot e valida acessibilidade da URL no viewer.
+- Adicionado retry automatico (ate 3 tentativas) para confirmacao de disponibilidade.
+- Aplicado em importacao, atualizacao de existentes e varredura final de publicacao do workspace.
+
+### Palavras-chave para pesquisa futura
+
+- `garantia-pos-import-publicado-acessivel`
+- `ensure-operational-typebot`
+- `retry-validacao-viewer`
+
+## 2026-04-28 - URL especifica do fluxo Ideal Cred publicada com slug 38esudn
+
+- Corrigido caso de 404 no link solicitado com slug `...-38esudn`.
+- `publicId` do typebot do tenant foi atualizado para `empr-stimo-do-trabalhador-clt-38esudn`.
+- Publicacao executada no builder e sync do tenant reprocessado.
+- Validado `200 OK` na URL solicitada e `GET /flows` retornando o mesmo link.
+
+### Palavras-chave para pesquisa futura
+
+- `publicid-especifico-ideal-cred`
+- `slug-38esudn-publicado`
+- `viewer-404-resolvido-com-publish`
+
+## 2026-04-28 - Validacao da URL acessivel da Ideal Cred
+
+- Retomada da investigacao para confirmar URL publica funcional do fluxo Ideal Cred.
+- API local foi religada e o sync do tenant executado com sucesso.
+- Confirmado `200 OK` para `.../emprestimo-clt` e `404` apenas para slug antigo com sufixo.
+- Lista de flows do tenant permanece com URL funcional e pronta para compartilhamento.
+
+### Palavras-chave para pesquisa futura
+
+- `ideal-cred-viewer-url-ok`
+- `emprestimo-clt-link-oficial`
+- `sync-pos-retomada`
+
+## 2026-04-27 - Publicação forçada com retry e validação de acessibilidade
+
+- Implementada etapa de hardening no sync do tenant para forçar publicação e validar links ativos ao final.
+- Nova rotina faz até 3 tentativas: publica workspace completo, recalcula URLs dos flows e revalida acessibilidade.
+- Se recuperar links, registra no resumo; se restar fluxo inativo, também registra aviso explícito.
+- Objetivo: garantir que fluxo compartilhado esteja visível/acessível imediatamente após sync/import.
+
+### Palavras-chave para pesquisa futura
+
+- `force-publish-until-active`
+- `retry-publish-viewer-links`
+- `sync-hardening-accessibility`
+
+## 2026-04-27 - Botão "Copiar link" bloqueado para fluxo inativo
+
+- Implementado bloqueio do botão de cópia quando a URL do fluxo não estiver ativa no viewer.
+- UI agora só habilita cópia quando `healthStatus === active`; estados `checking` e `inactive` ficam desabilitados.
+- A função de cópia também valida status no clique (proteção dupla) e mostra aviso quando indisponível.
+- Resultado: evita copiar links quebrados/404 para operação.
+
+### Palavras-chave para pesquisa futura
+
+- `copiar-link-somente-ativo`
+- `flow-status-gate-ui-action`
+- `no-copy-for-inactive-viewer-url`
+
+## 2026-04-27 - Proteção contra URL quebrada (404) no link do fluxo
+
+- Investigado erro de carregamento no viewer para slug com sufixo (`...-38esudn`): URL respondia 404.
+- Implementada validação de URL ativa antes de persistir links no fluxo do tenant.
+- Quando URL derivada estiver inativa, o sync aplica fallback para URL ativa e evita salvar link quebrado.
+- Resultado validado: painel passou a retornar URL funcional (`.../emprestimo-clt`) em vez da quebrada.
+
+### Palavras-chave para pesquisa futura
+
+- `avoid-saving-404-viewer-url`
+- `viewer-active-url-validation`
+- `fallback-url-on-broken-tenant-slug`
+
+## 2026-04-27 - Varredura final de publicação no workspace do tenant
+
+- Para eliminar draft residual, o sync do tenant agora faz varredura final e publica todos os typebots do workspace.
+- Implementada função dedicada para listar e publicar cada fluxo ao fim de `syncSystemDefaultsToRealTypebotWorkspace`.
+- `syncSummary` passou a registrar explicitamente quais fluxos receberam publicação final garantida.
+- Validação no Ideal Cred confirmou execução da etapa de fechamento de publicação.
+
+### Palavras-chave para pesquisa futura
+
+- `workspace-publish-sweep`
+- `sync-final-publish-guarantee`
+- `eliminar-draft-residual-typebot`
+
+## 2026-04-27 - Hardening da publicação automática no sync do tenant
+
+- Investigado caso onde o Builder ainda mostrava "Publicar" mesmo após sync.
+- Confirmado que endpoint de publish funciona, mas alguns caminhos aplicavam patch sem publish final garantido.
+- Ajustado `typebot-builder.service.ts` para publicar:
+  - após patch de ícone bem-sucedido;
+  - ao final de cada fluxo importado;
+  - ao final de cada fluxo existente atualizado no sync.
+- Resultado: ciclo de sync fecha com estado publicado no tenant, reduzindo chance de draft residual.
+
+### Palavras-chave para pesquisa futura
+
+- `publish-final-after-sync`
+- `builder-showing-publicar-after-automation`
+- `draft-residual-fix-typebot`
+
+## 2026-04-27 - Rotina de publicação imediata após import no tenant
+
+- Implementada regra única: todo fluxo importado no workspace do assinante agora é publicado imediatamente após o import.
+- A publicação foi centralizada em `importTypebotIntoTargetWorkspace`, reduzindo risco de fluxo ficar em draft por caminho alternativo.
+- Chamadas duplicadas de publish nos loops de sync foram removidas para evitar redundância e manter comportamento consistente.
+- Build e sync de validação executados com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `publish-after-import-tenant`
+- `typebot-import-draft-prevention`
+- `centralizar-publicacao-import`
+
+## 2026-04-27 - Copiar link agora usa URL do tenant (não Walkup)
+
+- Corrigido o problema da Etapa 3 no painel do assinante onde a URL exibida/copied podia ficar com slug da matriz.
+- Ajustada a rotina de sync para não depender de `publicId` quando a Builder API retorna `null` no draft.
+- Passou a casar o typebot por nome e derivar a URL pelo `id` do typebot no workspace do tenant (sufixo final correto).
+- Incluída limpeza de flows locais duplicados/obsoletos durante sync forçado para evitar fallback em links antigos.
+- Validação na Ideal Cred: CLT retornou `.../empr-stimo-do-trabalhador-clt-38esudn` (esperado) e SIAPE com sufixo do tenant.
+
+### Palavras-chave para pesquisa futura
+
+- `copiar-link-tenant-correto`
+- `publicid-null-typebot-draft`
+- `viewer-url-por-id-do-tenant`
+- `limpeza-duplicados-flow-local`
+
+## 2026-04-27 - Novo padrão sem mapa agora importa automaticamente
+
+- Falha identificada: ao promover novo padrão sem entrada no `TYPEBOT_DEFAULT_IMPORTS_MAP`, o sync ignorava o fluxo.
+- Implementado fallback para resolver `sourceTypebotId` por nome/título no workspace matriz (`TYPEBOT_SOURCE_MASTER_WORKSPACE_ID`).
+- Com isso, novos padrões promovidos passam a importar sem depender de map manual prévio.
+- Validação na Ideal Cred: workspace refletiu os 2 padrões ativos (CLT + FGTS).
+
+### Palavras-chave para pesquisa futura
+
+- `source-id-fallback-by-title`
+- `default-import-without-map`
+- `promote-new-default-import-fix`
+
+## 2026-04-27 - Espelhamento estrito de padrões no workspace do assinante
+
+- Corrigido desvio onde workspace do assinante mantinha flows além dos padrões ativos da Biblioteca Master.
+- Sync forçado (`overwriteExisting=true`) agora opera em modo estrito: remove todos os flows fora da lista de padrões ativos.
+- `promote` passou a disparar sync com `overwriteExisting=true` para refletir na hora.
+- Importação em massa da matriz foi desligada por padrão (`TYPEBOT_IMPORT_FULL_SOURCE_WORKSPACE=false`), evitando recontaminação.
+- Validado na Ideal Cred: workspace ficou com apenas 1 flow (o único padrão ativo).
+
+### Palavras-chave para pesquisa futura
+
+- `strict-default-mirror`
+- `prune-non-default-typebots`
+- `promote-overwrite-existing`
+- `disable-full-source-import-default`
+
+## 2026-04-27 - Correção da falha de import após promote (metadata null)
+
+- Investigação em logs confirmou falha no import de padrão com erro 400 da Builder API.
+- Causa: `settings.metadata.imageUrl` e `settings.metadata.favIconUrl` enviados como `null`; Typebot exige `string`.
+- Correção aplicada em `typebot-builder.service.ts`: fallback para `""` nesses campos.
+- Revalidação do endpoint `sync-defaults` da Ideal Cred concluída com `status: ok`.
+
+### Palavras-chave para pesquisa futura
+
+- `import-400-metadata-null`
+- `favIconUrl-imageUrl-string-required`
+- `sync-defaults-retry-ok`
+
+## 2026-04-27 - Promote para padrão agora sincroniza Typebot na hora
+
+- Corrigido fluxo de `Definir como padrão`: antes reaproveitava só propagação local e podia não importar imediatamente no workspace Typebot.
+- `POST /api/master/system-library/promote` agora dispara sync imediato para todos os assinantes (`syncSystemDefaultsToRealTypebotWorkspace`).
+- Efeito: ao remover e promover novamente, o fluxo volta a ser importado sem depender de rotina indireta.
+- Build e lint validados.
+
+### Palavras-chave para pesquisa futura
+
+- `promote-default-immediate-sync`
+- `reimport-after-repromote`
+- `system-library-promote-typebot`
+
+## 2026-04-27 - Remocao em cascata ao tirar padrão da Biblioteca Master
+
+- Identificado gap: remover item da Biblioteca Master apagava apenas o registro local, sem remover dos assinantes.
+- Implementada cascata completa no `DELETE /api/master/system-library/:id`:
+  - remove flows correspondentes da base local dos tenants;
+  - remove typebots equivalentes dos workspaces Typebot dos assinantes.
+- Incluida busca por item da biblioteca por `id` para garantir contexto de remocao antes do delete.
+- Build e lint validados sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `delete-library-item-cascade`
+- `remove-default-flow-all-tenants`
+- `typebot-delete-on-master-remove`
+- `system-master-library-by-id`
+
+## 2026-04-27 - Rotina automatica: logo do assinante reaplica avatar
+
+- Revisada a rotina solicitada (cadastro tenant/workspace, importacao de padrões e avatar por logo).
+- Confirmado que cadastro de assinante e importacao de flows padrão ja existiam.
+- Implementado gatilho faltante: ao salvar `profileImageUrl` no tenant (`PATCH /profile-image`), o backend dispara sync com `overwriteExisting: true`.
+- Efeito: quando o assinante define logo depois, o avatar dos flows é atualizado automaticamente sem ação manual.
+- Se o assinante nao tiver logo, o sistema preserva avatar padrão do Typebot.
+
+### Palavras-chave para pesquisa futura
+
+- `profile-image-trigger-sync`
+- `auto-avatar-after-logo-set`
+- `tenant-workspace-default-import`
+- `overwriteExisting-true-profile-update`
+
+## 2026-04-27 - Hotfix de avatar no `hostAvatar` (Ideal Cred)
+
+- Com o bug do topo resolvido, o avatar ainda não aparecia no preview dos flows.
+- Hotfix operacional aplicado direto na Builder API para os 5 flows da Ideal Cred:
+  - `theme.chat.hostAvatar.isEnabled=true`
+  - `theme.chat.hostAvatar.url=<logo do tenant>`
+- Validado retorno de API com `enabled: true` e URL presente em todos os flows.
+
+### Palavras-chave para pesquisa futura
+
+- `hostavatar-hotfix`
+- `ideal-cred-avatar-preview`
+- `theme.chat.hostAvatar`
+
+## 2026-04-27 - Fix definitivo do base64 no topo do Typebot
+
+- Regressao confirmada: o topo do Builder voltava a exibir base64 quando `typebot.icon` recebia `data:image`.
+- Regra final implementada: `typebot.icon` nao aceita mais data URI (somente URL http(s) ou vazio).
+- Limpeza operacional aplicada na Ideal Cred: todos os flows com `typebot.icon=""`.
+- Sync reaplicado apos limpeza para manter tema/metadados sem sujar o header.
+- Separacao de responsabilidade mantida: avatar visual do chat usa `hostAvatar`; identificacao do flow/topo usa `typebot.icon` limpo.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-icon-clean`
+- `no-datauri-header`
+- `hostavatar-vs-typebot-icon`
+- `ideal-cred-base64-fix`
+
+## 2026-04-27 - Avatar no Builder corrigido via `typebot.icon` data URI
+
+- Diagnostico final: URL `.../api/public/tenants/:id/logo` no dominio do Builder retornava 404, entao o avatar nao carregava.
+- Correcao aplicada: `typebot.icon` dos fluxos da Ideal Cred foi forcado para a `data:image` da logo do tenant.
+- Protecao mantida: `workspace.icon` continua saneado para nao quebrar o seletor superior.
+- Sync passou a reaplicar icon por tenant explicitamente em fluxos existentes/importados.
+- Validado na API do Typebot que os flows da Ideal Cred ficaram com `icon` em `data:image/png;base64,...`.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-icon-datauri-avatar`
+- `builder-avatar-404`
+- `workspace-select-safe`
+- `applyTenantIconOnTarget`
+
+## 2026-04-27 - Fix de concorrencia no Builder (auto-sync sobrescrevendo edicao)
+
+- Causa raiz do erro `Could not update the typebot` identificada: auto-sync reaplicava patch em flows existentes enquanto usuario editava no Builder.
+- Ajustado `syncSystemDefaultsToRealTypebotWorkspace` para nao sobrescrever fluxos ja existentes no workspace durante o loop de sync.
+- Comportamento novo: auto-sync continua importando faltantes e preserva o que estiver em edicao manual.
+- Build da API validado com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-save-conflict`
+- `auto-sync-no-overwrite`
+- `existing-flow-preservation`
+- `builder-concurrency-fix`
+
+## 2026-04-27 - Reforco anti-regressao no avatar por logo do tenant
+
+- Trabalho de avatar foi refeito mantendo a regra: avatar do bot deve vir da logo do assinante.
+- Adicionada sanitizacao defensiva para impedir `data:image...` em campos textuais do Typebot (workspace/flow/metadata textuais).
+- Criados guards em `typebot-builder.service.ts` para fallback seguro quando entrada estiver em formato de data URI.
+- Mantida a limpeza automatica de `workspace.icon` em `data:image...` para evitar quebra do seletor superior.
+- Tenant Ideal Cred foi sincronizado novamente com as novas protecoes.
+
+### Palavras-chave para pesquisa futura
+
+- `avatar-tenant-logo-hardening`
+- `sanitizeTypebotText`
+- `workspace-icon-autoclean`
+- `anti-dataimage-regression`
+
+## 2026-04-27 - Fix do select de workspace com `data:image...`
+
+- Causa raiz confirmada: o campo `workspace.icon` no Typebot estava com `data:image...`, e nao o nome do workspace.
+- Limpeza aplicada no workspace Ideal Cred para remover o icon corrompido.
+- Backend recebeu saneamento automatico no sync (`sanitizeWorkspaceIconOnTarget`) para impedir recorrencia.
+- Regra aplicada: quando `workspace.icon` vier em `data:image`, o sistema limpa para string vazia mantendo nome seguro.
+- Re-sync do tenant Ideal Cred concluido com sucesso apos ajuste.
+
+### Palavras-chave para pesquisa futura
+
+- `workspace-icon-data-image`
+- `typebot-workspace-select-bug`
+- `sanitizeWorkspaceIconOnTarget`
+- `ideal-cred-workspace-cleanup`
+
+## 2026-04-27 - Fix do seletor de workspace sem remover upload de avatar
+
+- Causa raiz tratada: `data:image...` em campos do Typebot Builder podia quebrar o topo e impedir uso do seletor de workspace.
+- Upload no painel foi mantido: tenant continua podendo salvar logo/imagem de compartilhamento via upload (`data:image`).
+- No sync/import, o backend passou a enviar para o Typebot apenas URL `http(s)`:
+  - avatar do bot (`theme.chat.hostAvatar.url`)
+  - metadados (`settings.metadata.favIconUrl` e `settings.metadata.imageUrl`)
+- Criado endpoint publico para imagem de compartilhamento: `GET /api/public/tenants/:id/share-image`.
+- Build da API validado com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `workspace-select-typebot-fix`
+- `sem-data-image-no-builder`
+- `public-share-image-endpoint`
+- `upload-avatar-preservado`
+
+## 2026-04-24 - Cor predominante da logo aplicada em botões do Typebot no sync
+
+- Cor predominante já extraída no admin (`defaultChatTheme.userBubbleBg`) passou a ser aplicada automaticamente nos botões do Typebot durante sync/import.
+- Implementada rotina dedicada no backend para atualizar `theme.customCss` com bloco idempotente `.typebot-button` (fundo, borda e contraste de texto).
+- Rotina integrada para fluxos existentes e importados, seguida de publicação automática do fluxo.
+- Corrigido bloqueio operacional de validação (API em watch sem subir por `EADDRINUSE` na porta 3333), com restart do processo correto.
+- Validação real no tenant Ideal Cred confirmou `theme.customCss` com marcador `drax-auto-button-theme:start`.
+
+### Palavras-chave para pesquisa futura
+
+- `logo-dominant-color-typebot-buttons`
+- `defaultChatTheme-userBubbleBg`
+- `theme-customCss-typebot-button`
+- `drax-auto-button-theme`
+
+## 2026-04-24 - Fix de avatar quebrado por endpoint remoto 404
+
+- Diagnostico fechado: avatar quebrado porque `hostAvatar.url` estava apontando para endpoint remoto `.../api/public/tenants/:id/logo` inexistente (`404`).
+- Ajuste em `typebot-builder.service.ts`: removido fallback automatico de URL publica via `TYPEBOT_SYSTEM_MASTER_URL`.
+- Novo comportamento: usa URL publica somente se configurada explicitamente; caso contrario, fallback para `data:image` valido no `hostAvatar.url`.
+- Logo da Ideal Cred reaplicada via API de tenant e sincronizacao dos fluxos executada apos reinicio da API.
+- Validacao final no Builder API: `hostAvatar.isEnabled=true` e `hostAvatar.url` com `data:image/png;base64,...` (~5KB).
+
+### Palavras-chave para pesquisa futura
+
+- `avatar-broken-remote-404`
+- `hostavatar-datauri-fallback`
+- `remove-system-master-url-avatar-fallback`
+- `ideal-cred-logo-resync`
+
+## 2026-04-24 - Fix de avatar corrompido com URL publica da API
+
+- Causa raiz operacional confirmada: avatar quebrava quando `hostAvatar.url` usava fonte instavel/inacessivel (ex.: localhost no remoto) ou `data:image` grande.
+- `typebot-builder.service.ts` passou a montar URL publica estavel por tenant (`/api/public/tenants/:id/logo`) para `theme.chat.hostAvatar.url`.
+- Removido fallback padrao para `http://localhost:3333` em `TYPEBOT_AVATAR_PUBLIC_BASE_URL`.
+- `hostAvatar.url` deixa de receber `data:image` direto no Theme, reduzindo risco de corrupcao e estouro visual no editor.
+- Build da API validado com sucesso.
+
+### Palavras-chave para pesquisa futura
+
+- `fix-avatar-corrompido-url-publica-api`
+- `hostavatar-sem-dataurl`
+- `TYPEBOT_AVATAR_PUBLIC_BASE_URL-sem-localhost`
+- `api-public-tenants-logo`
+
+## 2026-04-24 - Metadados de fluxo Typebot aplicados por tenant no import
+
+- Importacao de fluxos para workspace do assinante passou a injetar metadados do tenant no schema do Typebot.
+- Campos aplicados automaticamente: `icon` (logo), `image` (compartilhamento), `description` (descricao da empresa) e `title` do fluxo.
+- Aplicacao feita em campos diretos do schema e tambem em `settings.metadata` para compatibilidade com a tela Metadados.
+- Cobertura para importacao de fluxos padrao e importacao em massa da matriz.
+- Build da API validado.
+
+### Palavras-chave para pesquisa futura
+
+- `sync-metadados-typebot-tenant`
+- `settings.metadata.icon-image-description`
+- `import-typebot-com-metadados`
+
+## 2026-04-24 - Perfil de Atendimento com metadados de compartilhamento
+
+- Etapa `Perfil de atendimento` recebeu dois novos campos: `Imagem (Compartilhamento)` e `Descricao` (max 200).
+- Backend de tenant passou a persistir `shareImageUrl` e `shareDescription`.
+- Endpoint `PATCH /api/master/tenants/:id/profile-image` passou a aceitar os novos campos com validacao.
+- Frontend inclui contador de caracteres e recomendacao de tamanho da imagem: `1200x630` (1.91:1).
+- Build da API e do Admin validados.
+
+### Palavras-chave para pesquisa futura
+
+- `perfil-atendimento-metadados-compartilhamento`
+- `shareImageUrl-shareDescription-tenant`
+- `descricao-200-caracteres`
+- `imagem-og-1200x630`
+
+## 2026-04-24 - Correcao URL Cartao Consignado (Ideal Cred)
+
+- Aplicado override deterministico por `librarySourceId` no sync de viewer URL para corrigir caso legado do fluxo `Cartao Consignado`.
+- Mapeamento fixado: `b2ad8248-3fe8-4fcd-88e5-41bf45582b38` -> `cart-o-consignado-0yjx8jh`.
+- Persistencia local (`saved-flows.json`) atualizada para refletir a URL correta imediatamente.
+- Validado via API do tenant Ideal Cred que o fluxo agora retorna `.../cart-o-consignado-0yjx8jh`.
+
+### Palavras-chave para pesquisa futura
+
+- `fix-ideal-cred-cartao-consignado-url`
+- `librarysourceid-url-override`
+- `cart-o-consignado-0yjx8jh`
+
+## 2026-04-23 - Admin: Acesso Typebot só Master do Sistema (URL matriz)
+
+- Removido `Acessar Typebot` da tabela de assinantes.
+- Header `Acesso Typebot` visivel apenas com `masterProfile === system_master`; abre nova aba na URL fixa do builder matriz (`/pt-BR/typebots`).
+- Modal tutorial de primeiro acesso Typebot removido (fluxo antigo).
+
+### Palavras-chave para pesquisa futura
+
+- `acesso-typebot-walkup-header`
+- `sem-typebot-btn-linha-assinante`
+
+## 2026-04-23 - Filtro "somente fluxos ativos" no import Typebot
+
+- `isFlowUrlActive` centralizado em `apps/api/src/lib/flow-url-health.ts` e reutilizado por `flow.routes` e `typebot-builder.service`.
+- `TYPEBOT_TYPEBOT_IMPORT_ONLY_ACTIVE` (default `true`): import padrao exige `viewerUrl` 2xx; import matriz em massa exige URL `{TYPEBOT_SOURCE_VIEWER_BASE_URL}/{publicId}` 2xx.
+- Com matriz em massa + filtro ativo, `TYPEBOT_SOURCE_VIEWER_BASE_URL` e obrigatorio.
+- Resumo de sync inclui listas de ignorados por inatividade.
+
+### Palavras-chave para pesquisa futura
+
+- `import-typebot-somente-ativos`
+- `TYPEBOT_SOURCE_VIEWER_BASE_URL`
+- `flow-url-health`
+
+## 2026-04-23 - Import matriz Walkup (self-host) para workspace cloud (Ideal Cred)
+
+- Backend suporta **fonte** e **destino** Builder API distintos (`TYPEBOT_SOURCE_*` / `TYPEBOT_TARGET_*`).
+- Com `TYPEBOT_SOURCE_MASTER_WORKSPACE_ID`, o sync lista todos os typebots do workspace matriz na fonte e importa no workspace do tenant no destino (idempotente por nome).
+- Token de destino em host diferente da fonte e **obrigatorio** (`TYPEBOT_TARGET_BUILDER_API_TOKEN`); nao reutiliza o token da Walkup.
+- Tenant `Ideal Cred` aponta workspace cloud `cmobozu52000b04jmdwcvxda2` e URL de acesso em `app.typebot.com`.
+- Rota `sync-defaults` aceita rodar so com import da matriz (sem itens `isSystemDefault` na biblioteca).
+
+### Palavras-chave para pesquisa futura
+
+- `walkup-selfhost-to-app-typebot-com`
+- `TYPEBOT_SOURCE_MASTER_WORKSPACE_ID`
+- `TYPEBOT_TARGET_PUBLIC_BASE_URL`
+
+## 2026-04-23 - Idempotencia no import de Typebot (evita duplicar CLT)
+
+- Sync de defaults passou a listar typebots existentes no workspace antes de importar.
+- Comparacao por nome normalizado (lowercase/trim) para evitar reimport de itens ja presentes.
+- Resumo de sync agora separa: `Importados`, `Já existentes no workspace` e `Ignorados`.
+- Build da API validado apos ajuste.
+
+### Palavras-chave para pesquisa futura
+
+- `idempotencia-import-clt`
+- `list-workspace-typebots-before-import`
+- `ja-existentes-no-workspace`
+
+## 2026-04-23 - Automacao Typebot sem token por assinante (token unico da matriz)
+
+- Removido default de Builder API para `app.typebot.com` no backend.
+- Provisionamento agora exige `TYPEBOT_BUILDER_API_BASE_URL` explicito no ambiente.
+- Tenant nao e mais marcado como `provisioned` sem workspace/URL real.
+- Criacao de tenant inicia em `not_started` e depende de sync real para provisionar.
+- Admin nao abre mais fallback generico de cloud quando nao existe URL provisionada; mostra aviso para rodar sync.
+- Build validado em `api` e `admin`.
+
+### Palavras-chave para pesquisa futura
+
+- `token-unico-matriz-typebot`
+- `sem-token-por-assinante`
+- `not-started-ate-sync`
+- `no-cloud-fallback-admin`
+
+## 2026-04-23 - Sync do fluxo CLT confirmado no workspace da Ideal Cred
+
+- API local iniciada para executar sincronizacao do tenant `Ideal Cred`.
+- Endpoint `POST /api/master/tenants/:id/typebot/sync-defaults` executado com retorno `status: ok`.
+- Workspace alvo validado: `cmobv9atd000dru1co89jxfzb`.
+- Confirmacao direta no Builder API listando typebots do workspace com itens `CLT` presentes.
+
+### Palavras-chave para pesquisa futura
+
+- `sync-clt-ideal-cred-ok`
+- `builder-api-list-typebots-workspace`
+- `cmobv9atd000dru1co89jxfzb-clt`
+
+## 2026-04-23 - Ajuste completo de env + sync Typebot do Mozart validado
+
+- `TYPEBOT_BUILDER_API_BASE_URL` consolidado para o builder self-hosted (`...easypanel.host/api`).
+- `TYPEBOT_DEFAULT_IMPORTS_MAP` atualizado com `sourceTypebotId` real do fluxo CLT (`cj2c08vhgb1vecbncm28n80m`).
+- Identificado bloqueio de `create workspace` por nome duplicado (`Ideal Cred`) e vinculacao do tenant ao workspace existente (`cmobv9atd000dru1co89jxfzb`).
+- Sync final executado com sucesso via endpoint de tenant:
+  - `status: ok`
+  - `syncSummary: Importados: CLT.`
+
+### Palavras-chave para pesquisa futura
+
+- `env-typebot-selfhost-consolidado`
+- `sourceTypebotId-clt-real`
+- `mozart-sync-defaults-ok`
+- `workspace-ideal-cred-existente`
+
+## 2026-04-23 - Builder API apontado para self-host (401 resolvido)
+
+- Token testado diretamente no endpoint self-host `.../api/v1/workspaces` com retorno `200`.
+- `TYPEBOT_BUILDER_API_BASE_URL` ajustado para `https://soma-typebot-walkup-builder.achpyp.easypanel.host/api`.
+- Sync do tenant `mozart.hotmart@gmail.com` deixou de falhar por `401`.
+- Novo retorno: `Falha ao obter typebot fonte SOURCE_TYPEBOT_ID_CLT (404)`.
+- Conclusao: autenticacao/endpoint corretos; falta trocar o placeholder pelo ID real do typebot fonte.
+
+### Palavras-chave para pesquisa futura
+
+- `builder-api-selfhost-ok`
+- `source_typebot_id_clt-404`
+- `typebot-default-imports-map`
+
+## 2026-04-23 - Validacao final de token Builder API (401 em .io e .com)
+
+- `.env` da API foi ajustado para `TYPEBOT_BUILDER_API_BASE_URL=https://app.typebot.io/api`.
+- API reiniciada e sync do tenant `mozart.hotmart@gmail.com` reexecutado.
+- Endpoint continuou retornando `Falha ao criar workspace Typebot (401)`.
+- Teste direto com o mesmo `Authorization: Bearer <token>` em `/v1/workspaces` retornou `401` tanto em `app.typebot.io` quanto `app.typebot.com`.
+- Conclusao: bloqueio atual esta no token/permissoes/conta no provedor Typebot, nao no codigo local.
+
+### Palavras-chave para pesquisa futura
+
+- `builder-api-401-io-com`
+- `typebot-token-permission`
+- `workspace-create-unauthorized`
+
+## 2026-04-23 - Diagnostico do token Builder API (erro 401)
+
+- Validado que o `.env` de `apps/api` esta preenchido e atualizado no disco.
+- API reiniciada e endpoint de sync executado para o tenant `mozart.hotmart@gmail.com`.
+- Erro evoluiu de `token nao configurado` para `Falha ao criar workspace Typebot (401)`.
+- Conclusao: variavel esta sendo lida; falha atual e de autorizacao/permissao do token no provedor Typebot.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-builder-token-401`
+- `sync-defaults-unauthorized`
+- `builder-api-workspace-create-401`
+
+## 2026-04-23 - Rotina automatica para importar fluxo no workspace real Typebot
+
+- Criado servico backend para sync no workspace real do Typebot usando Builder API.
+- Na criacao de tenant, sistema agora pode criar workspace real e importar flows padrao automaticamente.
+- Integracao usa token/endpoint no servidor (sem exposicao no frontend).
+- Adicionado `TYPEBOT_DEFAULT_IMPORTS_MAP` para mapear item padrao interno para `sourceTypebotId` real.
+- Em falha de sync real, tenant continua criado e status registra erro operacional para diagnostico.
+
+### Palavras-chave para pesquisa futura
+
+- `auto-import-workspace-real-typebot`
+- `typebot-builder-api-sync`
+- `TYPEBOT_DEFAULT_IMPORTS_MAP`
+
+## 2026-04-23 - Autoimport de fluxo padrao em novos tenants
+
+- Criacao de assinante (`POST /api/master/tenants`) passou a aplicar automaticamente os itens `isSystemDefault` da Biblioteca Master no tenant novo.
+- Ajuste implementado em `tenant.routes` usando `FlowService` + `system-master-library`.
+- Validacao real confirmou import automatico do fluxo `CLT` (`.../emprestimo-clt`) em tenant novo.
+- Tenant de teste criado apenas para validacao e removido ao final.
+
+### Palavras-chave para pesquisa futura
+
+- `auto-import-fluxo-padrao`
+- `novo-tenant-default-flow`
+- `system-library-isSystemDefault`
+
+## 2026-04-23 - Modal tutorial de primeiro acesso Typebot
+
+- Modal `Acesso Typebot` evoluido para formato tutorial completo com 3 passos guiados.
+- Adicionado mock visual da tela de onboarding com destaque dos botoes `I agree` e `Skip >`.
+- Bloco final de atencao mantido com e-mail do assinante usado no primeiro acesso.
+- Fluxo de acao preservado: `Copiar e-mail` e `Comecar acesso` liberado apos copia.
+- Ajustes visuais aplicados no CSS para reproduzir o layout solicitado.
+
+### Palavras-chave para pesquisa futura
+
+- `modal-tutorial-typebot`
+- `primeiro-acesso-typebot`
+- `copy-email-gate-cta`
+
+## 2026-04-23 - Acesso Typebot guiado para gerente/master
+
+- Adicionado botao discreto `Acesso Typebot` no topo direito (ao lado do menu de usuario).
+- Visivel somente para perfis de atendente `master` e `manager`.
+- Clique abre modal de atencao com e-mail do assinante para primeiro acesso.
+- Fluxo exige `Copiar e-mail` antes de liberar o botao `Acesso Typebot` no modal.
+- Link aberto usa URL de ambiente Typebot do tenant logado/selecionado.
+
+### Palavras-chave para pesquisa futura
+
+- `acesso-typebot-gerente-master`
+- `copy-email-before-typebot-access`
+- `top-header-typebot-link`
+
+## 2026-04-23 - Exclusao completa do assinante Ideal Cred (mozart hotmart)
+
+- Tenant `Ideal Cred` (`ownerEmail: mozart.hotmart@gmail.com`) removido por endpoint oficial.
+- ID excluido: `ee82a83d-df8b-4c22-a224-3425e7f325b0`.
+- Validado que API nao retorna mais esse assinante.
+- Sem ocorrencias residuais em `tenants.json` e `attendants.json`.
+
+### Palavras-chave para pesquisa futura
+
+- `delete-completo-ideal-cred`
+- `cleanup-tenant-mozart-hotmart`
+- `tenant-remove-api`
+
+## 2026-04-23 - Senha inicial no cadastro de assinante + envio no e-mail
+
+- `POST /api/master/tenants` passou a exigir `initialPassword`.
+- Criacao de tenant agora tambem cria automaticamente o usuario master inicial (`username = ownerEmail`) no modulo de atendentes.
+- Senha inicial e hasheada com `scrypt` e usada no e-mail de boas-vindas do assinante.
+- Modal de criacao no admin recebeu campo `Senha inicial de acesso` (obrigatorio apenas na criacao).
+- Validacao de unicidade global do login do owner para evitar conflitos de autenticacao.
+
+### Palavras-chave para pesquisa futura
+
+- `senha-inicial-assinante`
+- `owner-master-auto-create`
+- `welcome-email-initial-password`
+- `post-tenants-initialPassword`
+
+## 2026-04-23 - Feedback visual no cadastro de assinante (processando)
+
+- Modal de assinante agora exibe estado visual durante criacao/edicao.
+- Adicionado `isSavingSubscriber` para bloquear inputs/botoes durante envio.
+- Indicador animado exibido com texto `Processando cadastro do assinante...`.
+- Botao principal passa a mostrar `Criando...` ou `Salvando...` enquanto processa.
+- Linter validado sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `loading-criacao-assinante`
+- `feedback-processando-modal-assinante`
+- `isSavingSubscriber`
+
+## 2026-04-23 - Exclusao completa de assinantes duplicados Ideal Cred
+
+- Identificados 2 tenants duplicados `Ideal Cred` (`ownerEmail: mozart.hotmart@gmail.com`) na API em runtime.
+- Exclusao executada via endpoint oficial `DELETE /api/master/tenants/:id` para os IDs duplicados.
+- Validacao posterior confirmou que `GET /api/master/tenants` nao retorna mais `Ideal Cred`.
+- Conferencia em persistencia local tambem sem ocorrencias restantes de `Ideal Cred`/`mozart.hotmart@gmail.com`.
+
+### Palavras-chave para pesquisa futura
+
+- `delete-assinante-ideal-cred`
+- `tenant-duplicado-remocao`
+- `cleanup-mozart-hotmart-tenant`
+
+## 2026-04-23 - Padronizacao dos e-mails de boas-vindas (assinante e atendente)
+
+- Templates de boas-vindas unificados com o novo texto padrao solicitado.
+- E-mail de atendente envia `username`, senha inicial e link de login.
+- E-mail de assinante passou a reutilizar o template de credenciais com `ownerEmail` como usuario.
+- URL de login padronizada por variavel de ambiente `SYSTEM_LOGIN_URL` com fallback local.
+- Linter validado sem erros nos arquivos alterados.
+
+### Palavras-chave para pesquisa futura
+
+- `template-padrao-boas-vindas`
+- `welcome-email-assinante-atendente`
+- `SYSTEM_LOGIN_URL`
+- `mail-templates-unificados`
+
+## 2026-04-23 - Feedback visual de processamento para assinantes e atendentes
+
+- Estados de loading adicionados no frontend para carregamento de assinantes e atendentes.
+- `loadTenants` e `loadAttendants` passaram a controlar loading com `try/finally` e validacao de `response.ok`.
+- Interface agora exibe indicador animado + texto durante processamento nas duas telas.
+- Objetivo: reduzir percepcao de travamento e melhorar clareza de estado.
+
+### Palavras-chave para pesquisa futura
+
+- `loading-tenants`
+- `loading-attendants`
+- `processing-feedback-admin-ui`
+
+## 2026-04-23 - Validacao estrita de aceite SMTP no boas-vindas
+
+- Fluxo de envio de boas-vindas passou a validar aceite real do destinatario (`accepted`) antes de marcar como `sent`.
+- `mail.service` agora retorna metadados tecnicos de entrega (`messageId`, `accepted`, `rejected`, `response`).
+- `attendant.routes` passou a retornar mensagem de diagnostico operacional no `emailDelivery`.
+- Teste real com `mozart.pmo@gmail.com` validou status `sent` com `messageId`.
+
+### Palavras-chave para pesquisa futura
+
+- `smtp-accepted-strict`
+- `emailDelivery-messageId`
+- `boas-vindas-validacao-entrega`
+
+## 2026-04-23 - Correcao do nome no e-mail de boas-vindas
+
+- Fluxo de cadastro de atendente ajustado para usar o nome persistido no cadastro ao montar o e-mail de boas-vindas.
+- `recipientName` agora e resolvido a partir do registro salvo (`displayName`) no tenant.
+- Fallback para `username` somente quando o nome vier vazio.
+- Validacao de linter sem erros.
+
+### Palavras-chave para pesquisa futura
+
+- `fix-recipient-name-email`
+- `nome-cadastro-no-email`
+- `attendant-routes-welcome-template`
+
+## 2026-04-23 - Exclusao do tenant Ideal Cred para reset de teste
+
+- Criado endpoint oficial `DELETE /api/master/tenants/:id`.
+- Implementado `deleteById` no repository de tenants e `delete` no service.
+- Validado que a listagem ativa de tenants nao retorna mais `Ideal Cred`.
+- Objetivo: permitir novo ciclo de criacao do assinante e Typebot do zero.
+
+### Palavras-chave para pesquisa futura
+
+- `delete-tenant-ideal-cred`
+- `delete-endpoint-tenants`
+- `reset-ciclo-teste-typebot`
+
+## 2026-04-23 - Limpeza completa do usuario de teste (mozart hotmart)
+
+- Usuario de teste removido dos dados ativos de login via endpoint de exclusao de atendente.
+- Tenant `Ideal Cred` atualizado para remover referencia ao e-mail do usuario removido.
+- Validacao de autenticacao retornando `401` para o usuario removido.
+- Documentacao operacional higienizada para eliminar ocorrencias literais do e-mail.
+
+### Palavras-chave para pesquisa futura
+
+- `cleanup-usuario-teste-mozart`
+- `reset-cadastro-typebot`
+- `login-401-apos-remocao`
+
 ## 2026-04-23 - Remocao do provisionamento manual de Typebot
 
 - Rota manual `POST /api/master/tenants/:id/typebot/provision` removida do backend.
@@ -51,10 +1298,10 @@
 - `traducao-status-ativo-bloqueado`
 - `subscribers-table-row-4-colunas`
 
-## 2026-04-23 - Correcao de tenant no login do mozart.hotmart@gmail.com
+## 2026-04-23 - Correcao de tenant no login do usuario de teste
 
 - Validado que o login estava retornando indevidamente o tenant `Walkup`.
-- Usuario `mozart.hotmart@gmail.com` foi movido para o tenant correto `Ideal Cred`.
+- Usuario de teste foi movido para o tenant correto `Ideal Cred`.
 - Registro antigo no tenant `Walkup` foi removido para eliminar colisao de contexto.
 - Login revalidado com sucesso retornando `masterProfile = subscriber_master` no tenant correto.
 
@@ -65,10 +1312,10 @@
 - `realocar-usuario-ideal-cred`
 - `auth-login-tenantid`
 
-## 2026-04-23 - Diagnostico de boas-vindas para mozart.hotmart@gmail.com
+## 2026-04-23 - Diagnostico de boas-vindas para usuario de teste
 
 - Backend de cadastro/SMTP revisado e teste real executado no endpoint de atendentes.
-- Resultado validado: `emailDelivery.status = "sent"` para `mozart.hotmart@gmail.com`.
+- Resultado validado: `emailDelivery.status = "sent"` para usuario de teste.
 - Identificado registro legado `mozart` sem `email` em `attendants.json`, potencial fonte de confusao em testes anteriores.
 
 ### Palavras-chave para pesquisa futura
@@ -800,3 +2047,115 @@
 - `tenant-default-chat-theme`
 - `redirect-r-shortlink`
 - `singleton-flow-tenant-repository`
+
+## 2026-04-24 - Correção de corrupção visual por metadados de ícone/imagem no Typebot
+
+- Problema: `icon` estava sendo enviado como `data:image/base64` para a API Builder, gerando comportamento visual incorreto no topo do Typebot.
+- Correção: sanitização em `typebot-builder.service.ts` para aceitar `icon/image` somente como URL pública (`http/https`), enviando `null` quando inválido.
+- Ação operacional: limpeza dos typebots existentes da Ideal Cred para remover `icon/image` inválidos e normalizar metadados.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-icon-data-url`
+- `metadata-corruption-header`
+- `sanitize-metadata-http-url`
+
+## 2026-04-24 - Correção do mapeamento de metadata (favIconUrl/imageUrl)
+
+- Diagnóstico: API do Typebot não persistia `metadata.icon`/`metadata.image`; os campos válidos são `settings.metadata.favIconUrl` e `settings.metadata.imageUrl`.
+- Ajuste em `typebot-builder.service.ts` para aplicar metadados nos campos corretos durante importação e resync.
+- Reaplicação imediata dos metadados em todos os fluxos da Ideal Cred.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-metadata-faviconurl`
+- `typebot-metadata-imageurl`
+- `ideal-cred-metadata-reapply`
+
+## 2026-04-24 - Regra operacional: após alterar fluxo, publicar
+
+- Rotina ajustada para publicar automaticamente o typebot após alteração em fluxo existente durante sync (inclusive metadados).
+- Implementado em `updateTypebotMetadataOnTarget` com publish após `PATCH` bem-sucedido (fluxo principal e fallback).
+
+### Palavras-chave para pesquisa futura
+
+- `auto-publish-after-flow-change`
+- `publish-after-metadata-update`
+
+## 2026-04-24 - Propagação de alterações da Walkup para cópias dos assinantes
+
+- Nova rotina de sync para fluxos existentes no destino: quando o fluxo já existe no workspace do assinante, o sistema atualiza o schema completo a partir da matriz (Walkup) e publica em seguida.
+- Implementado fallback para atualização de metadados caso o patch completo não seja aceito, sem quebrar o ciclo.
+- Coberto tanto para biblioteca padrão quanto para import em massa da matriz.
+
+### Palavras-chave para pesquisa futura
+
+- `sync-copia-fluxo-walkup`
+- `replicar-alteracoes-matriz-para-assinantes`
+- `typebot-existing-copy-refresh`
+
+## 2026-04-24 - Avatar do bot no tema fixado com logo do assinante
+
+- Ajuste de backend para forçar `redirectTheme.profileImageUrl` usando `tenant.profileImageUrl` (logo do assinante).
+- Coberto em listagem, criação e atualização de tema de fluxo.
+- Resultado: o avatar do bot no tema não depende mais de valor externo divergente do tenant.
+
+### Palavras-chave para pesquisa futura
+
+- `tenant-logo-bot-avatar`
+- `flow-theme-avatar-enforced`
+
+## 2026-04-24 - Correção de layout estourando no Theme (Avatar do bot)
+
+- Problema: `hostAvatar.url` com `data:image;base64` muito longo aparecia no editor e estourava o layout visual.
+- Ajuste: no Theme do Typebot, `hostAvatar.url` agora aceita apenas `http(s)`; sem URL pública, grava `isEnabled=false` e `url=""`.
+- Sync reaplicado na Ideal Cred para limpar o estado já persistido.
+
+### Palavras-chave para pesquisa futura
+
+- `typebot-hostavatar-overflow`
+- `theme-chat-hostavatar-url`
+
+## 2026-04-24 - Avatar ativo com logo + otimização de upload
+
+- Reversão da regra que desativava avatar quando a logo não era `http(s)`: avatar do bot voltou a aceitar `data:image` e ficar ativo.
+- Melhoria de frontend: upload de `Logo da marca` agora otimiza para 96x96 PNG antes de persistir (reduz payload e evita estouro visual).
+- Necessário reenviar a logo para aplicar a versão otimizada nos fluxos já existentes.
+
+### Palavras-chave para pesquisa futura
+
+- `avatar-ativo-logo-assinante`
+- `resize-logo-upload-96x96`
+
+## 2026-04-24 - Avatar ativo com URL pública da logo (sem texto gigante)
+
+- Ajuste definitivo para Theme do Typebot: `hostAvatar.url` não recebe mais `data:image` direto.
+- Nova estratégia: avatar ativo apontando para endpoint público da API (`/api/public/tenants/:id/logo`), que serve a logo do assinante.
+- Resultado: avatar permanece ativo e o layout do editor não estoura com string base64.
+
+### Palavras-chave para pesquisa futura
+
+- `avatar-bot-url-publica`
+- `public-tenant-logo-endpoint`
+
+## 2026-04-24 - Correção de avatar corrompido (remoção de localhost)
+
+- Ajuste com URL `localhost` no `hostAvatar.url` causou ícone quebrado no Typebot remoto.
+- Fluxo revertido para `data:image/http(s)` direto no avatar do Theme.
+- Logo da Ideal Cred foi otimizada (64x64 PNG) para reduzir payload do `data:image` e diminuir risco de estouro visual.
+
+### Palavras-chave para pesquisa futura
+
+- `avatar-corrompido-localhost`
+- `hostavatar-dataimage-otimizado`
+
+## 2026-04-24 - Avatar sem estouro usando URL pública real
+
+- `hostAvatar.url` em `data:image` causava texto gigante no editor; `localhost` causava imagem quebrada no remoto.
+- Solução operacional aplicada: logo do tenant em URL pública real e sync reaplicado.
+- Resultado: avatar ativo com imagem válida e sem texto estourando o layout.
+
+### Palavras-chave para pesquisa futura
+
+- `avatar-hostavatar-url-publica`
+- `remove-dataurl-avatar-theme`

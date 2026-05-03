@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { TenantRepository, type TenantStatus } from "./tenant.repository";
+import { TenantRepository, type QueueDistributionMode, type TenantStatus } from "./tenant.repository";
+import type { AttendantRepository } from "../attendants/attendant.repository";
+import { hashAttendantPassword } from "../attendants/attendant.service";
 
 const SYSTEM_MASTER_OWNER_EMAIL = "walkup@walkuptec.com.br";
 const TYPEBOT_TENANT_URL_TEMPLATE = String(process.env.TYPEBOT_TENANT_URL_TEMPLATE ?? "").trim();
 const TYPEBOT_DEFAULT_DASHBOARD_URL = String(process.env.TYPEBOT_DEFAULT_DASHBOARD_URL ?? "").trim();
 const TYPEBOT_SYSTEM_MASTER_URL = String(process.env.TYPEBOT_SYSTEM_MASTER_URL ?? "").trim();
-const TYPEBOT_DASHBOARD_FALLBACK = TYPEBOT_DEFAULT_DASHBOARD_URL || "https://app.typebot.io/typebots";
+const TYPEBOT_BUILDER_API_BASE_URL = String(process.env.TYPEBOT_BUILDER_API_BASE_URL ?? "").trim();
+const TYPEBOT_DASHBOARD_FALLBACK =
+  TYPEBOT_DEFAULT_DASHBOARD_URL ||
+  TYPEBOT_SYSTEM_MASTER_URL ||
+  TYPEBOT_BUILDER_API_BASE_URL.replace(/\/api\/?$/, "");
 const TYPEBOT_AUTH_MODE_RAW = String(process.env.TYPEBOT_AUTH_MODE ?? "manual").trim().toLowerCase();
 
 export type TypebotAuthMode = "manual" | "magic_link" | "sso";
@@ -42,19 +48,37 @@ const resolveTypebotAccessUrl = (tenant: { id: string; name: string; ownerEmail:
   return "";
 };
 
-const resolveAutoProvisionedTypebotState = (tenant: { id: string; name: string; ownerEmail: string; typebotAccessUrl?: string }) => {
+const resolveAutoProvisionedTypebotState = (
+  tenant: {
+    id: string;
+    name: string;
+    ownerEmail: string;
+    typebotAccessUrl?: string;
+    typebotWorkspaceId?: string;
+    typebotProvisionStatus?: "not_started" | "pending_manual" | "provisioned" | "failed";
+    typebotProvisionError?: string;
+    typebotLastSyncAt?: string;
+  },
+) => {
   const normalizedOwnerEmail = normalizeEmail(tenant.ownerEmail);
   const isSystemMasterTenant = isSystemMasterTenantEmail(normalizedOwnerEmail);
   const directAccessUrl = tenant.typebotAccessUrl?.trim() || resolveTypebotAccessUrl(tenant);
-  const fallbackAccessUrl = isSystemMasterTenant
-    ? TYPEBOT_SYSTEM_MASTER_URL || TYPEBOT_DASHBOARD_FALLBACK
-    : TYPEBOT_DASHBOARD_FALLBACK;
+  const fallbackAccessUrl = isSystemMasterTenant ? TYPEBOT_SYSTEM_MASTER_URL || TYPEBOT_DASHBOARD_FALLBACK : "";
+  const hasWorkspace = Boolean(String(tenant.typebotWorkspaceId ?? "").trim());
+  const hasDirectAccess = Boolean(String(directAccessUrl ?? "").trim());
+  const currentStatus = tenant.typebotProvisionStatus;
+  const derivedStatus: "not_started" | "pending_manual" | "provisioned" | "failed" =
+    currentStatus && currentStatus !== "provisioned"
+      ? currentStatus
+      : hasWorkspace || hasDirectAccess
+        ? "provisioned"
+        : "not_started";
   return {
     typebotOwnerEmail: normalizedOwnerEmail,
-    typebotProvisionStatus: "provisioned" as const,
+    typebotProvisionStatus: derivedStatus,
     typebotAccessUrl: directAccessUrl || fallbackAccessUrl,
-    typebotProvisionError: "",
-    typebotLastSyncAt: new Date().toISOString(),
+    typebotProvisionError: tenant.typebotProvisionError ?? "",
+    typebotLastSyncAt: tenant.typebotLastSyncAt,
   };
 };
 
@@ -69,6 +93,7 @@ export const createTenantSchema = z.object({
   name: z.string().min(2).max(120),
   ownerEmail: z.string().email(),
   whatsapp: z.string().min(8).max(30),
+  initialPassword: z.string().min(4).max(200),
   profileImageUrl: z.string().max(5000000).optional(),
 });
 
@@ -88,10 +113,31 @@ export const updateTenantProfileImageSchema = z
       .nullable()
       .optional(),
     chatDisplayName: z.union([z.string().min(2).max(120), z.literal("")]).optional(),
+    shareImageUrl: z
+      .union([z.string().url().max(2048), imageDataUrlSchema, z.literal("")])
+      .nullable()
+      .optional(),
+    shareDescription: z.union([z.string().max(200), z.literal("")]).optional(),
+    whatsapp: z.string().min(8).max(30).optional(),
+    useWhatsappSecondOption: z.boolean().optional(),
+    queueDistributionMode: z.enum(["assign_per_incoming", "shared_pool", "random"]).optional(),
+    noSeparateAttendants: z.boolean().optional(),
   })
-  .refine((body) => body.profileImageUrl !== undefined || body.chatDisplayName !== undefined, {
-    message: "Informe profileImageUrl e/ou chatDisplayName.",
-  });
+  .refine(
+    (body) =>
+      body.profileImageUrl !== undefined ||
+      body.chatDisplayName !== undefined ||
+      body.shareImageUrl !== undefined ||
+      body.shareDescription !== undefined ||
+      body.whatsapp !== undefined ||
+      body.useWhatsappSecondOption !== undefined ||
+      body.queueDistributionMode !== undefined ||
+      body.noSeparateAttendants !== undefined,
+    {
+      message:
+        "Informe profileImageUrl, chatDisplayName, shareImageUrl, shareDescription, whatsapp, useWhatsappSecondOption, queueDistributionMode e/ou noSeparateAttendants.",
+    },
+  );
 
 export const updateTenantChatThemeSchema = z.object({
   templateName: z.string().min(2).max(120).optional(),
@@ -109,17 +155,30 @@ export const updateTenantSchema = z.object({
 });
 
 export class TenantService {
-  constructor(private readonly tenantRepository: TenantRepository) {}
+  constructor(
+    private readonly tenantRepository: TenantRepository,
+    private readonly attendantRepository: AttendantRepository,
+  ) {}
 
   create(input: z.infer<typeof createTenantSchema>) {
     const ownerEmail = normalizeEmail(input.ownerEmail);
+    const existingMasterLogin = this.attendantRepository.findByUsernameGlobal(ownerEmail);
+    if (existingMasterLogin) {
+      throw new Error("Já existe um usuário com este e-mail. Use outro e-mail para criar o assinante.");
+    }
     const tenantBase = {
       id: input.id ?? randomUUID(),
       name: input.name,
       ownerEmail,
     };
-    const typebotProvision = resolveAutoProvisionedTypebotState(tenantBase);
-    return this.tenantRepository.create({
+    const typebotProvision = {
+      typebotOwnerEmail: ownerEmail,
+      typebotProvisionStatus: "not_started" as const,
+      typebotAccessUrl: resolveTypebotAccessUrl(tenantBase),
+      typebotProvisionError: "",
+      typebotLastSyncAt: undefined,
+    };
+    const tenant = this.tenantRepository.create({
       ...tenantBase,
       whatsapp: input.whatsapp,
       accessRole: "master",
@@ -128,6 +187,22 @@ export class TenantService {
       status: "active",
       createdAt: new Date().toISOString(),
     });
+    try {
+      this.attendantRepository.create({
+        id: randomUUID(),
+        tenantId: tenant.id,
+        username: ownerEmail,
+        email: ownerEmail,
+        displayName: input.name.trim(),
+        passwordHash: hashAttendantPassword(input.initialPassword),
+        role: "master",
+        createdAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      this.tenantRepository.deleteById(tenant.id);
+      throw error;
+    }
+    return tenant;
   }
 
   list() {
@@ -137,6 +212,10 @@ export class TenantService {
         name: tenant.name,
         ownerEmail: tenant.ownerEmail,
         typebotAccessUrl: tenant.typebotAccessUrl,
+        typebotWorkspaceId: tenant.typebotWorkspaceId,
+        typebotProvisionStatus: tenant.typebotProvisionStatus,
+        typebotProvisionError: tenant.typebotProvisionError,
+        typebotLastSyncAt: tenant.typebotLastSyncAt,
       });
       return {
         ...tenant,
@@ -155,12 +234,39 @@ export class TenantService {
   }
 
   patchLeadChatProfile(id: string, input: z.infer<typeof updateTenantProfileImageSchema>) {
-    const patch: { profileImageUrl?: string | null; chatDisplayName?: string | null } = {};
+    const patch: {
+      profileImageUrl?: string | null;
+      chatDisplayName?: string | null;
+      shareImageUrl?: string | null;
+      shareDescription?: string | null;
+      whatsapp?: string | null;
+      useWhatsappSecondOption?: boolean;
+      queueDistributionMode?: QueueDistributionMode;
+      noSeparateAttendants?: boolean;
+    } = {};
     if (input.profileImageUrl !== undefined) {
       patch.profileImageUrl = input.profileImageUrl;
     }
     if (input.chatDisplayName !== undefined) {
       patch.chatDisplayName = input.chatDisplayName === "" ? null : input.chatDisplayName;
+    }
+    if (input.shareImageUrl !== undefined) {
+      patch.shareImageUrl = input.shareImageUrl;
+    }
+    if (input.shareDescription !== undefined) {
+      patch.shareDescription = input.shareDescription === "" ? null : input.shareDescription;
+    }
+    if (input.whatsapp !== undefined) {
+      patch.whatsapp = input.whatsapp;
+    }
+    if (input.useWhatsappSecondOption !== undefined) {
+      patch.useWhatsappSecondOption = input.useWhatsappSecondOption;
+    }
+    if (input.queueDistributionMode !== undefined) {
+      patch.queueDistributionMode = input.queueDistributionMode;
+    }
+    if (input.noSeparateAttendants !== undefined) {
+      patch.noSeparateAttendants = input.noSeparateAttendants;
     }
     return this.tenantRepository.patchLeadChatProfile(id, patch);
   }
@@ -183,6 +289,10 @@ export class TenantService {
       payload.profileImageUrl = input.profileImageUrl.trim() || undefined;
     }
     return this.tenantRepository.update(id, payload);
+  }
+
+  delete(id: string): boolean {
+    return this.tenantRepository.deleteById(id);
   }
 
   getTypebotCapabilities(): TypebotCapabilities {

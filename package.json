@@ -1,0 +1,20 @@
+{
+  "name": "typebot-saas",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace @typebot-saas/api run dev",
+    "dev:admin": "npm --workspace @typebot-saas/admin run dev",
+    "dev:widget": "npm --workspace @typebot-saas/widget run dev",
+    "dev": "npm run dev:api",
+    "build:api": "npm --workspace @typebot-saas/api run build",
+    "build:admin": "npm --workspace @typebot-saas/admin run build",
+    "build:widget": "npm --workspace @typebot-saas/widget run build",
+    "build": "npm run build:api && npm run build:admin && npm run build:widget",
+    "start:api": "npm --workspace @typebot-saas/api run start"
+  }
+}
