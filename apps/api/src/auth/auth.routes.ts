@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import { z } from "zod";
+import { authEmailsEquivalent, extractEmailsFromLooseText, normalizeAuthIdentifier } from "../lib/auth-email";
 import { attendantRepository, tenantRepository } from "../lib/repositories";
 import { hashAttendantPassword, verifyAttendantPassword } from "../attendants/attendant.service";
 import { mailService } from "../mail/mail.service";
@@ -15,28 +16,54 @@ const loginSchema = z.object({
   password: z.string().min(4).max(200),
 });
 
-const resetPasswordSchema = z.object({
+const resetPasswordSchema = z.preprocess((raw: unknown) => {
+  if (!raw || typeof raw !== "object") return raw;
+  const body = raw as Record<string, unknown>;
+  const emailRaw = body.email ?? body.username;
+  return { ...body, email: typeof emailRaw === "string" ? emailRaw : body.email };
+}, z.object({
   email: z.string().email().max(160),
   newPassword: z.string().min(4).max(200),
-});
-
-const normalizeLoginKey = (raw: string): string => raw.trim().toLowerCase();
+}));
 
 const tenantOwnerLoginKeys = (tenant: Tenant): string[] => {
-  const keys = [
-    normalizeLoginKey(tenant.ownerEmail ?? ""),
-    normalizeLoginKey(tenant.typebotOwnerEmail ?? ""),
-  ].filter((k) => k.length > 0);
-  return [...new Set(keys)];
+  const sources = [tenant.ownerEmail ?? "", tenant.typebotOwnerEmail ?? ""];
+  const keys: string[] = [];
+  for (const src of sources) {
+    const norm = normalizeAuthIdentifier(src);
+    if (norm) keys.push(norm);
+    keys.push(...extractEmailsFromLooseText(src));
+  }
+  return [...new Set(keys.filter(Boolean))];
 };
 
-const tenantMatchesLoginKey = (tenant: Tenant, key: string): boolean =>
-  key.length > 0 && tenantOwnerLoginKeys(tenant).includes(key);
+const tenantMatchesLoginKey = (tenant: Tenant, key: string): boolean => {
+  const nk = normalizeAuthIdentifier(key);
+  if (!nk) return false;
+  return tenantOwnerLoginKeys(tenant).some((tenantKey) => authEmailsEquivalent(tenantKey, nk));
+};
 
-const resolveAttendantForResetByEmail = (emailRaw: string) => {
-  const emailKey = normalizeLoginKey(emailRaw);
-  const byAttendantEmail = attendantRepository.findByEmailGlobal(emailKey);
-  if (byAttendantEmail) return byAttendantEmail;
+const resolveAttendantForResetByEmail = (emailRaw: string): Attendant | null => {
+  const emailKey = normalizeAuthIdentifier(emailRaw);
+  if (!emailKey) return null;
+
+  const byStrictEmail = attendantRepository.findByEmailGlobal(emailKey);
+  if (byStrictEmail) return byStrictEmail;
+
+  const byRelaxedEmail = attendantRepository.findByEmailGlobalRelaxed(emailRaw);
+  if (byRelaxedEmail) return byRelaxedEmail;
+
+  const byUsername = attendantRepository.findByUsernameGlobal(emailKey);
+  if (byUsername) return byUsername;
+
+  const byUsernameRelaxed = attendantRepository.findByUsernameGlobalRelaxed(emailRaw);
+  if (byUsernameRelaxed) return byUsernameRelaxed;
+
+  const candidates = attendantRepository.listLoginCandidates(emailRaw);
+  const masterCand = candidates.find((a) => a.role === "master");
+  if (masterCand) return masterCand;
+  if (candidates[0]) return candidates[0];
+
   for (const tenant of tenantRepository.list()) {
     if (!tenantMatchesLoginKey(tenant, emailKey)) continue;
     const inTenant = attendantRepository.listByTenant(tenant.id);
@@ -52,7 +79,7 @@ const resolveAttendantForResetByEmail = (emailRaw: string) => {
  * A palavra-passe válida escolhe entre várias linhas (ex.: username igual ao e-mail mas hash antigo + master correto).
  */
 const resolveAttendantsForLogin = (identifierRaw: string): Attendant[] => {
-  const key = normalizeLoginKey(identifierRaw);
+  const key = normalizeAuthIdentifier(identifierRaw);
   if (!key) return [];
 
   const seen = new Set<string>();
@@ -79,7 +106,7 @@ const resolveAttendantsForLogin = (identifierRaw: string): Attendant[] => {
 };
 
 const ensureMasterAttendantForOwnerEmail = (emailRaw: string, newPassword: string): Attendant | null => {
-  const emailKey = normalizeLoginKey(emailRaw);
+  const emailKey = normalizeAuthIdentifier(emailRaw);
   for (const tenant of tenantRepository.list()) {
     if (!tenantMatchesLoginKey(tenant, emailKey)) continue;
     const existing = attendantRepository.listByTenant(tenant.id);
@@ -159,12 +186,14 @@ export const registerAuthRoutes = (app: Express) => {
         return res.status(404).json({ message: "Assinante não encontrado para este usuário." });
       }
 
-      const providedEmail = normalizeLoginKey(input.email);
-      const attendantEmail = normalizeLoginKey(attendant.email ?? "");
+      const providedEmail = normalizeAuthIdentifier(input.email);
+      const attendantEmail = normalizeAuthIdentifier(attendant.email ?? "");
+      const usernameKey = normalizeAuthIdentifier(attendant.username);
       const tenantKeys = tenantOwnerLoginKeys(tenant);
       const emailAllowed =
-        (attendantEmail.length > 0 && providedEmail === attendantEmail) ||
-        tenantKeys.includes(providedEmail);
+        (attendantEmail.length > 0 && authEmailsEquivalent(attendantEmail, providedEmail)) ||
+        tenantKeys.some((tk) => authEmailsEquivalent(tk, providedEmail)) ||
+        (usernameKey.length > 0 && authEmailsEquivalent(usernameKey, providedEmail));
       if (!emailAllowed) {
         return res.status(400).json({ message: "O e-mail informado não corresponde ao cadastro do usuário." });
       }

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { authEmailsEquivalent, normalizeAuthIdentifier } from "../lib/auth-email";
 import { getDataFilePath } from "../lib/data-path";
 
 export type AttendantRole = "master" | "manager" | "attendant";
@@ -58,8 +59,21 @@ export class AttendantRepository {
   }
 
   findByUsernameGlobal(username: string): Attendant | null {
-    const key = username.trim().toLowerCase();
-    return this.rows.find((row) => row.username.toLowerCase() === key) ?? null;
+    const key = normalizeAuthIdentifier(username);
+    if (!key) return null;
+    return this.rows.find((row) => normalizeAuthIdentifier(row.username) === key) ?? null;
+  }
+
+  /** Username compatível com equivalência Gmail quando aplicável. */
+  findByUsernameGlobalRelaxed(identifier: string): Attendant | null {
+    const key = normalizeAuthIdentifier(identifier);
+    if (!key) return null;
+    return (
+      this.rows.find((row) => {
+        const un = normalizeAuthIdentifier(row.username);
+        return un.length > 0 && (un === key || authEmailsEquivalent(un, key));
+      }) ?? null
+    );
   }
 
   /**
@@ -67,7 +81,7 @@ export class AttendantRepository {
    * Se parecer e-mail (`@`), prioriza linhas com `email` igual — evita ficar preso a um username duplicado/obsoleto com a mesma string.
    */
   listLoginCandidates(identifier: string): Attendant[] {
-    const key = identifier.trim().toLowerCase();
+    const key = normalizeAuthIdentifier(identifier);
     if (!key) return [];
     const seen = new Set<string>();
     const out: Attendant[] = [];
@@ -77,8 +91,17 @@ export class AttendantRepository {
       out.push(row);
     };
 
-    const emailRows = this.rows.filter((row) => (row.email ?? "").trim().toLowerCase() === key);
-    const usernameRows = this.rows.filter((row) => row.username.toLowerCase() === key);
+    const emailRows = this.rows.filter((row) => {
+      const em = normalizeAuthIdentifier(row.email ?? "");
+      return em.length > 0 && (em === key || authEmailsEquivalent(em, key));
+    });
+    const usernameRows = this.rows.filter((row) => {
+      const un = normalizeAuthIdentifier(row.username);
+      if (!un) return false;
+      if (un === key) return true;
+      return key.includes("@") && un.includes("@") && authEmailsEquivalent(un, key);
+    });
+
 
     if (key.includes("@")) {
       for (const row of emailRows) add(row);
@@ -98,9 +121,21 @@ export class AttendantRepository {
 
   /** E-mail guardado no atendente (não confunde com titular do tenant). */
   findByEmailGlobal(email: string): Attendant | null {
-    const key = email.trim().toLowerCase();
+    const key = normalizeAuthIdentifier(email);
     if (!key) return null;
-    return this.rows.find((row) => (row.email ?? "").trim().toLowerCase() === key) ?? null;
+    return this.rows.find((row) => normalizeAuthIdentifier(row.email ?? "") === key) ?? null;
+  }
+
+  /** E-mail no cadastro com equivalência Gmail / normalização NFKC. */
+  findByEmailGlobalRelaxed(identifier: string): Attendant | null {
+    const key = normalizeAuthIdentifier(identifier);
+    if (!key) return null;
+    return (
+      this.rows.find((row) => {
+        const em = normalizeAuthIdentifier(row.email ?? "");
+        return em.length > 0 && authEmailsEquivalent(em, key);
+      }) ?? null
+    );
   }
 
   create(row: Attendant): Attendant {
