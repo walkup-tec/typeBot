@@ -1527,7 +1527,7 @@ export function App() {
           {!showResetPassword ? (
             <div className="grid-form auth-login-form">
               <input
-                placeholder="Usuário"
+                placeholder="Usuário ou e-mail"
                 value={loginUsername}
                 onChange={(event) => setLoginUsername(event.target.value)}
               />
@@ -1547,7 +1547,7 @@ export function App() {
           ) : (
             <div className="grid-form auth-login-form">
               <input
-                placeholder="Usuário"
+                placeholder="Usuário ou e-mail"
                 value={resetUsername}
                 onChange={(event) => setResetUsername(event.target.value)}
               />

@@ -62,6 +62,15 @@ export class AttendantRepository {
     return this.rows.find((row) => row.username.toLowerCase() === key) ?? null;
   }
 
+  /** Login: mesmo valor que o utilizador mete no campo "Usuário" pode ser username ou e-mail cadastrado. */
+  findByUsernameOrEmailGlobal(identifier: string): Attendant | null {
+    const key = identifier.trim().toLowerCase();
+    if (!key) return null;
+    const byUsername = this.rows.find((row) => row.username.toLowerCase() === key);
+    if (byUsername) return byUsername;
+    return this.rows.find((row) => (row.email ?? "").trim().toLowerCase() === key) ?? null;
+  }
+
   create(row: Attendant): Attendant {
     this.rows.push(row);
     saveAll(this.rows);

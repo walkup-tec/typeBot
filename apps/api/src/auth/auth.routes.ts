@@ -30,7 +30,7 @@ export const registerAuthRoutes = (app: Express) => {
   app.post("/api/auth/login", (req, res) => {
     try {
       const input = loginSchema.parse(req.body);
-      const attendant = attendantRepository.findByUsernameGlobal(input.username);
+      const attendant = attendantRepository.findByUsernameOrEmailGlobal(input.username);
       if (!attendant) {
         return res.status(401).json({ message: "Usuário ou senha inválidos." });
       }
@@ -66,7 +66,7 @@ export const registerAuthRoutes = (app: Express) => {
   app.post("/api/auth/reset-password", async (req, res) => {
     try {
       const input = resetPasswordSchema.parse(req.body);
-      const attendant = attendantRepository.findByUsernameGlobal(input.username);
+      const attendant = attendantRepository.findByUsernameOrEmailGlobal(input.username);
       if (!attendant) {
         return res.status(404).json({ message: "Usuário não encontrado." });
       }
