@@ -33,6 +33,22 @@ const resolveAttendantForResetByEmail = (emailRaw: string) => {
   return null;
 };
 
+/** Login com e-mail do titular mesmo quando o master não tem esse e-mail no registo do atendente. */
+const resolveAttendantForLogin = (identifierRaw: string): Attendant | null => {
+  const byCredential = attendantRepository.findByUsernameOrEmailGlobal(identifierRaw);
+  if (byCredential) return byCredential;
+  const emailKey = identifierRaw.trim().toLowerCase();
+  if (!emailKey) return null;
+  for (const tenant of tenantRepository.list()) {
+    if (tenant.ownerEmail.trim().toLowerCase() !== emailKey) continue;
+    const inTenant = attendantRepository.listByTenant(tenant.id);
+    const master = inTenant.find((a) => a.role === "master");
+    if (master) return master;
+    if (inTenant[0]) return inTenant[0];
+  }
+  return null;
+};
+
 const ensureMasterAttendantForOwnerEmail = (emailRaw: string, newPassword: string): Attendant | null => {
   const emailKey = emailRaw.trim().toLowerCase();
   for (const tenant of tenantRepository.list()) {
@@ -70,7 +86,7 @@ export const registerAuthRoutes = (app: Express) => {
   app.post("/api/auth/login", (req, res) => {
     try {
       const input = loginSchema.parse(req.body);
-      const attendant = attendantRepository.findByUsernameOrEmailGlobal(input.username);
+      const attendant = resolveAttendantForLogin(input.username);
       if (!attendant) {
         return res.status(401).json({ message: "Usuário ou senha inválidos." });
       }
@@ -117,14 +133,18 @@ export const registerAuthRoutes = (app: Express) => {
       }
 
       const providedEmail = input.email.trim().toLowerCase();
-      const expectedEmail = (attendant.email || tenant.ownerEmail || "").trim().toLowerCase();
-      if (!expectedEmail || providedEmail !== expectedEmail) {
+      const attendantEmail = (attendant.email ?? "").trim().toLowerCase();
+      const ownerEmailKey = (tenant.ownerEmail ?? "").trim().toLowerCase();
+      const emailAllowed =
+        (attendantEmail.length > 0 && providedEmail === attendantEmail) ||
+        (ownerEmailKey.length > 0 && providedEmail === ownerEmailKey);
+      if (!emailAllowed) {
         return res.status(400).json({ message: "O e-mail informado não corresponde ao cadastro do usuário." });
       }
 
       const updated = attendantRepository.updateById(attendant.id, {
         passwordHash: hashAttendantPassword(input.newPassword),
-        email: expectedEmail,
+        email: providedEmail,
       });
       if (!updated) {
         return res.status(500).json({ message: "Não foi possível redefinir a senha." });
@@ -138,7 +158,7 @@ export const registerAuthRoutes = (app: Express) => {
         });
         try {
           await mailService.send({
-            to: expectedEmail,
+            to: providedEmail,
             subject: mail.subject,
             html: mail.html,
           });
