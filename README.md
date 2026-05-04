@@ -46,6 +46,8 @@ npm run dev:admin
 
 Deploy no VPS com domínio próprio: `doc/DEPLOY-VPS-chattypebot-com.md`.
 
+Easypanel mostra o **último commit** como título do deploy; para não repetir o mesmo nome: `doc/EASYPANEL-deploy-mensagens-unicas.md` e `npm run easypanel:deploy-empty -- "descrição"`.
+
 5. Rode o widget de chat:
 
 ```bash
