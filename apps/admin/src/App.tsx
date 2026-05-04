@@ -1473,6 +1473,8 @@ export function App() {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        // Compatibilidade: APIs antigas ainda exigem `username` no schema.
+        username: email,
         email,
         newPassword: nextPassword,
       }),
