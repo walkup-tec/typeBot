@@ -49,6 +49,11 @@ export class AttendantRepository {
     this.rows = loadAll();
   }
 
+  /** Re-lê `attendants.json` (útil antes de auth se o ficheiro foi atualizado noutro processo ou restore). */
+  reloadFromDisk(): void {
+    this.rows = loadAll();
+  }
+
   listByTenant(tenantId: string): Attendant[] {
     return this.rows.filter((row) => row.tenantId === tenantId);
   }

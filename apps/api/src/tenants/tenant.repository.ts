@@ -93,6 +93,14 @@ export class TenantRepository {
   }
 
   list(): Tenant[] {
+    const persisted = loadPersistedTenants();
+    const nextIds = new Set(persisted.map((t) => t.id));
+    for (const id of [...this.tenants.keys()]) {
+      if (!nextIds.has(id)) this.tenants.delete(id);
+    }
+    for (const tenant of persisted) {
+      this.tenants.set(tenant.id, tenant);
+    }
     return [...this.tenants.values()];
   }
 
