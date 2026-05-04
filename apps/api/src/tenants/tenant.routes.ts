@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { attendantRepository, tenantRepository } from "../lib/repositories";
+import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
 import {
   TenantService,
   createTenantSchema,
@@ -11,11 +11,10 @@ import {
 import { mailService } from "../mail/mail.service";
 import { buildTenantWelcomeTemplate } from "../mail/mail.templates";
 import { FlowService } from "../flows/flow.service";
-import { flowRepository } from "../lib/repositories";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 
-const tenantService = new TenantService(tenantRepository, attendantRepository);
+const tenantService = new TenantService(tenantRepository, attendantRepository, flowRepository, queueRepository);
 const flowService = new FlowService(flowRepository);
 const SYSTEM_LOGIN_URL = String(process.env.SYSTEM_LOGIN_URL ?? "http://localhost:5173").trim();
 

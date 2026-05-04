@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { TenantRepository, type QueueDistributionMode, type TenantStatus } from "./tenant.repository";
 import type { AttendantRepository } from "../attendants/attendant.repository";
+import type { FlowRepository } from "../flows/flow.repository";
+import type { QueueRepository } from "../queue/queue.repository";
 import { hashAttendantPassword } from "../attendants/attendant.service";
 
 const SYSTEM_MASTER_OWNER_EMAIL = "walkup@walkuptec.com.br";
@@ -158,6 +160,8 @@ export class TenantService {
   constructor(
     private readonly tenantRepository: TenantRepository,
     private readonly attendantRepository: AttendantRepository,
+    private readonly flowRepository: FlowRepository,
+    private readonly queueRepository: QueueRepository,
   ) {}
 
   create(input: z.infer<typeof createTenantSchema>) {
@@ -294,6 +298,8 @@ export class TenantService {
   delete(id: string): boolean {
     if (!this.tenantRepository.getById(id)) return false;
     this.attendantRepository.deleteByTenantId(id);
+    this.flowRepository.deleteByTenantId(id);
+    this.queueRepository.deleteByTenantId(id);
     return this.tenantRepository.deleteById(id);
   }
 

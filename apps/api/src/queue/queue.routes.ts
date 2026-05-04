@@ -1,9 +1,8 @@
 import type { Express, Request } from "express";
 import { z } from "zod";
 import type { SavedFlow } from "../flows/flow.repository";
-import { attendantRepository, flowRepository, tenantRepository } from "../lib/repositories";
+import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
-import { QueueRepository } from "./queue.repository";
 import { QueueService, assignSchema, enqueueSchema, sendLiveMessageSchema } from "./queue.service";
 
 function normalizeHandoffMatchToken(value: string): string {
@@ -42,7 +41,6 @@ function savedFlowMatchesHandoffSource(
   return matchesLabel || matchesViewer;
 }
 
-const queueRepository = new QueueRepository();
 const queueService = new QueueService(queueRepository);
 type ViewerVisualConfig = {
   pageBg: string;

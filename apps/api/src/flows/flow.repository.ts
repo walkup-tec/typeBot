@@ -103,4 +103,13 @@ export class FlowRepository {
     savePersistedFlows(this.flows);
     return removed;
   }
+
+  /** Remove todos os fluxos do assinante (ao apagar o tenant). */
+  deleteByTenantId(tenantId: string): number {
+    const before = this.flows.length;
+    this.flows = this.flows.filter((flow) => flow.tenantId !== tenantId);
+    const removed = before - this.flows.length;
+    if (removed > 0) savePersistedFlows(this.flows);
+    return removed;
+  }
 }

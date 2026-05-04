@@ -147,4 +147,18 @@ export class QueueRepository {
     if (!contact || contact.tenantId !== tenantId) return null;
     return liveMessages.get(contactId) ?? [];
   }
+
+  /** Remove contactos e mensagens da fila deste assinante (ao apagar o tenant). */
+  deleteByTenantId(tenantId: string): void {
+    const toRemove: string[] = [];
+    for (const [contactId, contact] of waitingQueue.entries()) {
+      if (contact.tenantId === tenantId) toRemove.push(contactId);
+    }
+    if (toRemove.length === 0) return;
+    for (const contactId of toRemove) {
+      waitingQueue.delete(contactId);
+      liveMessages.delete(contactId);
+    }
+    saveQueueState(waitingQueue, liveMessages);
+  }
 }
