@@ -394,9 +394,9 @@ export function App() {
     () => selectedTenantFlows.filter((flow) => Boolean(flow.librarySourceId)),
     [selectedTenantFlows],
   );
-  /** Fluxos criados no builder Typebot do workspace (sem item da Biblioteca Master). */
+  /** Fluxos do assinante sem vínculo ao catálogo da Biblioteca Master (builder Typebot ou URL manual na API). */
   const workspaceOnlyFlows = useMemo(
-    () => selectedTenantFlows.filter((flow) => Boolean(flow.typebotRemoteId)),
+    () => selectedTenantFlows.filter((flow) => !flow.librarySourceId),
     [selectedTenantFlows],
   );
   const activeLibraryFlows = useMemo(
@@ -2168,12 +2168,12 @@ export function App() {
                   )}
                 </div>
                 <div className="tenant-profile-card">
-                  <h4>Fluxos do workspace Typebot</h4>
+                  <h4>Fluxos do workspace</h4>
                   <p className="muted muted-subtle">
-                    Criados direto no builder no workspace deste assinante; aparecem aqui para copiar o link público.
+                    Inclui fluxos criados no builder Typebot e fluxos adicionados por URL (sem item na Biblioteca Master). Copie o link público abaixo.
                   </p>
                   {workspaceOnlyFlows.length === 0 ? (
-                    <p className="muted muted-subtle">Nenhum fluxo apenas do workspace.</p>
+                    <p className="muted muted-subtle">Nenhum fluxo fora do catálogo da biblioteca neste assinante.</p>
                   ) : (
                     <div className="saved-flows-table">
                       <div className="saved-flows-header library-active-row">
