@@ -117,7 +117,25 @@ type AuthSession = {
   masterProfile: MasterProfile;
 };
 
-const apiBase = import.meta.env.VITE_API_BASE_URL?.trim() || "http://localhost:3333";
+/**
+ * Base da API usada pelo painel.
+ * 1) Opcional em runtime (útil se o build Easypanel não injetou VITE_*): antes do bundle, define
+ *    `window.__TYPEBOT_SAAS_API_BASE__ = "https://..."` (ex.: script inline no index.html servido).
+ * 2) Build: `VITE_API_BASE_URL`
+ */
+function resolveApiBase(): string {
+  if (typeof window !== "undefined") {
+    const injected = String(
+      (window as Window & { __TYPEBOT_SAAS_API_BASE__?: string }).__TYPEBOT_SAAS_API_BASE__ ?? "",
+    ).trim();
+    if (injected) return injected.replace(/\/$/, "");
+  }
+  const fromVite = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (fromVite) return fromVite.replace(/\/$/, "");
+  return "http://localhost:3333";
+}
+
+const apiBase = resolveApiBase();
 const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
 /** Builder Typebot da matriz (Master do Sistema): abre em nova aba a partir do header. */
 const SYSTEM_MASTER_TYPEBOT_BUILDER_URL =
@@ -1427,14 +1445,21 @@ export function App() {
       setStatusMessage("Informe usuário e senha.");
       return;
     }
-    const response = await fetch(`${apiBase}/api/auth/login`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${apiBase}/api/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+    } catch {
+      setStatusMessage(`Sem ligação à API em ${apiBase}. Confirme rede, TLS e se esta URL é mesmo o serviço Node (ex.: /health).`);
+      return;
+    }
     const payload = (await response.json().catch(() => ({}))) as AuthSession & { message?: string };
     if (!response.ok) {
-      setStatusMessage(payload.message ?? "Falha ao autenticar.");
+      const hint = ` [HTTP ${response.status} · ${apiBase}]`;
+      setStatusMessage(`${payload.message ?? "Falha ao autenticar."}${hint}`);
       return;
     }
     const nextSession: AuthSession = {
@@ -1469,19 +1494,25 @@ export function App() {
       setStatusMessage("A confirmação da nova senha não confere.");
       return;
     }
-    const response = await fetch(`${apiBase}/api/auth/reset-password`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        // Compatibilidade: APIs antigas ainda exigem `username` no schema.
-        username: email,
-        email,
-        newPassword: nextPassword,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${apiBase}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username: email,
+          email,
+          newPassword: nextPassword,
+        }),
+      });
+    } catch {
+      setStatusMessage(`Sem ligação à API em ${apiBase}. Confirme rede, TLS e se esta URL é mesmo o serviço Node (ex.: /health).`);
+      return;
+    }
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
     if (!response.ok) {
-      setStatusMessage(payload.message ?? "Falha ao redefinir senha.");
+      const hint = ` [HTTP ${response.status} · ${apiBase}]`;
+      setStatusMessage(`${payload.message ?? "Falha ao redefinir senha."}${hint}`);
       return;
     }
     setShowResetPassword(false);
@@ -1575,6 +1606,9 @@ export function App() {
               Redefinir senha
             </button>
           ) : null}
+          <p className="auth-api-endpoint-hint" title="URL usada nas chamadas /api/auth/*">
+            API: {apiBase}
+          </p>
         </section>
         {statusMessage ? (
           <div className={`status-toast ${statusToneClass}`} role="status" aria-live="polite">

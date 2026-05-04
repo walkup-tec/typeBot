@@ -58,6 +58,16 @@ body {
   text-align: center;
 }
 
+.auth-api-endpoint-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #6b7c99;
+  text-align: center;
+  word-break: break-all;
+  max-width: 380px;
+  line-height: 1.35;
+}
+
 .auth-card .grid-form {
   grid-template-columns: 1fr;
   width: 100%;
