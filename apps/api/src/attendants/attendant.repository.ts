@@ -62,13 +62,38 @@ export class AttendantRepository {
     return this.rows.find((row) => row.username.toLowerCase() === key) ?? null;
   }
 
+  /**
+   * Possíveis contas para um identificador (username ou e-mail).
+   * Se parecer e-mail (`@`), prioriza linhas com `email` igual — evita ficar preso a um username duplicado/obsoleto com a mesma string.
+   */
+  listLoginCandidates(identifier: string): Attendant[] {
+    const key = identifier.trim().toLowerCase();
+    if (!key) return [];
+    const seen = new Set<string>();
+    const out: Attendant[] = [];
+    const add = (row: Attendant) => {
+      if (seen.has(row.id)) return;
+      seen.add(row.id);
+      out.push(row);
+    };
+
+    const emailRows = this.rows.filter((row) => (row.email ?? "").trim().toLowerCase() === key);
+    const usernameRows = this.rows.filter((row) => row.username.toLowerCase() === key);
+
+    if (key.includes("@")) {
+      for (const row of emailRows) add(row);
+      for (const row of usernameRows) add(row);
+    } else {
+      for (const row of usernameRows) add(row);
+      for (const row of emailRows) add(row);
+    }
+
+    return out;
+  }
+
   /** Login: mesmo valor que o utilizador mete no campo "Usuário" pode ser username ou e-mail cadastrado. */
   findByUsernameOrEmailGlobal(identifier: string): Attendant | null {
-    const key = identifier.trim().toLowerCase();
-    if (!key) return null;
-    const byUsername = this.rows.find((row) => row.username.toLowerCase() === key);
-    if (byUsername) return byUsername;
-    return this.rows.find((row) => (row.email ?? "").trim().toLowerCase() === key) ?? null;
+    return this.listLoginCandidates(identifier)[0] ?? null;
   }
 
   /** E-mail guardado no atendente (não confunde com titular do tenant). */
