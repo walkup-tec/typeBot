@@ -311,7 +311,6 @@ export function App() {
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [resetUsername, setResetUsername] = useState("");
   const [resetEmail, setResetEmail] = useState("");
   const [resetPassword, setResetPassword] = useState("");
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
@@ -1456,11 +1455,10 @@ export function App() {
   }
 
   async function resetUserPassword() {
-    const username = resetUsername.trim();
     const email = resetEmail.trim().toLowerCase();
     const nextPassword = resetPassword.trim();
-    if (!username || !email || !nextPassword) {
-      setStatusMessage("Informe usuário, e-mail e nova senha.");
+    if (!email || !nextPassword) {
+      setStatusMessage("Informe e-mail e nova senha.");
       return;
     }
     if (nextPassword.length < 4) {
@@ -1475,7 +1473,6 @@ export function App() {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        username,
         email,
         newPassword: nextPassword,
       }),
@@ -1486,7 +1483,6 @@ export function App() {
       return;
     }
     setShowResetPassword(false);
-    setResetUsername("");
     setResetEmail("");
     setResetPassword("");
     setResetPasswordConfirm("");
@@ -1546,11 +1542,6 @@ export function App() {
             </div>
           ) : (
             <div className="grid-form auth-login-form">
-              <input
-                placeholder="Usuário ou e-mail (não o nome)"
-                value={resetUsername}
-                onChange={(event) => setResetUsername(event.target.value)}
-              />
               <input
                 type="email"
                 placeholder="E-mail cadastrado"

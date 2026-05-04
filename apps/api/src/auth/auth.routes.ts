@@ -13,19 +13,12 @@ const loginSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  /** Pode ser vazio se só souber o e-mail; não confundir com nome de exibição. */
-  username: z.string().max(80),
   email: z.string().email().max(160),
   newPassword: z.string().min(4).max(200),
 });
 
-const resolveAttendantForReset = (usernameRaw: string, emailRaw: string) => {
-  const username = usernameRaw.trim();
+const resolveAttendantForResetByEmail = (emailRaw: string) => {
   const emailKey = emailRaw.trim().toLowerCase();
-  if (username.length >= 2) {
-    const byLogin = attendantRepository.findByUsernameOrEmailGlobal(username);
-    if (byLogin) return byLogin;
-  }
   const byAttendantEmail = attendantRepository.findByEmailGlobal(emailKey);
   if (byAttendantEmail) return byAttendantEmail;
   for (const tenant of tenantRepository.list()) {
@@ -86,9 +79,9 @@ export const registerAuthRoutes = (app: Express) => {
   app.post("/api/auth/reset-password", async (req, res) => {
     try {
       const input = resetPasswordSchema.parse(req.body);
-      const attendant = resolveAttendantForReset(input.username, input.email);
+      const attendant = resolveAttendantForResetByEmail(input.email);
       if (!attendant) {
-        return res.status(404).json({ message: "Usuário não encontrado." });
+        return res.status(404).json({ message: "E-mail não encontrado." });
       }
       const tenant = tenantRepository.getById(attendant.tenantId);
       if (!tenant) {
