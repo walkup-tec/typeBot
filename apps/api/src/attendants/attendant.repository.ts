@@ -172,4 +172,12 @@ export class AttendantRepository {
     saveAll(this.rows);
     return true;
   }
+
+  /** Remove todos os atendentes do assinante (ex.: ao apagar o tenant). */
+  deleteByTenantId(tenantId: string): void {
+    const next = this.rows.filter((row) => row.tenantId !== tenantId);
+    if (next.length === this.rows.length) return;
+    this.rows = next;
+    saveAll(this.rows);
+  }
 }

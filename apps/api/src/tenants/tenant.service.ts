@@ -292,6 +292,8 @@ export class TenantService {
   }
 
   delete(id: string): boolean {
+    if (!this.tenantRepository.getById(id)) return false;
+    this.attendantRepository.deleteByTenantId(id);
     return this.tenantRepository.deleteById(id);
   }
 
