@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import { z } from "zod";
 import { attendantRepository, tenantRepository } from "../lib/repositories";
 import { hashAttendantPassword, verifyAttendantPassword } from "../attendants/attendant.service";
 import { mailService } from "../mail/mail.service";
 import { buildPasswordResetNoticeTemplate } from "../mail/mail.templates";
+import type { Attendant } from "../attendants/attendant.repository";
 
 const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
 
@@ -27,6 +29,31 @@ const resolveAttendantForResetByEmail = (emailRaw: string) => {
     const master = inTenant.find((a) => a.role === "master");
     if (master) return master;
     if (inTenant[0]) return inTenant[0];
+  }
+  return null;
+};
+
+const ensureMasterAttendantForOwnerEmail = (emailRaw: string, newPassword: string): Attendant | null => {
+  const emailKey = emailRaw.trim().toLowerCase();
+  for (const tenant of tenantRepository.list()) {
+    if (tenant.ownerEmail.trim().toLowerCase() !== emailKey) continue;
+    const existing = attendantRepository.listByTenant(tenant.id);
+    const existingMaster = existing.find((a) => a.role === "master");
+    if (existingMaster) return existingMaster;
+
+    // Recupera acesso do titular quando a base de atendentes foi perdida no servidor.
+    const created: Attendant = {
+      id: randomUUID(),
+      tenantId: tenant.id,
+      username: emailKey,
+      email: emailKey,
+      displayName: tenant.name?.trim() || "Master",
+      passwordHash: hashAttendantPassword(newPassword),
+      role: "master",
+      createdAt: new Date().toISOString(),
+    };
+    attendantRepository.create(created);
+    return created;
   }
   return null;
 };
@@ -79,7 +106,8 @@ export const registerAuthRoutes = (app: Express) => {
   app.post("/api/auth/reset-password", async (req, res) => {
     try {
       const input = resetPasswordSchema.parse(req.body);
-      const attendant = resolveAttendantForResetByEmail(input.email);
+      const attendant =
+        resolveAttendantForResetByEmail(input.email) ?? ensureMasterAttendantForOwnerEmail(input.email, input.newPassword);
       if (!attendant) {
         return res.status(404).json({ message: "E-mail não encontrado." });
       }
