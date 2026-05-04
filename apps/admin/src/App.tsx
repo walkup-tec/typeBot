@@ -404,10 +404,23 @@ export function App() {
     () => (selectedTenant ? (savedFlowsByTenant[selectedTenant] ?? []) : []),
     [savedFlowsByTenant, selectedTenant],
   );
-  const selectableFlowLibrary = useMemo(
-    () => flowLibrary.filter((item) => item.id !== "template-placeholder" && item.title !== "Modelo (substitua a URL)"),
-    [flowLibrary],
-  );
+  const selectableFlowLibrary = useMemo(() => {
+    const directLibrary = flowLibrary.filter(
+      (item) => item.id !== "template-placeholder" && item.title !== "Modelo (substitua a URL)",
+    );
+    if (directLibrary.length > 0) return directLibrary;
+
+    // Fallback operacional: algumas instâncias retornam /flow-library vazio mesmo com itens na system-library.
+    return systemMasterLibrary
+      .filter((item) => item.isSystemDefault)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        suggestedNickname: item.suggestedNickname,
+        viewerUrl: item.viewerUrl,
+      }));
+  }, [flowLibrary, systemMasterLibrary]);
   const libraryLinkedFlows = useMemo(
     () => selectedTenantFlows.filter((flow) => Boolean(flow.librarySourceId)),
     [selectedTenantFlows],
