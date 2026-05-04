@@ -1547,7 +1547,7 @@ export function App() {
           ) : (
             <div className="grid-form auth-login-form">
               <input
-                placeholder="Usuário ou e-mail"
+                placeholder="Usuário ou e-mail (não o nome)"
                 value={resetUsername}
                 onChange={(event) => setResetUsername(event.target.value)}
               />

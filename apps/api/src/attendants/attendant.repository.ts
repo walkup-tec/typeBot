@@ -71,6 +71,13 @@ export class AttendantRepository {
     return this.rows.find((row) => (row.email ?? "").trim().toLowerCase() === key) ?? null;
   }
 
+  /** E-mail guardado no atendente (não confunde com titular do tenant). */
+  findByEmailGlobal(email: string): Attendant | null {
+    const key = email.trim().toLowerCase();
+    if (!key) return null;
+    return this.rows.find((row) => (row.email ?? "").trim().toLowerCase() === key) ?? null;
+  }
+
   create(row: Attendant): Attendant {
     this.rows.push(row);
     saveAll(this.rows);
