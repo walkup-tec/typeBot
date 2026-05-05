@@ -10,6 +10,13 @@ import { registerAttendantRoutes } from "./attendants/attendant.routes";
 import { flowRepository } from "./lib/repositories";
 import { registerAuthRoutes } from "./auth/auth.routes";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
+import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
+import {
+  bootstrapAuthDataFromDatabase,
+  enforceProductionAuthEnv,
+  logAuthPersistenceMode,
+} from "./bootstrap/auth-data-bootstrap";
+import { isAuthPostgresEnabled } from "./lib/auth-postgres";
 
 const app = express();
 /** Traefik/Easypanel enviam `X-Forwarded-Proto`; necessário para `req.secure` e cabeçalhos HTTPS. */
@@ -73,7 +80,11 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok", service: "typebot-saas-api" });
+  res.status(200).json({
+    status: "ok",
+    service: "typebot-saas-api",
+    authTenantsAttendants: isAuthPostgresEnabled() ? "postgres" : "json",
+  });
 });
 
 app.get("/", (_req, res) => {
@@ -124,17 +135,30 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   return res.status(500).json({ message: "Internal server error" });
 });
 
-app.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`API running on http://localhost:${port}`);
+async function startApi(): Promise<void> {
+  enforceProductionAuthEnv();
+  await bootstrapAuthDataFromDatabase();
+  logAuthPersistenceMode();
+  await seedTenantOnEmptyIfConfigured();
 
-  if (TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS) {
-    // Primeiro ciclo pouco após subir a API; depois segue intervalo contínuo.
-    setTimeout(() => {
-      void runMasterAutoSync();
-    }, 5000);
-    setInterval(() => {
-      void runMasterAutoSync();
-    }, Math.max(20000, TYPEBOT_AUTO_SYNC_INTERVAL_MS));
-  }
+  app.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`API running on http://localhost:${port}`);
+
+    if (TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS) {
+      // Primeiro ciclo pouco após subir a API; depois segue intervalo contínuo.
+      setTimeout(() => {
+        void runMasterAutoSync();
+      }, 5000);
+      setInterval(() => {
+        void runMasterAutoSync();
+      }, Math.max(20000, TYPEBOT_AUTO_SYNC_INTERVAL_MS));
+    }
+  });
+}
+
+void startApi().catch((err: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error("API failed to start:", err);
+  process.exit(1);
 });

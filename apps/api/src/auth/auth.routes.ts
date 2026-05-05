@@ -139,9 +139,9 @@ const toMasterProfile = (tenantOwnerEmail: string | undefined): "system_master" 
 };
 
 export const registerAuthRoutes = (app: Express) => {
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     try {
-      attendantRepository.reloadFromDisk();
+      await attendantRepository.reloadFromStorage();
       const input = loginSchema.parse(req.body);
       const candidates = resolveAttendantsForLogin(input.username);
       const attendant =
@@ -176,7 +176,7 @@ export const registerAuthRoutes = (app: Express) => {
 
   app.post("/api/auth/reset-password", async (req, res) => {
     try {
-      attendantRepository.reloadFromDisk();
+      await attendantRepository.reloadFromStorage();
       const input = resetPasswordSchema.parse(req.body);
       const attendant =
         resolveAttendantForResetByEmail(input.email) ?? ensureMasterAttendantForOwnerEmail(input.email, input.newPassword);

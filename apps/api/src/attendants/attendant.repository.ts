@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { authEmailsEquivalent, normalizeAuthIdentifier } from "../lib/auth-email";
 import { getDataFilePath } from "../lib/data-path";
+import { isAuthPostgresEnabled, loadAttendantsFromPostgres, schedulePersistAttendants } from "../lib/auth-postgres";
 
 export type AttendantRole = "master" | "manager" | "attendant";
 
@@ -42,16 +43,41 @@ const saveAll = (rows: Attendant[]) => {
   writeFileSync(FILE_PATH, JSON.stringify(rows, null, 2), "utf-8");
 };
 
+const persistAttendantsSnapshot = (rows: Attendant[]) => {
+  const snapshot = [...rows];
+  if (isAuthPostgresEnabled()) {
+    schedulePersistAttendants(snapshot);
+    return;
+  }
+  saveAll(snapshot);
+};
+
 export class AttendantRepository {
   private rows: Attendant[] = [];
 
   constructor() {
-    this.rows = loadAll();
+    if (!isAuthPostgresEnabled()) {
+      this.rows = loadAll();
+    }
+  }
+
+  /** Preenche linhas em memória após bootstrap Postgres (ou testes). */
+  hydrate(rows: Attendant[]): void {
+    this.rows = [...rows];
   }
 
   /** Re-lê `attendants.json` (útil antes de auth se o ficheiro foi atualizado noutro processo ou restore). */
   reloadFromDisk(): void {
     this.rows = loadAll();
+  }
+
+  /** Postgres: recarrega da base. JSON: re-lê o ficheiro. */
+  async reloadFromStorage(): Promise<void> {
+    if (isAuthPostgresEnabled()) {
+      this.rows = await loadAttendantsFromPostgres();
+      return;
+    }
+    this.reloadFromDisk();
   }
 
   listByTenant(tenantId: string): Attendant[] {
@@ -145,7 +171,7 @@ export class AttendantRepository {
 
   create(row: Attendant): Attendant {
     this.rows.push(row);
-    saveAll(this.rows);
+    persistAttendantsSnapshot(this.rows);
     return row;
   }
 
@@ -166,7 +192,7 @@ export class AttendantRepository {
       email: patch.email === undefined ? current.email : patch.email,
     };
     this.rows[index] = updated;
-    saveAll(this.rows);
+    persistAttendantsSnapshot(this.rows);
     return updated;
   }
 
@@ -174,7 +200,7 @@ export class AttendantRepository {
     const before = this.rows.length;
     this.rows = this.rows.filter((row) => row.id !== id);
     if (this.rows.length === before) return false;
-    saveAll(this.rows);
+    persistAttendantsSnapshot(this.rows);
     return true;
   }
 
@@ -183,6 +209,11 @@ export class AttendantRepository {
     const next = this.rows.filter((row) => row.tenantId !== tenantId);
     if (next.length === this.rows.length) return;
     this.rows = next;
-    saveAll(this.rows);
+    persistAttendantsSnapshot(this.rows);
+  }
+
+  /** Contagem em memória; chama `reloadFromDisk()` antes se precisares do estado em disco. */
+  countAll(): number {
+    return this.rows.length;
   }
 }

@@ -16,7 +16,7 @@ const keyLength = 64;
 
 export const hashAttendantPassword = (password: string): string => {
   const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, keyLength, scryptParams);
+  const hash = scryptSync(password, salt as Uint8Array, keyLength, scryptParams);
   return `${salt.toString("hex")}:${hash.toString("hex")}`;
 };
 
@@ -26,8 +26,8 @@ export const verifyAttendantPassword = (password: string, stored: string): boole
   try {
     const salt = Buffer.from(saltHex, "hex");
     const expected = Buffer.from(hashHex, "hex");
-    const hash = scryptSync(password, salt, expected.length, scryptParams);
-    return timingSafeEqual(hash, expected);
+    const hash = scryptSync(password, salt as Uint8Array, expected.length, scryptParams);
+    return timingSafeEqual(hash as Uint8Array, expected as Uint8Array);
   } catch {
     return false;
   }

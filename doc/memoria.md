@@ -1,3 +1,27 @@
+## 2026-05-04 - Postgres para login (tenants + attendants)
+
+- Com `DATABASE_URL`, assinantes e atendentes persistem em Postgres (`saas_tenants`, `saas_attendants`); redeploy do contentor da API não apaga logins. Migração automática JSON→Postgres se Postgres vazio e ficheiros existirem.
+- Bootstrap `bootstrap/auth-data-bootstrap.ts`; módulo `lib/auth-postgres.ts`; `reloadFromStorage` em auth; health com `authTenantsAttendants`.
+- Doc: `doc/POSTGRES-AUTH-TENANTS-ATTENDANTS.md`, `doc/LOG-2026-05-04__174500__feat-postgres-auth-tenants-attendants.md`, env em `doc/EASYPANEL-AMBIENTE.env.example`.
+
+### Palavras-chave
+
+- `DATABASE_URL`
+- `saas_tenants`
+- `auth-postgres`
+
+## 2026-05-04 - Login após deploy: volume + seed opcional (base vazia)
+
+- Causa recorrente: sem volume em `apps/api/data`, redeploy zera JSON → 401/404.
+- Código: `API_SEED_ON_EMPTY` + env documentados em `doc/EASYPANEL-AMBIENTE.env.example`; bootstrap `apps/api/src/bootstrap/seed-tenant-on-empty.ts`.
+- LOG: `doc/LOG-2026-05-04__120000__feat-api-seed-on-empty-easypanel-login.md`.
+
+### Palavras-chave
+
+- `API_SEED_ON_EMPTY`
+- `apps/api/data`
+- `volume Easypanel`
+
 ## 2026-05-03 - Deploy VPS chattypebot.com e admin com VITE_API_BASE_URL
 
 - Admin deixa de fixar `localhost:3333`: usa **`VITE_API_BASE_URL`** no build (`apps/admin/.env.example`).

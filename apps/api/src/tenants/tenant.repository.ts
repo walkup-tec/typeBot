@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { getDataFilePath } from "../lib/data-path";
+import { isAuthPostgresEnabled, schedulePersistTenants } from "../lib/auth-postgres";
 
 export type TenantStatus = "active" | "blocked";
 export type TypebotProvisionStatus = "not_started" | "pending_manual" | "provisioned" | "failed";
@@ -76,23 +77,46 @@ const savePersistedTenants = (tenants: Tenant[]) => {
   writeFileSync(TENANTS_FILE_PATH, JSON.stringify(tenants, null, 2), "utf-8");
 };
 
+const persistTenantsSnapshot = (tenants: Tenant[]) => {
+  const snapshot = [...tenants];
+  if (isAuthPostgresEnabled()) {
+    schedulePersistTenants(snapshot);
+    return;
+  }
+  savePersistedTenants(snapshot);
+};
+
 export class TenantRepository {
   private readonly tenants = new Map<string, Tenant>();
 
   constructor() {
+    if (isAuthPostgresEnabled()) {
+      return;
+    }
     const initial = loadPersistedTenants();
     for (const tenant of initial) {
       this.tenants.set(tenant.id, tenant);
     }
   }
 
+  /** Preenche o mapa em memória após bootstrap Postgres (ou testes). */
+  hydrate(rows: Tenant[]): void {
+    this.tenants.clear();
+    for (const tenant of rows) {
+      this.tenants.set(tenant.id, tenant);
+    }
+  }
+
   create(tenant: Tenant): Tenant {
     this.tenants.set(tenant.id, tenant);
-    savePersistedTenants([...this.tenants.values()]);
+    persistTenantsSnapshot([...this.tenants.values()]);
     return tenant;
   }
 
   list(): Tenant[] {
+    if (isAuthPostgresEnabled()) {
+      return [...this.tenants.values()];
+    }
     const persisted = loadPersistedTenants();
     const nextIds = new Set(persisted.map((t) => t.id));
     for (const id of [...this.tenants.keys()]) {
@@ -107,6 +131,9 @@ export class TenantRepository {
   getById(id: string): Tenant | null {
     const fromMemory = this.tenants.get(id);
     if (fromMemory) return fromMemory;
+    if (isAuthPostgresEnabled()) {
+      return null;
+    }
     const persisted = loadPersistedTenants().find((tenant) => tenant.id === id);
     if (!persisted) return null;
     this.tenants.set(persisted.id, persisted);
@@ -119,7 +146,7 @@ export class TenantRepository {
 
     const updated: Tenant = { ...current, status };
     this.tenants.set(id, updated);
-    savePersistedTenants([...this.tenants.values()]);
+    persistTenantsSnapshot([...this.tenants.values()]);
     return updated;
   }
 
@@ -173,7 +200,7 @@ export class TenantRepository {
       updated.noSeparateAttendants = patch.noSeparateAttendants;
     }
     this.tenants.set(id, updated);
-    savePersistedTenants([...this.tenants.values()]);
+    persistTenantsSnapshot([...this.tenants.values()]);
     return updated;
   }
 
@@ -187,7 +214,7 @@ export class TenantRepository {
     };
     const updated: Tenant = { ...current, defaultChatTheme: nextTheme };
     this.tenants.set(id, updated);
-    savePersistedTenants([...this.tenants.values()]);
+    persistTenantsSnapshot([...this.tenants.values()]);
     return updated;
   }
 
@@ -210,7 +237,7 @@ export class TenantRepository {
       ...patch,
     };
     this.tenants.set(id, updated);
-    savePersistedTenants([...this.tenants.values()]);
+    persistTenantsSnapshot([...this.tenants.values()]);
     return updated;
   }
 
@@ -231,14 +258,14 @@ export class TenantRepository {
       updated.profileImageUrl = input.profileImageUrl?.trim() ? input.profileImageUrl.trim() : undefined;
     }
     this.tenants.set(id, updated);
-    savePersistedTenants([...this.tenants.values()]);
+    persistTenantsSnapshot([...this.tenants.values()]);
     return updated;
   }
 
   deleteById(id: string): boolean {
     const deleted = this.tenants.delete(id);
     if (!deleted) return false;
-    savePersistedTenants([...this.tenants.values()]);
+    persistTenantsSnapshot([...this.tenants.values()]);
     return true;
   }
 }
