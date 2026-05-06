@@ -13,6 +13,7 @@ import { buildTenantWelcomeTemplate } from "../mail/mail.templates";
 import { FlowService } from "../flows/flow.service";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
+import { isAuthPostgresEnabled, loadTenantsFromPostgres } from "../lib/auth-postgres";
 
 const tenantService = new TenantService(tenantRepository, attendantRepository, flowRepository, queueRepository);
 const flowService = new FlowService(flowRepository);
@@ -144,6 +145,17 @@ export const registerTenantRoutes = (app: Express) => {
 
   app.get("/api/master/tenants", async (_req, res) => {
     let tenants = tenantService.list();
+    if (tenants.length === 0) {
+      if (isAuthPostgresEnabled()) {
+        try {
+          const rows = await loadTenantsFromPostgres();
+          tenantRepository.hydrate(rows);
+          tenants = tenantService.list();
+        } catch {
+          // best-effort: segue para fallback por attendants
+        }
+      }
+    }
     if (tenants.length === 0) {
       try {
         await attendantRepository.reloadFromStorage();
