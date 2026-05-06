@@ -112,7 +112,12 @@ const removeSystemDefaultFlowFromAllTenants = async (payload: {
 
 export const registerFlowRoutes = (app: Express) => {
   const handleSourceFlowsRequest = async (_req: Request, res: Response) => {
-    await syncSourceWorkspaceFlowsToMasterTenant();
+    // Hotfix: never block/kill response on external sync instability.
+    try {
+      void syncSourceWorkspaceFlowsToMasterTenant();
+    } catch {
+      // best-effort: list endpoint must keep responding
+    }
     const tenants = tenantRepository.list();
     const sourceTenant = tenants.find((tenant) => tenant.ownerEmail.toLowerCase() === MASTER_SOURCE_EMAIL);
     if (!sourceTenant) {
