@@ -84,6 +84,10 @@ export class AttendantRepository {
     return this.rows.filter((row) => row.tenantId === tenantId);
   }
 
+  listAll(): Attendant[] {
+    return [...this.rows];
+  }
+
   findByUsername(tenantId: string, username: string): Attendant | null {
     const key = username.trim().toLowerCase();
     return this.rows.find((row) => row.tenantId === tenantId && row.username.toLowerCase() === key) ?? null;

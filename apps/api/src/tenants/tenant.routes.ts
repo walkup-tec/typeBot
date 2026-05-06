@@ -143,7 +143,29 @@ export const registerTenantRoutes = (app: Express) => {
   });
 
   app.get("/api/master/tenants", (_req, res) => {
-    return res.status(200).json(tenantService.list());
+    let tenants = tenantService.list();
+    if (tenants.length === 0) {
+      const fallbackMasters = attendantRepository
+        .listAll()
+        .filter((attendant) => attendant.role === "master" && String(attendant.tenantId ?? "").trim().length > 0);
+
+      for (const attendant of fallbackMasters) {
+        const tenantId = String(attendant.tenantId ?? "").trim();
+        if (!tenantId || tenantRepository.getById(tenantId)) continue;
+        const ownerEmail = String(attendant.email ?? attendant.username ?? "").trim().toLowerCase();
+        tenantRepository.create({
+          id: tenantId,
+          name: attendant.displayName?.trim() || tenantId,
+          ownerEmail,
+          whatsapp: "",
+          accessRole: "master",
+          status: "active",
+          createdAt: attendant.createdAt || new Date().toISOString(),
+        });
+      }
+      tenants = tenantService.list();
+    }
+    return res.status(200).json(tenants);
   });
 
   app.patch("/api/master/tenants/:id/status", (req, res) => {
