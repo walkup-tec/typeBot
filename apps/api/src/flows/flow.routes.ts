@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { loadFlowLibrary } from "./flow-library.repository";
 import { syncSourceWorkspaceFlowsToMasterTenant } from "./source-master-sync.service";
@@ -111,7 +111,7 @@ const removeSystemDefaultFlowFromAllTenants = async (payload: {
 };
 
 export const registerFlowRoutes = (app: Express) => {
-  app.get("/api/master/system-library/source-flows", async (_req, res) => {
+  const handleSourceFlowsRequest = async (_req: Request, res: Response) => {
     await syncSourceWorkspaceFlowsToMasterTenant();
     const tenants = tenantRepository.list();
     const sourceTenant = tenants.find((tenant) => tenant.ownerEmail.toLowerCase() === MASTER_SOURCE_EMAIL);
@@ -151,7 +151,10 @@ export const registerFlowRoutes = (app: Express) => {
     }
 
     return res.status(200).json(withTypebotAlias);
-  });
+  };
+
+  app.get("/api/master/source-flows", handleSourceFlowsRequest);
+  app.get("/api/master/system-library/source-flows", handleSourceFlowsRequest);
 
   app.get("/api/master/system-library", (_req, res) => {
     return res.status(200).json(listSystemMasterLibrary());
