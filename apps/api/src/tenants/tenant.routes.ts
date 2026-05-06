@@ -142,9 +142,14 @@ export const registerTenantRoutes = (app: Express) => {
     }
   });
 
-  app.get("/api/master/tenants", (_req, res) => {
+  app.get("/api/master/tenants", async (_req, res) => {
     let tenants = tenantService.list();
     if (tenants.length === 0) {
+      try {
+        await attendantRepository.reloadFromStorage();
+      } catch {
+        // best-effort: tenta reconstruir com snapshot já em memória
+      }
       const fallbackMasters = attendantRepository
         .listAll()
         .filter((attendant) => attendant.role === "master" && String(attendant.tenantId ?? "").trim().length > 0);
