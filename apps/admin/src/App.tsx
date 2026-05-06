@@ -2158,9 +2158,9 @@ export function App() {
                         return (
                           <div key={item.id} className="saved-flows-row library-active-row">
                             <span>{linkedFlow?.displayLabel ?? linkedFlow?.nickname ?? item.title}</span>
-                            <span className={`flow-status ${isIncluded ? "active" : "inactive"}`}>
+                            <span className={`flow-status ${healthStatus === "active" ? "active" : "inactive"}`}>
                               <i />
-                              {isIncluded ? "Ativo" : "Inativo"}
+                              {healthStatus === "checking" ? "Verificando…" : healthStatus === "active" ? "Ativo" : "Inativo"}
                             </span>
                             <span className="flow-url-cell">
                               <a
