@@ -119,15 +119,16 @@ export const registerFlowRoutes = (app: Express) => {
       // best-effort: list endpoint must keep responding
     }
     const tenants = tenantRepository.list();
-    const sourceTenant = tenants.find((tenant) => tenant.ownerEmail.toLowerCase() === MASTER_SOURCE_EMAIL);
-    if (!sourceTenant) {
+    const sourceTenant = tenants.find((tenant) => normalizeText(tenant.ownerEmail) === MASTER_SOURCE_EMAIL);
+    if (!sourceTenant?.id) {
       return res.status(200).json([]);
     }
     const candidateFlows = flowService.listByTenant(sourceTenant.id);
 
     const uniqueByUrl = new Map<string, (typeof candidateFlows)[number]>();
     for (const flow of candidateFlows) {
-      const key = flow.url.trim().toLowerCase();
+      const key = normalizeText(flow.url);
+      if (!key) continue;
       if (!uniqueByUrl.has(key)) uniqueByUrl.set(key, flow);
     }
     const uniqueFlows = [...uniqueByUrl.values()];
