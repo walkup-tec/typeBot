@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Express, Request } from "express";
 import { z } from "zod";
 import type { SavedFlow } from "../flows/flow.repository";
@@ -42,6 +43,54 @@ function savedFlowMatchesHandoffSource(
 }
 
 const queueService = new QueueService(queueRepository);
+
+const slugifyFlowNickname = (value: string): string =>
+  String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-")
+    .slice(0, 120);
+
+const ensureTenantFlowRegisteredFromHandoff = (params: {
+  tenantId: string;
+  sourceFlowLabel: string;
+  viewerUrl?: string;
+  flowAlias?: string;
+}) => {
+  const tenantId = String(params.tenantId ?? "").trim();
+  const sourceFlowLabel = String(params.sourceFlowLabel ?? "").trim();
+  const viewerUrl = String(params.viewerUrl ?? "").trim();
+  if (!tenantId) return;
+
+  const sourceToken = normalizeHandoffMatchToken(sourceFlowLabel);
+  const viewerToken = normalizeHandoffMatchToken(typebotPublicIdFromViewerUrl(viewerUrl));
+  const byTenant = flowRepository.listByTenant(tenantId);
+  const alreadyExists = byTenant.some((flow) =>
+    savedFlowMatchesHandoffSource(flow, sourceToken || viewerToken, viewerToken),
+  );
+  if (alreadyExists) return;
+
+  const displayLabel = String(params.flowAlias ?? "").trim() || sourceFlowLabel || "Fluxo";
+  const nicknameBase = sourceFlowLabel || viewerToken || displayLabel;
+  let nickname = slugifyFlowNickname(nicknameBase);
+  if (nickname.length < 2) nickname = `fluxo-${Date.now()}`;
+  if (byTenant.some((flow) => normalizeHandoffMatchToken(flow.nickname) === normalizeHandoffMatchToken(nickname))) {
+    nickname = `${nickname}-${Date.now().toString().slice(-4)}`;
+  }
+
+  flowRepository.create({
+    id: randomUUID(),
+    tenantId,
+    createdAt: new Date().toISOString(),
+    nickname,
+    displayLabel,
+    url: viewerUrl || `https://placeholder.local/${encodeURIComponent(sourceFlowLabel || nickname)}`,
+    typebotPublicId: viewerToken || sourceToken || undefined,
+  });
+};
 type ViewerVisualConfig = {
   pageBg: string;
   chatBg: string;
@@ -1070,6 +1119,20 @@ export const registerQueueRoutes = (app: Express) => {
       const tenant = tenantRepository.getById(resolvedTenantId);
       const distributionMode = tenant?.queueDistributionMode ?? "shared_pool";
       const attendantsForTenant = attendantsForQueueRouting(resolvedTenantId, tenant);
+      const displayFlowLabel = (
+        payload.flowAlias?.trim() ||
+        payload.sourceFlowLabel?.trim() ||
+        payload.source_flow_label?.trim() ||
+        viewerPidFromBody ||
+        "Fluxo"
+      ).trim();
+
+      ensureTenantFlowRegisteredFromHandoff({
+        tenantId: resolvedTenantId,
+        sourceFlowLabel: sourceFlowLabelCandidate || viewerPidFromBody || displayFlowLabel,
+        viewerUrl: resolvedViewerUrlFromPayload,
+        flowAlias: payload.flowAlias,
+      });
 
       const item = queueService.enqueue(resolvedTenantId, {
         contactName: resolvedContactName,
@@ -1119,7 +1182,6 @@ export const registerQueueRoutes = (app: Express) => {
       const leadContextQuery = Object.keys(resolvedLeadContext).length > 0
         ? `&leadContext=${encodeURIComponent(JSON.stringify(resolvedLeadContext))}`
         : "";
-      const displayFlowLabel = (payload.flowAlias?.trim() || payload.sourceFlowLabel?.trim() || viewerPidFromBody || "Fluxo").trim();
       const handoffUrl = `${publicBaseUrl}/handoff-view?tenantId=${resolvedTenantId}&contactId=${item.contactId}&contactName=${encodeURIComponent(
         payload.contactName,
       )}&flow=${encodeURIComponent(displayFlowLabel)}${typebotQuery}${leadContextQuery}${visualQuery}`;
