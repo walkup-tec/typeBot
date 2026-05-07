@@ -1019,7 +1019,16 @@ export const registerQueueRoutes = (app: Express) => {
 
       const payloadRecord = payload as Record<string, unknown>;
       const resolvedContactName = pickLeadNameFromPayload(payloadRecord);
-      const resolvedFlowLabel = String(payload.flowAlias ?? payload.sourceFlowLabel ?? viewerPidFromBody ?? "Fluxo").trim();
+      const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId);
+      const resolvedFlowLabel = String(
+        payload.flowAlias ??
+          inferredFlow?.displayLabel ??
+          inferredFlow?.nickname ??
+          payload.sourceFlowLabel ??
+          payload.source_flow_label ??
+          viewerPidFromBody ??
+          "Fluxo",
+      ).trim();
       const knownKeys = new Set([
         "tenantId",
         "tenant_id",
@@ -1079,7 +1088,6 @@ export const registerQueueRoutes = (app: Express) => {
       }
       const publicBaseUrl = getPublicBaseUrl(req);
       const typebotViewerUrlFromBody = resolvedViewerUrlFromPayload;
-      const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId);
       const typebotViewerUrl = typebotViewerUrlFromBody || inferredFlow?.url;
       const visualConfigFromFlow = inferredFlow?.redirectTheme;
       const visualConfigDetected =
