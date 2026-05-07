@@ -174,12 +174,36 @@ const normalizeHexColor = (raw: string): string => {
   return /^#[0-9a-fA-F]{6}$/.test(value) ? value : "";
 };
 
-const normalizeTypebotWebhookBody = (rawBody: string, tenantId: string): string => {
+type HandoffRuntimeVars = {
+  tenantId?: string;
+  sourceFlowLabel?: string;
+  typebotViewerUrl?: string;
+};
+
+const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntimeVars): string => {
   const body = String(rawBody ?? "").trim();
   if (!body) return body;
+  const tenantId = String(runtimeVars.tenantId ?? "").trim();
+  const sourceFlowLabel = String(runtimeVars.sourceFlowLabel ?? "").trim();
+  const typebotViewerUrl = String(runtimeVars.typebotViewerUrl ?? "").trim();
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object") {
+      if (tenantId) parsed.tenantId = tenantId;
+      if (sourceFlowLabel) parsed.sourceFlowLabel = sourceFlowLabel;
+      if (typebotViewerUrl) parsed.typebotViewerUrl = typebotViewerUrl;
+      return JSON.stringify(parsed);
+    }
+  } catch {
+    // fallback regex abaixo
+  }
   let nextBody = body;
-  if (tenantId) {
-    nextBody = nextBody.replace(/"tenantId"\s*:\s*"[^"]*"/, `"tenantId": "${tenantId}"`);
+  if (tenantId) nextBody = nextBody.replace(/"tenantId"\s*:\s*"[^"]*"/, `"tenantId": "${tenantId}"`);
+  if (sourceFlowLabel) {
+    nextBody = nextBody.replace(/"sourceFlowLabel"\s*:\s*"[^"]*"/, `"sourceFlowLabel": "${sourceFlowLabel}"`);
+  }
+  if (typebotViewerUrl) {
+    nextBody = nextBody.replace(/"typebotViewerUrl"\s*:\s*"[^"]*"/, `"typebotViewerUrl": "${typebotViewerUrl}"`);
   }
   return nextBody;
 };
@@ -192,6 +216,7 @@ const isWebhookLikeHttpBlock = (blockType: string): boolean => {
 const patchHandoffWebhookAndRedirectConfig = (
   schema: Record<string, unknown>,
   tenant: Tenant,
+  runtimeVars?: HandoffRuntimeVars,
 ): Record<string, unknown> => {
   const groupsRaw = schema.groups;
   const groups = Array.isArray(groupsRaw) ? groupsRaw : [];
@@ -215,8 +240,11 @@ const patchHandoffWebhookAndRedirectConfig = (
         webhook.url = TYPEBOT_HANDOFF_WEBHOOK_URL;
       }
       const body = String(webhook.body ?? "");
-      const tenantId = String(tenant.id ?? "").trim();
-      webhook.body = normalizeTypebotWebhookBody(body, tenantId);
+      webhook.body = normalizeTypebotWebhookBody(body, {
+        tenantId: String(tenant.id ?? "").trim(),
+        sourceFlowLabel: runtimeVars?.sourceFlowLabel,
+        typebotViewerUrl: runtimeVars?.typebotViewerUrl,
+      });
       options.webhook = webhook;
       const responseVariableMappingRaw = options.responseVariableMapping;
       const responseVariableMapping = Array.isArray(responseVariableMappingRaw)
@@ -1020,6 +1048,14 @@ const updateTypebotMetadataOnTarget = async (typebotId: string, name: string, te
 
 const patchHandoffWebhookOnTarget = async (typebotId: string, tenant: Tenant): Promise<boolean> => {
   ensureTargetConfigured();
+  const typebotPublicId = (await fetchTypebotPublicIdOnTarget(typebotId)) || "";
+  const viewerBase = resolveTargetViewerBaseUrl();
+  const runtimeViewerUrl = typebotPublicId && viewerBase ? buildViewerUrl(viewerBase, typebotPublicId) : "";
+  const runtimeVars: HandoffRuntimeVars = {
+    tenantId: String(tenant.id ?? "").trim(),
+    sourceFlowLabel: typebotPublicId,
+    typebotViewerUrl: runtimeViewerUrl,
+  };
   const response = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}?migrateToLatestVersion=true`,
     {
@@ -1030,7 +1066,7 @@ const patchHandoffWebhookOnTarget = async (typebotId: string, tenant: Tenant): P
   if (!response.ok) return false;
   const payload = (await response.json()) as { typebot?: Record<string, unknown> };
   if (!payload.typebot || typeof payload.typebot !== "object") return false;
-  const patched = patchHandoffWebhookAndRedirectConfig(payload.typebot, tenant);
+  const patched = patchHandoffWebhookAndRedirectConfig(payload.typebot, tenant, runtimeVars);
   const groups = patched.groups;
   if (!Array.isArray(groups)) return false;
   const patchResponse = await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`, {
@@ -1188,6 +1224,7 @@ export const syncSystemDefaultsToRealTypebotWorkspace = async (
     await applyTenantIconOnTarget(importedId, tenant);
     await applyTenantAvatarThemeOnTarget(importedId, tenant);
     await applyTenantButtonThemeCssOnTarget(importedId, tenant);
+    await patchHandoffWebhookOnTarget(importedId, tenant);
     await ensureTypebotOperationalOnTarget(importedId, item.title);
     importedNames.push(item.title);
     if (normalizedTargetName) existingWorkspaceTypebotNames.add(normalizedTargetName);
@@ -1229,6 +1266,7 @@ export const syncSystemDefaultsToRealTypebotWorkspace = async (
       await applyTenantIconOnTarget(importedId, tenant);
       await applyTenantAvatarThemeOnTarget(importedId, tenant);
       await applyTenantButtonThemeCssOnTarget(importedId, tenant);
+      await patchHandoffWebhookOnTarget(importedId, tenant);
       await ensureTypebotOperationalOnTarget(importedId, bot.name);
       bulkImported.push(bot.name);
       if (normalized) existingWorkspaceTypebotNames.add(normalized);
