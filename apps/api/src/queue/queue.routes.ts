@@ -962,7 +962,9 @@ export const registerQueueRoutes = (app: Express) => {
         }, z.string().min(2).max(120)),
         source: z.enum(["typebot", "widget"]).default("typebot"),
         sourceFlowLabel: asOptionalNonEmptyString(150),
+        source_flow_label: asOptionalNonEmptyString(150),
         tenantId: asOptionalNonEmptyString(120),
+        tenant_id: asOptionalNonEmptyString(120),
         initialMessage: z.preprocess((value) => {
           if (typeof value !== "string") return undefined;
           const trimmed = value.trim();
@@ -970,6 +972,11 @@ export const registerQueueRoutes = (app: Express) => {
         }, z.string().max(3000).optional()),
         flowAlias: asOptionalNonEmptyString(120),
         typebotViewerUrl: z.preprocess((value) => {
+          if (typeof value !== "string") return undefined;
+          const trimmed = value.trim();
+          return trimmed.length > 0 ? trimmed : undefined;
+        }, z.string().url().max(2048).optional()),
+        viewer_url: z.preprocess((value) => {
           if (typeof value !== "string") return undefined;
           const trimmed = value.trim();
           return trimmed.length > 0 ? trimmed : undefined;
@@ -984,10 +991,13 @@ export const registerQueueRoutes = (app: Express) => {
       .passthrough();
       const payload = payloadSchema.parse(req.body);
       const allFlows = flowRepository.listAll();
-      const sourceFlowLabelCandidate = String(payload.sourceFlowLabel ?? payload.flowAlias ?? "").trim();
+      const sourceFlowLabelCandidate = String(
+        payload.sourceFlowLabel ?? payload.source_flow_label ?? payload.flowAlias ?? "",
+      ).trim();
       const normalizedLabel = sourceFlowLabelCandidate.toLowerCase();
-      const viewerPidFromBody = payload.typebotViewerUrl?.trim()
-        ? normalizeHandoffMatchToken(typebotPublicIdFromViewerUrl(payload.typebotViewerUrl))
+      const resolvedViewerUrlFromPayload = String(payload.typebotViewerUrl ?? payload.viewer_url ?? "").trim();
+      const viewerPidFromBody = resolvedViewerUrlFromPayload
+        ? normalizeHandoffMatchToken(typebotPublicIdFromViewerUrl(resolvedViewerUrlFromPayload))
         : "";
       const matchingFlowsMap = new Map<string, SavedFlow>();
       for (const saved of allFlows) {
@@ -998,7 +1008,7 @@ export const registerQueueRoutes = (app: Express) => {
       const matchingFlows = [...matchingFlowsMap.values()];
 
       const resolvedTenantIds = [...new Set(matchingFlows.map((flow) => flow.tenantId))];
-      const resolvedTenantId = payload.tenantId ?? (resolvedTenantIds.length === 1 ? resolvedTenantIds[0] : null);
+      const resolvedTenantId = payload.tenantId ?? payload.tenant_id ?? (resolvedTenantIds.length === 1 ? resolvedTenantIds[0] : null);
 
       if (!resolvedTenantId) {
         return res.status(400).json({
@@ -1012,12 +1022,15 @@ export const registerQueueRoutes = (app: Express) => {
       const resolvedFlowLabel = String(payload.flowAlias ?? payload.sourceFlowLabel ?? viewerPidFromBody ?? "Fluxo").trim();
       const knownKeys = new Set([
         "tenantId",
+        "tenant_id",
         "contactName",
         "source",
         "sourceFlowLabel",
+        "source_flow_label",
         "flowAlias",
         "initialMessage",
         "typebotViewerUrl",
+        "viewer_url",
         "leadContext",
         "variables",
         "answers",
@@ -1065,7 +1078,7 @@ export const registerQueueRoutes = (app: Express) => {
         });
       }
       const publicBaseUrl = getPublicBaseUrl(req);
-      const typebotViewerUrlFromBody = payload.typebotViewerUrl?.trim();
+      const typebotViewerUrlFromBody = resolvedViewerUrlFromPayload;
       const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId);
       const typebotViewerUrl = typebotViewerUrlFromBody || inferredFlow?.url;
       const visualConfigFromFlow = inferredFlow?.redirectTheme;
