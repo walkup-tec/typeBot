@@ -197,6 +197,13 @@ const attendantsForQueueRouting = (
 };
 
 export const registerQueueRoutes = (app: Express) => {
+  const asOptionalNonEmptyString = (max = 2048) =>
+    z.preprocess((value) => {
+      if (typeof value !== "string") return undefined;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }, z.string().min(2).max(max).optional());
+
   /**
    * URL pública da API usada em links do handoff (evita localhost quando o Typebot
    * chama via túnel e o Host não é o domínio real).
@@ -947,12 +954,26 @@ export const registerQueueRoutes = (app: Express) => {
 
   app.post("/api/typebot/handoff", async (req, res) => {
     try {
-      const payloadSchema = enqueueSchema
-      .extend({
-        tenantId: z.string().min(2).optional(),
-        initialMessage: z.string().max(3000).optional(),
-        flowAlias: z.string().min(2).max(120).optional(),
-        typebotViewerUrl: z.string().url().max(2048).optional(),
+      const payloadSchema = z
+      .object({
+        contactName: z.preprocess((value) => {
+          const normalized = typeof value === "string" ? value.trim() : "";
+          return normalized.length >= 2 ? normalized : "Lead";
+        }, z.string().min(2).max(120)),
+        source: z.enum(["typebot", "widget"]).default("typebot"),
+        sourceFlowLabel: asOptionalNonEmptyString(150),
+        tenantId: asOptionalNonEmptyString(120),
+        initialMessage: z.preprocess((value) => {
+          if (typeof value !== "string") return undefined;
+          const trimmed = value.trim();
+          return trimmed.length > 0 ? trimmed : undefined;
+        }, z.string().max(3000).optional()),
+        flowAlias: asOptionalNonEmptyString(120),
+        typebotViewerUrl: z.preprocess((value) => {
+          if (typeof value !== "string") return undefined;
+          const trimmed = value.trim();
+          return trimmed.length > 0 ? trimmed : undefined;
+        }, z.string().url().max(2048).optional()),
         leadContext: z
           .union([
             z.record(z.string().min(1).max(80), z.union([z.string(), z.number(), z.boolean()])),
@@ -963,7 +984,8 @@ export const registerQueueRoutes = (app: Express) => {
       .passthrough();
       const payload = payloadSchema.parse(req.body);
       const allFlows = flowRepository.listAll();
-      const normalizedLabel = payload.sourceFlowLabel.toLowerCase();
+      const sourceFlowLabelCandidate = String(payload.sourceFlowLabel ?? payload.flowAlias ?? "").trim();
+      const normalizedLabel = sourceFlowLabelCandidate.toLowerCase();
       const viewerPidFromBody = payload.typebotViewerUrl?.trim()
         ? normalizeHandoffMatchToken(typebotPublicIdFromViewerUrl(payload.typebotViewerUrl))
         : "";
@@ -987,7 +1009,7 @@ export const registerQueueRoutes = (app: Express) => {
 
       const payloadRecord = payload as Record<string, unknown>;
       const resolvedContactName = pickLeadNameFromPayload(payloadRecord);
-      const resolvedFlowLabel = String(payload.flowAlias ?? payload.sourceFlowLabel ?? "Fluxo").trim();
+      const resolvedFlowLabel = String(payload.flowAlias ?? payload.sourceFlowLabel ?? viewerPidFromBody ?? "Fluxo").trim();
       const knownKeys = new Set([
         "tenantId",
         "contactName",
@@ -1076,7 +1098,7 @@ export const registerQueueRoutes = (app: Express) => {
       const leadContextQuery = Object.keys(resolvedLeadContext).length > 0
         ? `&leadContext=${encodeURIComponent(JSON.stringify(resolvedLeadContext))}`
         : "";
-      const displayFlowLabel = (payload.flowAlias?.trim() || payload.sourceFlowLabel).trim();
+      const displayFlowLabel = (payload.flowAlias?.trim() || payload.sourceFlowLabel?.trim() || viewerPidFromBody || "Fluxo").trim();
       const handoffUrl = `${publicBaseUrl}/handoff-view?tenantId=${resolvedTenantId}&contactId=${item.contactId}&contactName=${encodeURIComponent(
         payload.contactName,
       )}&flow=${encodeURIComponent(displayFlowLabel)}${typebotQuery}${leadContextQuery}${visualQuery}`;
