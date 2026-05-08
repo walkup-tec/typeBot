@@ -1,3 +1,56 @@
+## 2026-05-08 - Publicacao de /health operacional para master
+
+- Acao executada: preparado commit com `apps/api/src/server.ts` para expor no `/health` os campos `flowsSavedCount`, `tenantsCount`, `operationalDataBackend`, `operationalDataDirectory`, `operationalSavedFlowsFile` e `operationalDataHint`.
+- Contexto: producao no Easypanel estava a responder `/health` antigo sem campos operacionais, impedindo descobrir o path correto de volume.
+- Validacao local: `npm run build:api` concluido com sucesso antes do push.
+- Proximo passo: push no GitHub `master` e novo deploy no Easypanel; depois validar `/health` e montar volume no `operationalDataDirectory`.
+
+## 2026-05-08 - Pos-deploy ainda sem campos operacionais no /health
+
+- Evidencia: apos deploy manual no Easypanel, `GET /health` continua com apenas `status`, `service`, `authTenantsAttendants`.
+- Diagnostico: o container publicado ainda nao contem o `server.ts` atualizado (desvio de branch/commit/repo ou de pipeline de build no servico).
+- Proxima acao guiada: validar no GitHub (branch `master` usada pelo Easypanel) se `apps/api/src/server.ts` contem `operationalDataDirectory`; se nao contiver, publicar commit correto e redeploy.
+
+## 2026-05-08 - Deploy API executado no Easypanel (etapa guiada)
+
+- Serviço confirmado: `soma / api-typebot-crm`, origem GitHub (`walkup-tec/typeBot`, branch `master`), builder Nixpacks.
+- Comandos de deploy vistos no log: `npm run build:api`, `npm run start:api`, processo iniciado com `node dist/server.js`.
+- Estado atual: API reiniciada com sucesso aparente; próxima validação é ler `GET /health` e confirmar presença de `operationalDataDirectory`, `flowsSavedCount` e `operationalSavedFlowsFile`.
+- Próximo passo operacional: se campos novos aparecerem, configurar volume persistente exatamente em `operationalDataDirectory`.
+
+## 2026-05-07 - Produção: /health só com postgres (artifact antigo da API)
+
+- Evidência: `GET https://soma-api-typebot-crm.../health` devolve apenas `status`, `service`, `authTenantsAttendants` — **não aparece** `flowsSavedCount`, `operationalDataDirectory`, etc.
+- Conclusão: o serviço em Easypanel ainda está a correr uma **build anterior** ao `/health` estendido. Próximo passo operacional é **deploy da API com o código atual** (onde `/health` expõe o path exato do volume).
+- Até ao deploy: o ficheiro de fluxos continua a ser `saved-flows.json` sob a pasta `data` da API; no código local isso resolve para `apps/api/data` (absoluto = `dirname` de `getDataFilePath('saved-flows.json')`). No container, o path absoluto depende do `WORKDIR`/layout do build — validar com `find`/`ls` dentro do contentor se necessário.
+
+## 2026-05-07 - Fix definitivo de sessao intermitente no modo agente
+
+- Causa raiz confirmada: o modo agente ainda dependia de `tenantId` na URL para montar `x-tenant-id`; quando o link carregava tenant ausente/desatualizado, o frontend forçava tenant errado e retornava "Sessão não encontrada para este tenant".
+- Correção aplicada:
+  - `apps/admin/src/App.tsx`: `getAgentViewUrl` deixou de enviar `tenantId` na URL do modo agente.
+  - `apps/api/src/queue/queue.routes.ts`: `handoff-view` agora resolve `tenantId` por `contactId` quando query não vier; endpoints de sessão/fila retornam `x-resolved-tenant-id`.
+  - `apps/widget/src/WidgetApp.tsx`: modo agente não exige mais `tenantId`; headers agora enviam `x-tenant-id` apenas quando disponível e capturam `x-resolved-tenant-id` para estabilizar polling/brand lookup.
+- Validação executada: `npm run build` (api/admin/widget) + `ReadLints` sem erros.
+- Próximo passo sugerido: smoke manual abrindo atendimento por links antigos e novos de agente para confirmar ausência de regressão no handoff.
+
+## 2026-05-07 - Rotina segura: auto-heal da biblioteca e status de fluxo
+
+- Causa raiz observada em produção: fluxo salvo com host de viewer inválido para aquele slug (`typebot-...` retornando 404 enquanto `soma-typebot-...` estava 200).
+- Correção pontual executada: recriação do fluxo `Drax Sistemas` no tenant `tenant_drax` com URL ativa do viewer.
+- Prevenção definitiva implementada no código:
+  - `lib/flow-url-health.ts`: nova `probeFlowUrlStatus()` com fallback automático entre hosts `typebot-` e `soma-typebot-`.
+  - `typebot.routes.ts` (`GET /api/typebot/flow-status`): retorna `resolvedUrl`/`fallbackUrl` para diagnóstico consistente.
+  - `flow.routes.ts` (`GET /api/master/tenants/:tenantId/flows`): rotina `selfHealTenantFlowViewerUrls()` corrige automaticamente URL do fluxo quando fallback ativo é detectado.
+- Resultado esperado: biblioteca não volta a marcar fluxo como inativo só por variação de host do viewer; URL é auto-reparada no primeiro carregamento da lista.
+
+## 2026-05-07 - Fluxos sumindo após deploy: causa infra + mitigação
+
+- **Causa raiz:** `saved-flows.json` e outros JSON operacionais vivem no disco da API (`apps/api/data`). Postgres cobre apenas tenants/atendentes. Redeploy **sem volume persistente** recria disco → biblioteca volta vazia.
+- **Correção imediata (produção):** recriação via `POST .../tenants/:id/flows` para `tenant_drax` até volume estar correto.
+- **Mitigação no código:** `GET /health` passa `flowsSavedCount`, `operationalDataBackend`, `operationalDataDirectory`, `operationalSavedFlowsFile`, hints; arranque em produção emite `[saas-data]` com aviso quando há tenants mas zero fluxos.
+- **Doc:** `doc/EASYPANEL-VOLUME-FLUXOS-FILA.md`; secção destacada em `doc/POSTGRES-AUTH-TENANTS-ATTENDANTS.md`.
+
 ## 2026-05-04 - Postgres para login (tenants + attendants)
 
 - Com `DATABASE_URL`, assinantes e atendentes persistem em Postgres (`saas_tenants`, `saas_attendants`); redeploy do contentor da API não apaga logins. Migração automática JSON→Postgres se Postgres vazio e ficheiros existirem.

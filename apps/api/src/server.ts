@@ -1,4 +1,5 @@
 import "./load-env";
+import { dirname } from "node:path";
 import cors from "cors";
 import express from "express";
 import { z } from "zod";
@@ -7,7 +8,8 @@ import { registerQueueRoutes } from "./queue/queue.routes";
 import { registerTypebotRoutes } from "./typebot/typebot.routes";
 import { registerFlowRoutes } from "./flows/flow.routes";
 import { registerAttendantRoutes } from "./attendants/attendant.routes";
-import { flowRepository } from "./lib/repositories";
+import { flowRepository, tenantRepository } from "./lib/repositories";
+import { getDataFilePath } from "./lib/data-path";
 import { registerAuthRoutes } from "./auth/auth.routes";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
@@ -80,10 +82,23 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => {
+  const flowsTotal = flowRepository.listAll().length;
+  const tenantsTotal = tenantRepository.list().length;
+  const savedFlowsPath = getDataFilePath("saved-flows.json");
+  const operationalDataDirectory = dirname(savedFlowsPath);
   res.status(200).json({
     status: "ok",
     service: "typebot-saas-api",
     authTenantsAttendants: isAuthPostgresEnabled() ? "postgres" : "json",
+    /** Postgres cobre só login/assinantes/atendentes. Fluxos, fila e bibliotecas continuam em JSON no disco. */
+    flowsSavedCount: flowsTotal,
+    tenantsCount: tenantsTotal,
+    operationalDataBackend: "json_filesystem",
+    /** Caminho absoluto no servidor/container — monte o volume nesta pasta (contém saved-flows.json). */
+    operationalDataDirectory,
+    operationalSavedFlowsFile: savedFlowsPath,
+    operationalDataHint:
+      "Montar volume persistente no diretório de dados da API (operationalDataDirectory). Sem volume, cada redeploy recria disco e pode esvaziar a biblioteca de fluxos.",
   });
 });
 
@@ -140,6 +155,24 @@ async function startApi(): Promise<void> {
   await bootstrapAuthDataFromDatabase();
   logAuthPersistenceMode();
   await seedTenantOnEmptyIfConfigured();
+
+  const dataMarker = getDataFilePath("saved-flows.json");
+  if (String(process.env.NODE_ENV ?? "").toLowerCase() === "production") {
+    const flowsTotal = flowRepository.listAll().length;
+    const tenantsTotal = tenantRepository.list().length;
+    if (tenantsTotal > 0 && flowsTotal === 0) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[saas-data] AVISO: biblioteca de fluxos vazia (${flowsTotal}) com ${tenantsTotal} assinante(s). Se antes havia fluxos, ` +
+          `redeploy sem volume pode ter apagado JSON no contentor. Persistência esperada próximo de: ${dataMarker}`,
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.log(
+      `[saas-data] Dados operacionais (fluxos/fila/bibliotecas): JSON em disco. Postgres cobre apenas auth/tenants conforme DATABASE_URL. ` +
+        `Garantir volume Easypanel na pasta da API onde fica saved-flows.json.`,
+    );
+  }
 
   app.listen(port, () => {
     // eslint-disable-next-line no-console
