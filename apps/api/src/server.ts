@@ -12,6 +12,7 @@ import { flowRepository, tenantRepository } from "./lib/repositories";
 import { getDataFilePath } from "./lib/data-path";
 import { registerAuthRoutes } from "./auth/auth.routes";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
+import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
 import {
   bootstrapAuthDataFromDatabase,
@@ -27,7 +28,11 @@ const port = Number(process.env.PORT ?? 3333);
 const TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS =
   String(process.env.TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS ?? "true").trim().toLowerCase() !== "false";
 const TYPEBOT_AUTO_SYNC_INTERVAL_MS = Number(process.env.TYPEBOT_AUTO_SYNC_INTERVAL_MS ?? 20000);
+const TYPEBOT_TENANT_FLOW_WATCHER_ENABLED =
+  String(process.env.TYPEBOT_TENANT_FLOW_WATCHER_ENABLED ?? "true").trim().toLowerCase() !== "false";
+const TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS = Number(process.env.TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS ?? 7000);
 let isMasterAutoSyncRunning = false;
+let isTenantFlowWatcherRunning = false;
 
 const runMasterAutoSync = async () => {
   if (isMasterAutoSyncRunning) return;
@@ -43,6 +48,31 @@ const runMasterAutoSync = async () => {
     console.error("[typebot-auto-sync] failed:", error);
   } finally {
     isMasterAutoSyncRunning = false;
+  }
+};
+
+const runTenantFlowWatcher = async () => {
+  if (isTenantFlowWatcherRunning) return;
+  isTenantFlowWatcherRunning = true;
+  try {
+    let imported = 0;
+    let scannedTenants = 0;
+    const tenants = tenantRepository.list();
+    for (const tenant of tenants) {
+      if (!tenant.id) continue;
+      scannedTenants += 1;
+      try {
+        const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
+        imported += result.imported;
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error(`[typebot-tenant-flow-sync] tenant=${tenant.id} failed:`, error);
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log(`[typebot-tenant-flow-sync] tenants=${scannedTenants} imported=${imported}`);
+  } finally {
+    isTenantFlowWatcherRunning = false;
   }
 };
 
@@ -186,6 +216,19 @@ async function startApi(): Promise<void> {
       setInterval(() => {
         void runMasterAutoSync();
       }, Math.max(20000, TYPEBOT_AUTO_SYNC_INTERVAL_MS));
+    }
+
+    if (TYPEBOT_TENANT_FLOW_WATCHER_ENABLED) {
+      const watcherIntervalMs = Math.min(8000, Math.max(5000, TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS));
+      // Captura novos fluxos criados/publicados no Typebot do assinante sem depender de ação manual no painel.
+      setTimeout(() => {
+        void runTenantFlowWatcher();
+      }, 5000);
+      setInterval(() => {
+        void runTenantFlowWatcher();
+      }, watcherIntervalMs);
+      // eslint-disable-next-line no-console
+      console.log(`[typebot-tenant-flow-sync] enabled intervalMs=${watcherIntervalMs}`);
     }
   });
 }

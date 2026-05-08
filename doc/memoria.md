@@ -1,3 +1,31 @@
+## 2026-05-08 - Watcher automatico de fluxos Typebot (5-8s)
+
+- Implementado watcher no `apps/api/src/server.ts` para importar automaticamente novos fluxos publicados no Typebot do assinante.
+- Configuracao:
+  - `TYPEBOT_TENANT_FLOW_WATCHER_ENABLED` (default `true`)
+  - `TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS` (default `7000`, com clamp entre `5000` e `8000`)
+- Comportamento:
+  - roda em loop com protecao anti-concorrencia (`isTenantFlowWatcherRunning`);
+  - percorre tenants e executa `importManualWorkspaceTypebotsIntoTenantFlows(tenantId)`;
+  - registra log operacional `[typebot-tenant-flow-sync] tenants=<n> imported=<n>`.
+- Validacao local: `npm run build:api` e `ReadLints` sem erros.
+
+## 2026-05-08 - Inclusao manual de fluxo via API para tenant_drax
+
+- Restricao operacional confirmada: UI atual nao tem acao de provisionar/vincular workspace Typebot nem cadastro direto por URL nessa tela.
+- Acao aplicada: criacao manual de fluxo pelo endpoint `POST /api/master/tenants/tenant_drax/flows` com URL publicada do viewer.
+- Resultado: fluxo criado com sucesso (`201`) e `GET /health` passou de `flowsSavedCount: 0` para `1`.
+- Proximo passo: executar redeploy de prova e confirmar que `flowsSavedCount` permanece `>= 1` (validacao final da persistencia do volume).
+
+## 2026-05-08 - Fluxo nao aparece por workspace Typebot nao provisionado
+
+- Verificacao direta em producao:
+  - `GET /health` retorna campos operacionais e `flowsSavedCount: 0`.
+  - `GET /api/master/tenants/tenant_drax/flows` retorna lista vazia.
+  - `GET /api/master/tenants` mostra `tenant_drax` com `typebotProvisionStatus: "not_started"` e `typebotAccessUrl: ""`.
+- Causa raiz atual: tenant sem workspace Typebot vinculado/provisionado; por isso o auto-sync (`synced=1`) nao traz fluxo para a biblioteca do tenant.
+- Proximo passo: provisionar/vincular o workspace Typebot do tenant no Admin e repetir teste de listagem.
+
 ## 2026-05-08 - Publicacao de /health operacional para master
 
 - Acao executada: preparado commit com `apps/api/src/server.ts` para expor no `/health` os campos `flowsSavedCount`, `tenantsCount`, `operationalDataBackend`, `operationalDataDirectory`, `operationalSavedFlowsFile` e `operationalDataHint`.
