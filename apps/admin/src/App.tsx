@@ -324,6 +324,8 @@ export function App() {
   const [newTenantName, setNewTenantName] = useState("");
   const [newTenantEmail, setNewTenantEmail] = useState("");
   const [newTenantWhatsapp, setNewTenantWhatsapp] = useState("");
+  const [newTenantTypebotWorkspaceId, setNewTenantTypebotWorkspaceId] = useState("");
+  const [newTenantTypebotAccessUrl, setNewTenantTypebotAccessUrl] = useState("");
   const [newTenantPassword, setNewTenantPassword] = useState("");
   const [isSubscriberModalOpen, setIsSubscriberModalOpen] = useState(false);
   const [isLeadContextModalOpen, setIsLeadContextModalOpen] = useState(false);
@@ -949,6 +951,8 @@ export function App() {
     setNewTenantName("");
     setNewTenantEmail("");
     setNewTenantWhatsapp("");
+    setNewTenantTypebotWorkspaceId("");
+    setNewTenantTypebotAccessUrl("");
     setNewTenantPassword("");
     setEditingTenantId(null);
   }
@@ -963,6 +967,8 @@ export function App() {
     setNewTenantName(tenant.name);
     setNewTenantEmail(tenant.ownerEmail);
     setNewTenantWhatsapp(tenant.whatsapp ?? "");
+    setNewTenantTypebotWorkspaceId(String(tenant.typebotWorkspaceId ?? "").trim());
+    setNewTenantTypebotAccessUrl(String(tenant.typebotAccessUrl ?? "").trim());
     setIsSubscriberModalOpen(true);
   }
 
@@ -993,6 +999,8 @@ export function App() {
           name: newTenantName,
           ownerEmail: newTenantEmail,
           whatsapp: newTenantWhatsapp,
+          typebotWorkspaceId: newTenantTypebotWorkspaceId.trim(),
+          typebotAccessUrl: newTenantTypebotAccessUrl.trim(),
         }),
       });
 
@@ -2666,6 +2674,22 @@ export function App() {
                     disabled={isSavingSubscriber}
                     required
                   />
+                  {editingTenantId ? (
+                    <>
+                      <input
+                        placeholder="Typebot Workspace ID (obrigatório para autoimport)"
+                        value={newTenantTypebotWorkspaceId}
+                        onChange={(event) => setNewTenantTypebotWorkspaceId(event.target.value)}
+                        disabled={isSavingSubscriber}
+                      />
+                      <input
+                        placeholder="Typebot Access URL (opcional)"
+                        value={newTenantTypebotAccessUrl}
+                        onChange={(event) => setNewTenantTypebotAccessUrl(event.target.value)}
+                        disabled={isSavingSubscriber}
+                      />
+                    </>
+                  ) : null}
                   {!editingTenantId ? (
                     <input
                       type="password"

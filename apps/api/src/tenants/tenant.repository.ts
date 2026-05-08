@@ -243,7 +243,14 @@ export class TenantRepository {
 
   update(
     id: string,
-    input: Pick<Tenant, "name" | "ownerEmail" | "whatsapp"> & { profileImageUrl?: string },
+    input: Pick<Tenant, "name" | "ownerEmail" | "whatsapp"> & {
+      profileImageUrl?: string;
+      typebotWorkspaceId?: string;
+      typebotAccessUrl?: string;
+      typebotProvisionStatus?: TypebotProvisionStatus;
+      typebotProvisionError?: string;
+      typebotLastSyncAt?: string;
+    },
   ): Tenant | null {
     const current = this.tenants.get(id) ?? this.getById(id);
     if (!current) return null;
@@ -256,6 +263,21 @@ export class TenantRepository {
     };
     if (input.profileImageUrl !== undefined) {
       updated.profileImageUrl = input.profileImageUrl?.trim() ? input.profileImageUrl.trim() : undefined;
+    }
+    if (input.typebotWorkspaceId !== undefined) {
+      updated.typebotWorkspaceId = input.typebotWorkspaceId?.trim() ? input.typebotWorkspaceId.trim() : undefined;
+    }
+    if (input.typebotAccessUrl !== undefined) {
+      updated.typebotAccessUrl = input.typebotAccessUrl?.trim() ? input.typebotAccessUrl.trim() : undefined;
+    }
+    if (input.typebotProvisionStatus !== undefined) {
+      updated.typebotProvisionStatus = input.typebotProvisionStatus;
+    }
+    if (input.typebotProvisionError !== undefined) {
+      updated.typebotProvisionError = input.typebotProvisionError;
+    }
+    if (input.typebotLastSyncAt !== undefined) {
+      updated.typebotLastSyncAt = input.typebotLastSyncAt;
     }
     this.tenants.set(id, updated);
     persistTenantsSnapshot([...this.tenants.values()]);

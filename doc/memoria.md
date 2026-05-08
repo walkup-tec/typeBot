@@ -1,3 +1,20 @@
+## 2026-05-08 - Solucao definitiva: vinculo manual do workspace Typebot por assinante
+
+- Causa raiz consolidada: watcher/autosync nao importava fluxos porque `tenant_drax` estava sem `typebotWorkspaceId`.
+- Implementacao aplicada:
+  - API aceita e persiste no update do assinante:
+    - `typebotWorkspaceId`
+    - `typebotAccessUrl`
+  - Ao salvar `typebotWorkspaceId`, tenant passa para `typebotProvisionStatus = provisioned` com `typebotLastSyncAt` atualizado.
+  - Painel Admin (Editar assinante) ganhou campos:
+    - `Typebot Workspace ID (obrigatório para autoimport)`
+    - `Typebot Access URL (opcional)`
+- Arquivos principais:
+  - `apps/api/src/tenants/tenant.service.ts`
+  - `apps/api/src/tenants/tenant.repository.ts`
+  - `apps/admin/src/App.tsx`
+- Validacao: `npm run build:api`, `npm run build:admin` e `ReadLints` sem erros.
+
 ## 2026-05-08 - Publicacao pendente explicava ausencia do indicador
 
 - Diagnostico: ultimo commit remoto estava em `3798619` (API). As mudancas visuais do painel (`apps/admin/src/App.tsx`, `styles.css`) ainda estavam apenas locais, sem push.

@@ -154,6 +154,8 @@ export const updateTenantSchema = z.object({
   ownerEmail: z.string().email(),
   whatsapp: z.string().min(8).max(30),
   profileImageUrl: z.string().max(5000000).optional(),
+  typebotWorkspaceId: z.string().max(200).optional(),
+  typebotAccessUrl: z.union([z.string().url().max(2048), z.literal("")]).optional(),
 });
 
 export class TenantService {
@@ -291,6 +293,19 @@ export class TenantService {
     };
     if (input.profileImageUrl !== undefined) {
       payload.profileImageUrl = input.profileImageUrl.trim() || undefined;
+    }
+    const workspaceId = String(input.typebotWorkspaceId ?? "").trim();
+    if (input.typebotWorkspaceId !== undefined) {
+      payload.typebotWorkspaceId = workspaceId || undefined;
+    }
+    if (input.typebotAccessUrl !== undefined) {
+      const accessUrl = String(input.typebotAccessUrl ?? "").trim();
+      payload.typebotAccessUrl = accessUrl || undefined;
+    }
+    if (workspaceId) {
+      payload.typebotProvisionStatus = "provisioned";
+      payload.typebotProvisionError = "";
+      payload.typebotLastSyncAt = new Date().toISOString();
     }
     return this.tenantRepository.update(id, payload);
   }
