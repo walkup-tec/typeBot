@@ -46,6 +46,57 @@ const buildTargetHeaders = (): Record<string, string> => ({
   Authorization: `Bearer ${TYPEBOT_TARGET_BUILDER_API_TOKEN}`,
 });
 
+const normalizeWorkspaceText = (value: string | undefined): string =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+type WorkspaceRow = { id: string; name: string };
+
+const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return [];
+  for (const root of builderApiRoots()) {
+    const base = root.replace(/\/$/, "");
+    const url = `${base}/v1/workspaces`;
+    const response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+    if (!response.ok) continue;
+    const payload = (await response.json()) as { workspaces?: Array<{ id?: string | null; name?: string | null }> };
+    const rows: WorkspaceRow[] = [];
+    for (const row of payload.workspaces ?? []) {
+      const id = String(row.id ?? "").trim();
+      const name = String(row.name ?? "").trim();
+      if (id && name) rows.push({ id, name });
+    }
+    if (rows.length > 0) return rows;
+  }
+  return [];
+};
+
+const resolveTenantWorkspaceId = async (tenantId: string): Promise<string> => {
+  const tenant = tenantRepository.getById(tenantId);
+  const current = String(tenant?.typebotWorkspaceId ?? "").trim();
+  if (current) return current;
+  const tenantName = normalizeWorkspaceText(tenant?.name);
+  if (!tenantName) return "";
+  const workspaces = await listTargetWorkspaces();
+  if (workspaces.length === 0) return "";
+
+  // Regra segura: vincula automaticamente apenas quando há match exato por nome.
+  const exact = workspaces.find((w) => normalizeWorkspaceText(w.name) === tenantName);
+  if (!exact) return "";
+
+  tenantRepository.updateTypebotProvision(tenantId, {
+    typebotWorkspaceId: exact.id,
+    typebotWorkspaceName: exact.name,
+    typebotProvisionStatus: "provisioned",
+    typebotProvisionError: "",
+    typebotLastSyncAt: new Date().toISOString(),
+  });
+  return exact.id;
+};
+
 const viewerOriginFromUrl = (rawUrl: string): string | null => {
   const s = rawUrl.trim();
   if (!s) return null;
@@ -280,8 +331,7 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
 export const importManualWorkspaceTypebotsIntoTenantFlows = async (tenantId: string): Promise<{ imported: number }> => {
   if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return { imported: 0 };
 
-  const tenant = tenantRepository.getById(tenantId);
-  const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
+  const workspaceId = await resolveTenantWorkspaceId(tenantId);
   if (!workspaceId) return { imported: 0 };
 
   const viewerBase = resolveTargetViewerBaseUrl(tenantId);
@@ -517,8 +567,7 @@ export const refreshFlowViewerUrlFromTypebot = async (flowId: string): Promise<b
   const viewerBase = resolveTargetViewerBaseUrl(flow.tenantId);
   if (!viewerBase) return false;
 
-  const tenant = tenantRepository.getById(flow.tenantId);
-  const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
+  const workspaceId = await resolveTenantWorkspaceId(flow.tenantId);
   if (!workspaceId) return false;
 
   const rows = await listWorkspaceTypebots(workspaceId);
@@ -530,8 +579,7 @@ export const refreshTenantFlowViewerUrls = async (tenantId: string): Promise<{ u
   const viewerBase = resolveTargetViewerBaseUrl(tenantId);
   if (!viewerBase) return { updated: 0 };
 
-  const tenant = tenantRepository.getById(tenantId);
-  const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
+  const workspaceId = await resolveTenantWorkspaceId(tenantId);
   if (!workspaceId) return { updated: 0 };
 
   const rows = await listWorkspaceTypebots(workspaceId);

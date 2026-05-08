@@ -1,3 +1,15 @@
+## 2026-05-08 - Backend autonomo: auto-descoberta de workspace Typebot
+
+- Ajuste de arquitetura conforme solicitacao do usuario: nao depender de acao no painel para importacao automatica.
+- Implementado no backend (`typebot-flow-viewer-url-sync`):
+  - quando `typebotWorkspaceId` estiver vazio, a API tenta descobrir workspace via Builder API (`GET /v1/workspaces`);
+  - se houver match exato por nome do tenant, vincula automaticamente no tenant (`typebotWorkspaceId`, `typebotWorkspaceName`, `provisioned`) e segue com importacao.
+- O watcher de importacao agora usa essa resolucao automatica tanto para:
+  - `importManualWorkspaceTypebotsIntoTenantFlows`
+  - `refreshFlowViewerUrlFromTypebot`
+  - `refreshTenantFlowViewerUrls`
+- Validacao: `npm run build:api` e `ReadLints` sem erros.
+
 ## 2026-05-08 - Solucao definitiva: vinculo manual do workspace Typebot por assinante
 
 - Causa raiz consolidada: watcher/autosync nao importava fluxos porque `tenant_drax` estava sem `typebotWorkspaceId`.
