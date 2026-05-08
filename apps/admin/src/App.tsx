@@ -138,16 +138,24 @@ function resolveApiBase(): string {
 const apiBase = resolveApiBase();
 const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
 /** Builder Typebot da matriz (Master do Sistema): abre em nova aba a partir do header. */
+const systemMasterTypebotBuilderUrlFromEnv = import.meta.env.VITE_SYSTEM_MASTER_TYPEBOT_BUILDER_URL?.trim();
 const SYSTEM_MASTER_TYPEBOT_BUILDER_URL =
-  "https://soma-typebot-walkup-builder.achpyp.easypanel.host/pt-BR/typebots";
+  systemMasterTypebotBuilderUrlFromEnv || "https://typebot-walkup-builder.achpyp.easypanel.host/pt-BR/typebots";
 const AUTH_STORAGE_KEY = "typebot-saas-auth-session";
 const widgetBaseUrlFromEnv = import.meta.env.VITE_WIDGET_BASE_URL?.trim();
 const widgetBaseUrl =
-  widgetBaseUrlFromEnv && !widgetBaseUrlFromEnv.includes("loca.lt") ? widgetBaseUrlFromEnv : "http://localhost:5174";
+  widgetBaseUrlFromEnv &&
+  !/localhost|127\.0\.0\.1|loca\.lt/i.test(widgetBaseUrlFromEnv)
+    ? widgetBaseUrlFromEnv.replace(/\/$/, "")
+    : "";
 const getAgentViewUrl = (tenantId: string, contactId: string, agent: string, agentName?: string) =>
-  `${widgetBaseUrl}/?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
-    contactId,
-  )}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(agentName?.trim() || agent)}`;
+  widgetBaseUrl
+    ? `${widgetBaseUrl}/?mode=agent&contactId=${encodeURIComponent(contactId)}&agentId=${encodeURIComponent(
+        agent,
+      )}&agentName=${encodeURIComponent(agentName?.trim() || agent)}&apiBase=${encodeURIComponent(apiBase)}`
+    : `${apiBase}/handoff-view?mode=agent&contactId=${encodeURIComponent(contactId)}&agentId=${encodeURIComponent(
+        agent,
+      )}&agentName=${encodeURIComponent(agentName?.trim() || agent)}`;
 const getTenantUserTypeLabel = (ownerEmail: string): "Master do Sistema" | "Master Assinante" =>
   ownerEmail.trim().toLowerCase() === SYSTEM_MASTER_EMAIL ? "Master do Sistema" : "Master Assinante";
 const getTenantStatusLabel = (status: Tenant["status"]): "Ativo" | "Bloqueado" => (status === "active" ? "Ativo" : "Bloqueado");
@@ -304,9 +312,14 @@ function abbreviateUrlForDisplay(raw: string, maxLen = 56): string {
 }
 
 export function App() {
+  const QUEUE_REFRESH_INTERVAL_MS = 3000;
+  const FLOW_LIBRARY_REFRESH_INTERVAL_MS = 7000;
+  const FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS = Math.max(1, Math.ceil(FLOW_LIBRARY_REFRESH_INTERVAL_MS / 1000));
   const [activeScreen, setActiveScreen] = useState<ScreenId>("master");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [queueItems, setQueueItems] = useState<QueueContact[]>([]);
+  const [libraryLastUpdatedAt, setLibraryLastUpdatedAt] = useState<Date | null>(null);
+  const [libraryNextRefreshInSeconds, setLibraryNextRefreshInSeconds] = useState(FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS);
   const [selectedTenant, setSelectedTenant] = useState<string>("");
   const [newTenantName, setNewTenantName] = useState("");
   const [newTenantEmail, setNewTenantEmail] = useState("");
@@ -536,6 +549,7 @@ export function App() {
     () => queueItems.filter((item) => item.status === "waiting").length,
     [queueItems],
   );
+  const libraryLastUpdatedLabel = libraryLastUpdatedAt ? libraryLastUpdatedAt.toLocaleTimeString("pt-BR") : "--:--:--";
 
   function playPendingLeadAlertTone(repeats = 1) {
     try {
@@ -789,11 +803,35 @@ export function App() {
 
   useEffect(() => {
     if (!selectedTenant) return;
+    void loadQueue(selectedTenant).catch(() => undefined);
     const timer = window.setInterval(() => {
       loadQueue(selectedTenant).catch(() => undefined);
-    }, 3000);
+    }, QUEUE_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [selectedTenant, attendants]);
+
+  useEffect(() => {
+    if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== 3) return;
+    const refreshLibrary = async () => {
+      await loadFlows(selectedTenant);
+      setLibraryLastUpdatedAt(new Date());
+      setLibraryNextRefreshInSeconds(FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS);
+    };
+    void refreshLibrary().catch(() => undefined);
+    const libraryTimer = window.setInterval(() => {
+      void refreshLibrary().catch(() => undefined);
+    }, FLOW_LIBRARY_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(libraryTimer);
+  }, [selectedTenant, activeScreen, masterWizardStep]);
+
+  useEffect(() => {
+    if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== 3) return;
+    setLibraryNextRefreshInSeconds(FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS);
+    const countdownTimer = window.setInterval(() => {
+      setLibraryNextRefreshInSeconds((current) => (current <= 1 ? 0 : current - 1));
+    }, 1000);
+    return () => window.clearInterval(countdownTimer);
+  }, [selectedTenant, activeScreen, masterWizardStep]);
 
   useEffect(() => {
     if (!isPendingCountBootstrappedRef.current) {
@@ -2123,6 +2161,15 @@ export function App() {
                   Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
                   <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
                 </p>
+                <div className="queue-refresh-banner" role="status" aria-live="polite">
+                  <span className="queue-refresh-pill">
+                    <i className="queue-refresh-dot" aria-hidden="true" />
+                    Atualizado em {libraryLastUpdatedLabel}
+                  </span>
+                  <span className="queue-refresh-pill queue-refresh-pill--countdown">
+                    Próxima atualização em {libraryNextRefreshInSeconds}s
+                  </span>
+                </div>
                 {selectableFlowLibrary.some((item) => !systemDefaultLibraryIds.has(item.id)) ? (
                   <div className="grid-form">
                     <select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)}>

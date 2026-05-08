@@ -1,3 +1,37 @@
+## 2026-05-08 - Publicacao pendente explicava ausencia do indicador
+
+- Diagnostico: ultimo commit remoto estava em `3798619` (API). As mudancas visuais do painel (`apps/admin/src/App.tsx`, `styles.css`) ainda estavam apenas locais, sem push.
+- Impacto: deploy do Easypanel do painel nao tinha como trazer o indicador novo.
+- Acao: preparar commit/push exclusivo do painel com indicador somente na Biblioteca de fluxos (sem Fila ao vivo).
+
+## 2026-05-08 - Escopo do indicador ajustado: somente Biblioteca de fluxos
+
+- Ajuste solicitado pelo usuario: remover indicador da `Fila ao vivo`.
+- Aplicado:
+  - removido banner "Atualizado em / Próxima atualização" da tela `liveQueue`;
+  - mantido apenas na tela `Master > Etapa 3 — Biblioteca de fluxos`.
+- Validacao: `npm run build:admin` e `ReadLints` sem erros.
+
+## 2026-05-08 - Indicador de atualizacao tambem na Biblioteca (Etapa 3)
+
+- Ajuste aplicado apos validacao do usuario: o indicador visual nao aparecia porque estava apenas na tela `Fila ao vivo`.
+- Implementado tambem na tela `Master > Etapa 3 — Biblioteca de fluxos`:
+  - `Atualizado em HH:mm:ss`
+  - `Próxima atualização em Ns` (contagem regressiva)
+- Polling da biblioteca configurado em 7s (`FLOW_LIBRARY_REFRESH_INTERVAL_MS = 7000`) quando a tela da etapa 3 esta ativa.
+- Validacao: `npm run build:admin` e `ReadLints` sem erros.
+
+## 2026-05-08 - Indicador visual de atualizacao na Fila ao vivo
+
+- Implementado no painel admin (tela `liveQueue`) um banner com:
+  - `Atualizado em HH:mm:ss`
+  - `Próxima atualização em Ns` (contagem regressiva)
+- Mudancas:
+  - `apps/admin/src/App.tsx`: novos estados `queueLastUpdatedAt` e `queueNextRefreshInSeconds`; reset da contagem a cada `loadQueue`; render do banner na seção da fila.
+  - `apps/admin/src/styles.css`: estilos dos pills, ponto pulsante e animacao.
+- Intervalo do polling mantido em 3s (`QUEUE_REFRESH_INTERVAL_MS = 3000`) e a contagem regressiva sincronizada com esse ciclo.
+- Validacao: `npm run build:admin` e `ReadLints` sem erros.
+
 ## 2026-05-08 - Watcher automatico de fluxos Typebot (5-8s)
 
 - Implementado watcher no `apps/api/src/server.ts` para importar automaticamente novos fluxos publicados no Typebot do assinante.
