@@ -1,3 +1,10 @@
+## 2026-05-11 - Painel lead compacto com acordeoes e atalhos
+
+- Pedido: otimizar painel lateral do lead com icones, resumo do contato e secoes recolhiveis.
+- Correcao: cartao com avatar/iniciais, linha de WhatsApp com copiar, barra de atalhos e acordeoes (dados, atribuicao, anexos, Typebot, observacoes) no `handoff-view` e no widget (`LeadDrawerPanel.tsx`).
+- Validacao: `npm run build:api`, `npm run build:widget` OK.
+- Pendencia: redeploy API + widget.
+
 ## 2026-05-11 - Painel lead ausente em producao (nao publicado)
 
 - Sintoma: chat do atendente sem icone ao lado do nome do lead.

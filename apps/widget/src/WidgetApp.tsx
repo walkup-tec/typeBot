@@ -1,4 +1,5 @@
 import { CSSProperties, ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { LeadDrawerPanel, type AttendantOption, type LeadAttachment } from "./LeadDrawerPanel";
 
 const defaultApiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3333";
 const tenantId = import.meta.env.VITE_TENANT_ID ?? "demo-tenant";
@@ -12,14 +13,6 @@ type LiveMessage = {
   createdAt: string;
 };
 
-type LeadAttachment = {
-  id: string;
-  fileName: string;
-  mimeType: string;
-  content: string;
-  createdAt: string;
-};
-
 type QueueContactProfile = {
   contactName?: string;
   leadWhatsapp?: string;
@@ -27,11 +20,6 @@ type QueueContactProfile = {
   leadContext?: Record<string, string | number | boolean>;
   attachments?: LeadAttachment[];
   assignedAgentId?: string;
-};
-
-type AttendantOption = {
-  username: string;
-  displayName: string;
 };
 
 type TenantBranding = {
@@ -736,105 +724,26 @@ export function WidgetApp() {
 
         {status ? <small>{status}</small> : null}
 
-        <div
-          className={`lead-drawer-overlay${leadDrawerOpen ? " open" : ""}`}
-          aria-hidden={!leadDrawerOpen}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setLeadDrawerOpen(false);
-          }}
-        >
-          <aside className="lead-drawer-panel" role="dialog" aria-labelledby="leadDrawerTitle">
-            <div className="lead-drawer-head">
-              <strong id="leadDrawerTitle">Dados do lead</strong>
-              <button
-                type="button"
-                className="lead-drawer-close"
-                aria-label="Fechar painel"
-                onClick={() => setLeadDrawerOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="lead-drawer-body">
-              <label className="lead-field">
-                <span>Nome do lead</span>
-                <input value={leadNameDraft} onChange={(event) => setLeadNameDraft(event.target.value)} />
-              </label>
-              <label className="lead-field">
-                <span>WhatsApp</span>
-                <input
-                  value={leadWhatsappDraft}
-                  onChange={(event) => setLeadWhatsappDraft(event.target.value)}
-                  inputMode="tel"
-                />
-              </label>
-              <label className="lead-field">
-                <span>Atribuir para outro atendente</span>
-                <select value={leadAssignTo} onChange={(event) => setLeadAssignTo(event.target.value)}>
-                  <option value="">Manter atendente atual</option>
-                  {leadAttendants.map((attendant) => (
-                    <option key={attendant.username} value={attendant.username}>
-                      {attendant.displayName} ({attendant.username})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="lead-field">
-                <span>Anexos (imagens e documentos)</span>
-                <input
-                  ref={leadFilesInputRef}
-                  type="file"
-                  accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
-                  multiple
-                  onChange={handleLeadFilesSelected}
-                />
-              </label>
-              <div className="lead-attachments-list">
-                {leadAttachments.map((item) => (
-                  <div className="lead-attachment-item" key={item.id}>
-                    <strong>{item.fileName}</strong>
-                    {item.mimeType.startsWith("image/") || item.content.startsWith(IMAGE_DATA_URL_PREFIX) ? (
-                      <img className="live-message-image" src={item.content} alt={item.fileName} />
-                    ) : (
-                      <a href={item.content} download={item.fileName}>
-                        Baixar
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <label className="lead-field">
-                <span>Variáveis do Typebot</span>
-              </label>
-              <div className="lead-variables-list">
-                {leadVariables.length === 0 ? (
-                  <div className="lead-variable-chip">
-                    <strong>Sem variáveis registradas</strong>
-                  </div>
-                ) : (
-                  leadVariables.map((item) => (
-                    <div className="lead-variable-chip" key={item.key}>
-                      <strong>{item.key}</strong>
-                      {item.value}
-                    </div>
-                  ))
-                )}
-              </div>
-              <label className="lead-field">
-                <span>Observações do atendimento</span>
-                <textarea
-                  rows={5}
-                  value={leadNotesDraft}
-                  onChange={(event) => setLeadNotesDraft(event.target.value)}
-                />
-              </label>
-              <button type="button" className="lead-save-button" onClick={() => void saveLeadProfile()}>
-                Salvar dados do lead
-              </button>
-              {leadDrawerStatus ? <small className="lead-drawer-status">{leadDrawerStatus}</small> : null}
-            </div>
-          </aside>
-        </div>
+        <LeadDrawerPanel
+          open={leadDrawerOpen}
+          onClose={() => setLeadDrawerOpen(false)}
+          leadNameDraft={leadNameDraft}
+          onLeadNameDraftChange={setLeadNameDraft}
+          leadWhatsappDraft={leadWhatsappDraft}
+          onLeadWhatsappDraftChange={setLeadWhatsappDraft}
+          leadNotesDraft={leadNotesDraft}
+          onLeadNotesDraftChange={setLeadNotesDraft}
+          leadAssignTo={leadAssignTo}
+          onLeadAssignToChange={setLeadAssignTo}
+          leadAttendants={leadAttendants}
+          leadAttachments={leadAttachments}
+          leadVariables={leadVariables}
+          leadDrawerStatus={leadDrawerStatus}
+          onSave={() => void saveLeadProfile()}
+          onFilesSelected={handleLeadFilesSelected}
+          leadFilesInputRef={leadFilesInputRef}
+          imageDataUrlPrefix={IMAGE_DATA_URL_PREFIX}
+        />
       </div>
     );
   }
