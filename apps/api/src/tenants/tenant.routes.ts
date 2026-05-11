@@ -13,6 +13,11 @@ import { buildTenantWelcomeTemplate } from "../mail/mail.templates";
 import { FlowService } from "../flows/flow.service";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
+import {
+  importManualWorkspaceTypebotsIntoTenantFlows,
+  refreshTenantFlowViewerUrls,
+  refreshTenantWorkspaceFlowUrlsFromTypebot,
+} from "../typebot/typebot-flow-viewer-url-sync";
 import { isAuthPostgresEnabled, loadTenantsFromPostgres } from "../lib/auth-postgres";
 
 const tenantService = new TenantService(tenantRepository, attendantRepository, flowRepository, queueRepository);
@@ -239,6 +244,33 @@ export const registerTenantRoutes = (app: Express) => {
     const ok = tenantService.delete(req.params.id);
     if (!ok) return res.status(404).json({ message: "Tenant not found" });
     return res.status(204).send();
+  });
+
+  app.post("/api/master/tenants/:id/typebot/sync-workspace-flows", async (req, res) => {
+    const tenant = tenantRepository.getById(req.params.id);
+    if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+    try {
+      const importResult = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
+      await refreshTenantWorkspaceFlowUrlsFromTypebot(tenant.id);
+      await refreshTenantFlowViewerUrls(tenant.id);
+      const refreshed = tenantRepository.getById(tenant.id);
+      const flows = flowService.listByTenant(tenant.id);
+      return res.status(200).json({
+        status: importResult.skipReason && importResult.imported === 0 ? "partial" : "ok",
+        tenantId: tenant.id,
+        typebotProvisionStatus: refreshed?.typebotProvisionStatus ?? null,
+        flowCount: flows.length,
+        ...importResult,
+        workspaceId: refreshed?.typebotWorkspaceId ?? importResult.workspaceId ?? null,
+        workspaceName: refreshed?.typebotWorkspaceName ?? importResult.workspaceName ?? null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao sincronizar fluxos do workspace Typebot.";
+      return res.status(500).json({
+        status: "failed",
+        message,
+      });
+    }
   });
 
   app.post("/api/master/tenants/:id/typebot/sync-defaults", async (req, res) => {

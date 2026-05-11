@@ -1,3 +1,11 @@
+## 2026-05-11 - Biblioteca ainda sem espelhar Typebot apos deploy API
+
+- Sintoma: `/health` com watcher e token OK, mas Etapa 3 segue so com `Teste` inativo; `flowsSavedCount=1`.
+- Hipotese: Builder API nao lista workspace (base `/api`, token ou match de nome) ou import retorna 0 sem diagnostico.
+- Correcao: match compacto de workspace (nome/e-mail), fallback com workspace unico, logs de `skipReason`, endpoint `POST /api/master/tenants/:id/typebot/sync-workspace-flows`.
+- Validacao local: `npm run build:api` OK.
+- Pendencia: redeploy API; chamar sync-workspace-flows para `tenant_drax`; conferir `TYPEBOT_BUILDER_API_BASE_URL` com sufixo `/api`.
+
 ## 2026-05-11 - Divergencia biblioteca x Typebot (Drax Sistemas)
 
 - Sintoma em producao: workspace Typebot com `Teste 5`, `Empréstimo do Trabalhador CLT` e `Drax Sistemas` (Live); biblioteca SaaS com apenas `Teste` inativo (`teste-0rzqap7` 404) e `Teste 5` ativo no viewer (`teste-5-olx3rjp` 200).

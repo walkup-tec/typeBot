@@ -51,6 +51,9 @@ const normalizeWorkspaceText = (value: string | undefined): string =>
     .trim()
     .toLowerCase();
 
+const compactWorkspaceText = (value: string | undefined): string =>
+  normalizeWorkspaceText(value).replace(/[^a-z0-9]+/g, "");
+
 const sanitizeWorkspaceLabel = (value: string | undefined, fallback = "Workspace"): string => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return fallback;
@@ -60,12 +63,21 @@ const sanitizeWorkspaceLabel = (value: string | undefined, fallback = "Workspace
 
 type WorkspaceRow = { id: string; name: string };
 
+const MASTER_WORKSPACE_ID = String(process.env.TYPEBOT_SOURCE_MASTER_WORKSPACE_ID ?? "").trim();
+
+const excludeMasterWorkspace = (workspaces: WorkspaceRow[]): WorkspaceRow[] => {
+  if (!MASTER_WORKSPACE_ID) return workspaces;
+  return workspaces.filter((workspace) => workspace.id !== MASTER_WORKSPACE_ID);
+};
+
 const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
   if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return [];
+  let lastStatus = 0;
   for (const root of builderApiRoots()) {
     const base = root.replace(/\/$/, "");
     const url = `${base}/v1/workspaces`;
     const response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+    lastStatus = response.status;
     if (!response.ok) continue;
     const payload = (await response.json()) as { workspaces?: Array<{ id?: string | null; name?: string | null }> };
     const rows: WorkspaceRow[] = [];
@@ -75,6 +87,10 @@ const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
       if (id && name) rows.push({ id, name });
     }
     if (rows.length > 0) return rows;
+  }
+  if (lastStatus > 0 && process.env.NODE_ENV !== "test") {
+    // eslint-disable-next-line no-console
+    console.warn(`[typebot-flow-viewer-url-sync] list workspaces failed lastStatus=${lastStatus}`);
   }
   return [];
 };
@@ -91,10 +107,17 @@ const pickWorkspaceForTenant = (
     if (exact) return exact;
   }
 
+  const tenantCompact = compactWorkspaceText(sanitizeWorkspaceLabel(tenant?.name ?? undefined));
+  if (tenantCompact) {
+    const compactMatches = workspaces.filter((workspace) => compactWorkspaceText(workspace.name) === tenantCompact);
+    if (compactMatches.length === 1) return compactMatches[0];
+  }
+
   const ownerEmail = normalizeText(tenant?.ownerEmail ?? undefined);
   if (ownerEmail) {
     const localPart = ownerEmail.split("@")[0] ?? "";
     const ownerNeedle = normalizeWorkspaceText(localPart.replace(/[._-]+/g, " "));
+    const ownerCompact = compactWorkspaceText(localPart.replace(/[._-]+/g, " "));
     if (ownerNeedle) {
       const byOwner = workspaces.filter((workspace) => {
         const workspaceName = normalizeWorkspaceText(workspace.name);
@@ -102,18 +125,30 @@ const pickWorkspaceForTenant = (
       });
       if (byOwner.length === 1) return byOwner[0];
     }
+    if (ownerCompact) {
+      const byOwnerCompact = workspaces.filter((workspace) => {
+        const workspaceCompact = compactWorkspaceText(workspace.name);
+        return workspaceCompact.includes(ownerCompact) || ownerCompact.includes(workspaceCompact);
+      });
+      if (byOwnerCompact.length === 1) return byOwnerCompact[0];
+    }
   }
+
+  if (workspaces.length === 1) return workspaces[0];
 
   return null;
 };
 
-const resolveTenantWorkspaceId = async (tenantId: string): Promise<string> => {
+const resolveTenantWorkspaceId = async (
+  tenantId: string,
+  workspaceCandidates?: WorkspaceRow[],
+): Promise<string> => {
   const tenant = tenantRepository.getById(tenantId);
   const current = String(tenant?.typebotWorkspaceId ?? "").trim();
   if (current) return current;
   if (!tenant) return "";
 
-  const workspaces = await listTargetWorkspaces();
+  const workspaces = workspaceCandidates ?? excludeMasterWorkspace(await listTargetWorkspaces());
   const matched = pickWorkspaceForTenant(tenant, workspaces);
   if (!matched) return "";
 
@@ -354,21 +389,64 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
   return false;
 };
 
+export type TenantWorkspaceFlowImportResult = {
+  imported: number;
+  workspaceId: string;
+  workspaceName?: string;
+  workspaceCandidates: number;
+  typebotsScanned: number;
+  skipReason?: string;
+};
+
 /**
  * Typebots que existem só no workspace Typebot (criação manual no builder) passam a ter registro na biblioteca local do assinante.
  * Só inclui fluxos com URL de viewer publicada e respondendo (evita rascunhos).
  */
-export const importManualWorkspaceTypebotsIntoTenantFlows = async (tenantId: string): Promise<{ imported: number }> => {
-  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return { imported: 0 };
+export const importManualWorkspaceTypebotsIntoTenantFlows = async (
+  tenantId: string,
+): Promise<TenantWorkspaceFlowImportResult> => {
+  const empty = (skipReason: string, workspaceCandidates = 0): TenantWorkspaceFlowImportResult => ({
+    imported: 0,
+    workspaceId: "",
+    workspaceCandidates,
+    typebotsScanned: 0,
+    skipReason,
+  });
 
-  const workspaceId = await resolveTenantWorkspaceId(tenantId);
-  if (!workspaceId) return { imported: 0 };
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return empty("builder_api_token_missing");
+
+  const workspaceCandidates = excludeMasterWorkspace(await listTargetWorkspaces());
+  const workspaceId = await resolveTenantWorkspaceId(tenantId, workspaceCandidates);
+  if (!workspaceId) {
+    return empty(workspaceCandidates.length === 0 ? "workspaces_list_empty" : "workspace_not_matched", workspaceCandidates.length);
+  }
+
+  const linkedTenant = tenantRepository.getById(tenantId);
+  const workspaceName = String(linkedTenant?.typebotWorkspaceName ?? "").trim() || undefined;
 
   const viewerBase = resolveTargetViewerBaseUrl(tenantId);
-  if (!viewerBase) return { imported: 0 };
+  if (!viewerBase) {
+    return {
+      imported: 0,
+      workspaceId,
+      workspaceName,
+      workspaceCandidates: workspaceCandidates.length,
+      typebotsScanned: 0,
+      skipReason: "viewer_base_url_missing",
+    };
+  }
 
   const rows = await listWorkspaceTypebots(workspaceId);
-  if (rows.length === 0) return { imported: 0 };
+  if (rows.length === 0) {
+    return {
+      imported: 0,
+      workspaceId,
+      workspaceName,
+      workspaceCandidates: workspaceCandidates.length,
+      typebotsScanned: 0,
+      skipReason: "workspace_typebots_empty",
+    };
+  }
 
   const existingFlows = [...flowRepository.listByTenant(tenantId)];
   let imported = 0;
@@ -405,7 +483,14 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (tenantId: str
     imported += 1;
   }
 
-  return { imported };
+  return {
+    imported,
+    workspaceId,
+    workspaceName,
+    workspaceCandidates: workspaceCandidates.length,
+    typebotsScanned: rows.length,
+    skipReason: imported === 0 ? "no_new_active_typebots" : undefined,
+  };
 };
 
 /**

@@ -67,6 +67,12 @@ const runTenantFlowWatcher = async () => {
       try {
         const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
         imported += result.imported;
+        if (result.imported === 0 && result.skipReason) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[typebot-tenant-flow-sync] tenant=${tenant.id} imported=0 reason=${result.skipReason} candidates=${result.workspaceCandidates} workspaceId=${result.workspaceId || "none"}`,
+          );
+        }
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error(`[typebot-tenant-flow-sync] tenant=${tenant.id} failed:`, error);
