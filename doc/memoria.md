@@ -1,3 +1,10 @@
+## 2026-05-11 - Painel lead ausente em producao (nao publicado)
+
+- Sintoma: chat do atendente sem icone ao lado do nome do lead.
+- Causa: drawer/APIs so no working tree local; remoto em `003d5d6`.
+- Correcao: commit/push `c211d99`; CSS do widget para nao sobrescrever `button.lead-info-button`.
+- Pendencia: redeploy API + widget; hard refresh apos deploy.
+
 ## 2026-05-11 - Painel lateral de dados do lead no chat do atendente
 
 - Pedido: icone ao lado do nome do lead abre painel com edicao de nome, WhatsApp, observacoes, atribuicao a outro atendente, anexos e variaveis do Typebot.
