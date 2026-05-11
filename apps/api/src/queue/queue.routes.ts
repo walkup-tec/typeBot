@@ -106,6 +106,24 @@ const DEFAULT_VISUAL_CONFIG: ViewerVisualConfig = {
   botBubbleBg: "#FFFFFF",
 };
 
+const getReadableTextColor = (hexColor: string): string => {
+  const value = String(hexColor ?? "").trim();
+  if (!/^#[0-9A-Fa-f]{6}$/.test(value)) return "#f8fafc";
+  const r = Number.parseInt(value.slice(1, 3), 16);
+  const g = Number.parseInt(value.slice(3, 5), 16);
+  const b = Number.parseInt(value.slice(5, 7), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.74 ? "#111827" : "#f8fafc";
+};
+
+const getInitials = (label: string): string =>
+  String(label ?? "")
+    .split(" ")
+    .map((token) => token.trim()[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
 const pickHexColors = (jsonText: string) => {
   const matches = [...jsonText.matchAll(/#[0-9A-Fa-f]{6}/g)].map((m) => m[0]);
   return [...new Set(matches)];
@@ -365,6 +383,11 @@ export const registerQueueRoutes = (app: Express) => {
     const themeBotBubbleBg = pickThemeHex(String(req.query.themeBotBubbleBg), tenantTheme?.botBubbleBg, DEFAULT_VISUAL_CONFIG.botBubbleBg);
     const tenantProfileImageUrl = tenant?.profileImageUrl ?? "";
     const profileImageUrl = String(req.query.profileImageUrl ?? "").trim() || tenantProfileImageUrl.trim();
+    const agentId = String(req.query.agentId ?? "").trim();
+    const agentName = String(req.query.agentName ?? (agentId || "atendente-01")).trim();
+    const agentBubbleTextColor = getReadableTextColor(themeUserBubbleBg);
+    const agentAvatarInitials = getInitials(tenantDisplayName);
+    const safeAgentLogoUrl = profileImageUrl && isSafeImageSrc(profileImageUrl) ? profileImageUrl : "";
 
     if (!contactId || (mode === "agent" && !tenantId) || (mode !== "agent" && !tenantId)) {
       return res.status(200).send(`<!doctype html>
@@ -442,7 +465,37 @@ export const registerQueueRoutes = (app: Express) => {
       --handoff-accent: ${themeUserBubbleBg};
     }
     body { margin:0; font-family: Inter, Arial, sans-serif; background:var(--handoff-page-bg); color:#111827; }
-    body.agent-screen { background:#0b1224; min-height:100vh; }
+    body.agent-screen { background:#0b1224; min-height:100vh; color:#f1f5f9; }
+    body.agent-screen .agent-widget { width:min(500px,92vw); margin:20px auto; background:#111827; border:1px solid #1f2937; border-radius:12px; display:grid; gap:12px; padding:16px; box-sizing:border-box; }
+    body.agent-screen .widget-header { display:flex; flex-direction:column; gap:4px; }
+    body.agent-screen .widget-header span { color:#94a3b8; font-size:14px; }
+    body.agent-screen .widget-chat { min-height:320px; max-height:min(420px,52vh); overflow:auto; padding:10px; border:1px solid #1f2937; border-radius:10px; display:flex; flex-direction:column; gap:10px; background:#0b1224; }
+    body.agent-screen .live-message-row { display:flex; align-items:flex-end; gap:8px; }
+    body.agent-screen .live-message-row.mine { justify-content:flex-end; }
+    body.agent-screen .live-message-row.other { justify-content:flex-start; }
+    body.agent-screen .live-message { border:1px solid #334155; border-radius:8px; padding:10px; background:#111827; max-width:82%; }
+    body.agent-screen .live-message p { margin:6px 0; }
+    body.agent-screen .live-message small { color:#94a3b8; display:block; margin-top:4px; }
+    body.agent-screen .live-message.visitor { border-color:#35658e; background:#2f5f8a; }
+    body.agent-screen .live-message.visitor strong { color:#f8fafc; }
+    body.agent-screen .live-message.visitor p { color:#e2edf8; }
+    body.agent-screen .live-message.visitor small { color:#b7cee3; }
+    body.agent-screen .live-message.system { border-color:#26374c; background:#0f1a2a; max-width:100%; }
+    body.agent-screen .live-message.system strong { color:#6f87a2; }
+    body.agent-screen .live-message.system p { color:#8098b2; }
+    body.agent-screen .live-message.system small { color:#6f8298; }
+    body.agent-screen .msg-image { width:min(240px,100%); max-height:240px; object-fit:cover; border-radius:8px; border:1px solid rgba(148,163,184,.35); display:block; margin:6px 0; }
+    body.agent-screen .message-avatar { width:28px; height:28px; border-radius:999px; border:1px solid #334155; background:#0f172a; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; color:#cbd5e1; font-size:11px; font-weight:700; flex-shrink:0; }
+    body.agent-screen .message-avatar img { width:100%; height:100%; object-fit:cover; }
+    body.agent-screen .message-avatar--lead { border-color:#1b4f7b; background:#0f4f7f; color:#9ec2df; }
+    body.agent-screen .message-avatar-icon { width:16px; height:16px; position:relative; display:inline-block; }
+    body.agent-screen .message-avatar-icon-head { position:absolute; top:1px; left:5px; width:6px; height:6px; border-radius:999px; background:currentColor; }
+    body.agent-screen .message-avatar-icon-body { position:absolute; left:2px; bottom:1px; width:12px; height:8px; border-radius:8px 8px 4px 4px; background:currentColor; }
+    body.agent-screen .widget-input { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; }
+    body.agent-screen .widget-input input, body.agent-screen .widget-input button { border-radius:8px; border:1px solid #334155; background:#0f172a; color:#f1f5f9; padding:10px; }
+    body.agent-screen .widget-input button { font-weight:700; cursor:pointer; }
+    body.agent-screen .attach-button { width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; font-size:20px; line-height:1; }
+    body.agent-screen .session-meta { color:#64748b; word-break:break-all; font-size:12px; }
     .shell { max-width: 880px; margin: 18px auto; padding: 12px; border:1px solid #d7dee8; border-radius:14px; background:var(--handoff-chat-bg); box-shadow: 0 18px 48px rgba(15,23,42,.12); }
     .shell.visitor { max-width: 520px; padding: 0; background: transparent; border: 0; box-shadow: none; }
     .top { display:flex; flex-direction:column; gap:6px; margin-bottom: 12px; }
@@ -758,7 +811,8 @@ export const registerQueueRoutes = (app: Express) => {
     .warn { padding:12px; color:#fecaca; font-size: 13px; }
     @media (min-width: 900px) {
       body { display:grid; place-items:center; background: rgba(15, 23, 42, 0.5); min-height: 100vh; }
-      body.agent-screen { background:#0b1224; }
+      body.agent-screen { background:#0b1224; display:grid; place-items:center; }
+      body.agent-screen .agent-widget { margin:0 auto; }
       .visitor-shell {
         width: min(460px, 92vw);
         min-height: min(860px, 92vh);
@@ -786,23 +840,19 @@ export const registerQueueRoutes = (app: Express) => {
 <body class="${isAgentMode ? "agent-screen" : ""}">
   ${
     isAgentMode
-      ? `<div class="shell">
-    <div class="top">
-      <h2>Atendimento ao vivo</h2>
-      <div class="meta">${escapedModeLabel}</div>
-      <div class="meta">Fluxo: ${escapedFlow} | Sessão: ${escapedContactId} | Usuário: ${escapedName}</div>
+      ? `<div class="agent-widget">
+    <div class="widget-header">
+      <strong>Atendimento ao vivo</strong>
+      <span>Você está conversando com o visitante em tempo real</span>
     </div>
-    ${leadContextHtml ? `<div class="lead-info">${leadContextHtml}</div>` : ""}
-
-    <div class="chat-wrap">
-      <div id="chat" class="chat"></div>
-      <form id="form" class="input">
-        <input id="imagePicker" class="image-picker-input" type="file" accept="image/*" />
-        <button type="button" id="attachButton" class="attach-button" title="Enviar imagem">+</button>
-        <input id="message" placeholder="Digite sua resposta..." />
-        <button type="submit">Enviar</button>
-      </form>
-    </div>
+    <div id="chat" class="widget-chat agent-chat"></div>
+    <form id="form" class="widget-input">
+      <input id="imagePicker" class="image-picker-input" type="file" accept="image/*" />
+      <button type="button" id="attachButton" class="attach-button" title="Enviar imagem" style="background:${themeUserBubbleBg};border-color:${themeUserBubbleBg};color:${agentBubbleTextColor};">+</button>
+      <input id="message" placeholder="Digite sua resposta..." />
+      <button type="submit" style="background:${themeUserBubbleBg};border-color:${themeUserBubbleBg};color:${agentBubbleTextColor};">Enviar</button>
+    </form>
+    <small class="session-meta">Sessão: ${escapedContactId} | Atendente: ${agentName.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</small>
   </div>`
       : `<div class="visitor-shell">
     <div id="waitOverlay" class="wait-overlay">
@@ -854,6 +904,11 @@ export const registerQueueRoutes = (app: Express) => {
     const contactId = ${JSON.stringify(contactId)};
     const senderRole = ${JSON.stringify(senderRole)};
     const isAgentMode = ${JSON.stringify(isAgentMode)};
+    const tenantChatLabel = ${JSON.stringify(tenantDisplayName)};
+    const tenantBubbleColor = ${JSON.stringify(themeUserBubbleBg)};
+    const tenantBubbleText = ${JSON.stringify(agentBubbleTextColor)};
+    const tenantLogoUrl = ${JSON.stringify(safeAgentLogoUrl)};
+    const tenantAvatarInitials = ${JSON.stringify(agentAvatarInitials)};
     const chat = document.getElementById("chat");
     const form = document.getElementById("form");
     const messageInput = document.getElementById("message");
@@ -982,6 +1037,44 @@ export const registerQueueRoutes = (app: Express) => {
       return "sistema";
     }
 
+    function formatCreatedAt(value) {
+      try {
+        return new Date(value).toLocaleString("pt-BR");
+      } catch {
+        return "";
+      }
+    }
+
+    function senderTitle(sender) {
+      if (sender === "visitor") return "Cliente";
+      if (sender === "agent") return tenantChatLabel;
+      return "Sistema";
+    }
+
+    function buildLeadAvatarNode() {
+      const avatar = document.createElement("span");
+      avatar.className = "message-avatar message-avatar--lead";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.innerHTML =
+        '<span class="message-avatar-icon"><span class="message-avatar-icon-head"></span><span class="message-avatar-icon-body"></span></span>';
+      return avatar;
+    }
+
+    function buildAgentAvatarNode() {
+      const avatar = document.createElement("span");
+      avatar.className = "message-avatar message-avatar--right";
+      avatar.setAttribute("aria-hidden", "true");
+      if (tenantLogoUrl) {
+        const img = document.createElement("img");
+        img.src = tenantLogoUrl;
+        img.alt = tenantChatLabel;
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = tenantAvatarInitials;
+      }
+      return avatar;
+    }
+
     async function loadMessages() {
       const response = await fetch("/api/chat/sessions/" + contactId + "/messages?t=" + Date.now(), {
         cache: "no-store",
@@ -999,12 +1092,41 @@ export const registerQueueRoutes = (app: Express) => {
       }
       chat.innerHTML = "";
       data.forEach((item) => {
+        if (isAgentMode) {
+          const row = document.createElement("div");
+          row.className = "live-message-row " + (item.sender === "agent" ? "mine" : "other");
+          if (item.sender === "agent") row.appendChild(buildAgentAvatarNode());
+          if (item.sender === "visitor") row.appendChild(buildLeadAvatarNode());
+          const bubble = document.createElement("div");
+          bubble.className = "live-message " + item.sender + " " + (item.sender === "agent" ? "mine" : "other");
+          if (item.sender === "agent") {
+            bubble.style.background = tenantBubbleColor;
+            bubble.style.borderColor = tenantBubbleColor;
+            bubble.style.color = tenantBubbleText;
+          }
+          const title = document.createElement("strong");
+          title.textContent = senderTitle(item.sender);
+          bubble.appendChild(title);
+          const bodyWrap = document.createElement("div");
+          bodyWrap.innerHTML = formatMessageContent(item.content);
+          bubble.appendChild(bodyWrap);
+          const stamp = document.createElement("small");
+          stamp.textContent = formatCreatedAt(item.createdAt);
+          if (item.sender === "agent") {
+            stamp.style.color = tenantBubbleText;
+            stamp.style.opacity = "0.84";
+          }
+          bubble.appendChild(stamp);
+          row.appendChild(bubble);
+          chat.appendChild(row);
+          return;
+        }
         const row = document.createElement("div");
         row.className = "msg-row " + (item.sender === "visitor" ? "visitor-row" : item.sender === "agent" ? "agent-row" : "system-row");
         const div = document.createElement("div");
         div.className = "msg " + item.sender;
         div.innerHTML = "<strong>" + roleLabel(item.sender) + "</strong><div>" + formatMessageContent(item.content) + "</div>";
-        if (!isAgentMode && (item.sender === "agent" || item.sender === "system")) {
+        if (item.sender === "agent" || item.sender === "system") {
           const avatarWrap = document.createElement("div");
           avatarWrap.innerHTML = ${JSON.stringify(safeProfileImageTag)};
           row.appendChild(avatarWrap.firstChild);
