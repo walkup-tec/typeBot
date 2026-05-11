@@ -445,13 +445,13 @@ export function App() {
     () => selectedTenantFlows.filter((flow) => !flow.librarySourceId),
     [selectedTenantFlows],
   );
-  const activeLibraryFlows = useMemo(
+  const activeWorkspaceOnlyFlows = useMemo(
     () =>
-      libraryLinkedFlows.filter((flow) => {
+      workspaceOnlyFlows.filter((flow) => {
         const status = flowStatuses[flow.id];
         return status === "active" || status === "checking";
       }),
-    [libraryLinkedFlows, flowStatuses],
+    [workspaceOnlyFlows, flowStatuses],
   );
   const normalizeFlowText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
   const libraryFlowRows = useMemo(
@@ -485,6 +485,10 @@ export function App() {
         };
       }),
     [selectableFlowLibrary, libraryLinkedFlows, flowStatuses],
+  );
+  const visibleLibraryFlowRows = useMemo(
+    () => libraryFlowRows.filter((row) => row.healthStatus === "active" || row.healthStatus === "checking"),
+    [libraryFlowRows],
   );
   const unpublishedSourceMasterFlows = useMemo(
     () =>
@@ -2197,7 +2201,7 @@ export function App() {
                 ) : null}
                 <div className="tenant-profile-card">
                   <h4>Fluxos ativos na biblioteca</h4>
-                  {libraryFlowRows.length === 0 ? (
+                  {visibleLibraryFlowRows.length === 0 ? (
                     <p className="muted muted-subtle">Nenhum fluxo disponível na biblioteca.</p>
                   ) : (
                     <div className="saved-flows-table">
@@ -2207,7 +2211,7 @@ export function App() {
                         <span>URL</span>
                         <span>Ações</span>
                       </div>
-                      {libraryFlowRows.map(({ item, linkedFlow, isIncluded, healthStatus }) => {
+                      {visibleLibraryFlowRows.map(({ item, linkedFlow, isIncluded, healthStatus }) => {
                         const isSystemDefaultRow = systemDefaultLibraryIds.has(item.id);
                         const canCopyLink = Boolean(linkedFlow) && isIncluded && healthStatus === "active";
                         return (
@@ -2274,8 +2278,8 @@ export function App() {
                   <p className="muted muted-subtle">
                     Inclui fluxos criados no builder Typebot e fluxos adicionados por URL (sem item na Biblioteca Master). Copie o link público abaixo.
                   </p>
-                  {workspaceOnlyFlows.length === 0 ? (
-                    <p className="muted muted-subtle">Nenhum fluxo fora do catálogo da biblioteca neste assinante.</p>
+                  {activeWorkspaceOnlyFlows.length === 0 ? (
+                    <p className="muted muted-subtle">Nenhum fluxo ativo fora do catálogo da biblioteca neste assinante.</p>
                   ) : (
                     <div className="saved-flows-table">
                       <div className="saved-flows-header library-active-row">
@@ -2284,7 +2288,7 @@ export function App() {
                         <span>URL</span>
                         <span>Ações</span>
                       </div>
-                      {workspaceOnlyFlows.map((flow) => {
+                      {activeWorkspaceOnlyFlows.map((flow) => {
                         const healthStatus = flowStatuses[flow.id] ?? "checking";
                         const canCopyLink = healthStatus === "active";
                         return (

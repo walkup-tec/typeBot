@@ -1,3 +1,10 @@
+## 2026-05-11 - Biblioteca Etapa 3: exibir somente fluxos ativos
+
+- Ajuste no admin: listas da Etapa 3 filtram por saude da URL (`active` ou `checking`); inativos somem da UI.
+- Arquivo: `apps/admin/src/App.tsx` (`visibleLibraryFlowRows`, `activeWorkspaceOnlyFlows`).
+- Validacao: `npm run build:admin` OK.
+- Pendencia: redeploy do painel CRM.
+
 ## 2026-05-11 - Diagnostico sync-workspace-flows em producao
 
 - `Cannot GET .../sync-workspace-flows` no navegador: rota era so POST; adicionado GET com o mesmo handler.
