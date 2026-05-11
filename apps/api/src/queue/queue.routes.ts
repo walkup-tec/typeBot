@@ -494,7 +494,8 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .widget-input { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; }
     body.agent-screen .widget-input input, body.agent-screen .widget-input button { border-radius:8px; border:1px solid #334155; background:#0f172a; color:#f1f5f9; padding:10px; }
     body.agent-screen .widget-input button { font-weight:700; cursor:pointer; }
-    body.agent-screen .attach-button { width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; font-size:20px; line-height:1; }
+    body.agent-screen .attach-button { width:34px; height:34px; min-width:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; font-size:20px; line-height:1; box-sizing:border-box; }
+    body.agent-screen .attach-button-symbol { display:block; line-height:1; transform:translateY(-1px); }
     body.agent-screen .session-meta { color:#64748b; word-break:break-all; font-size:12px; }
     .shell { max-width: 880px; margin: 18px auto; padding: 12px; border:1px solid #d7dee8; border-radius:14px; background:var(--handoff-chat-bg); box-shadow: 0 18px 48px rgba(15,23,42,.12); }
     .shell.visitor { max-width: 520px; padding: 0; background: transparent; border: 0; box-shadow: none; }
@@ -520,9 +521,11 @@ export const registerQueueRoutes = (app: Express) => {
     .shell button { background:var(--handoff-accent); color:#fff; border-color:var(--handoff-accent); font-weight:700; cursor:pointer; }
     .image-picker-input { display:none; }
     .attach-button {
-      width:40px; height:40px; border-radius:999px; border:1px solid #cbd5e1; background:#fff; color:#334155;
-      font-size:22px; line-height:1; cursor:pointer; display:grid; place-items:center; padding:0;
+      width:40px; height:40px; min-width:40px; border-radius:999px; border:1px solid #cbd5e1; background:#fff; color:#334155;
+      font-size:20px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0;
+      box-sizing:border-box;
     }
+    .attach-button-symbol { display:block; line-height:1; transform:translateY(-1px); }
 
     .visitor-shell {
       --visitor-accent: ${themeUserBubbleBg.replace(/"/g, "")};
@@ -747,6 +750,21 @@ export const registerQueueRoutes = (app: Express) => {
       line-height: 1.2;
       white-space: nowrap;
     }
+    .visitor-live-wrap .attach-button {
+      width:40px;
+      height:40px;
+      min-width:40px;
+      padding:0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:999px;
+      background:#fff;
+      color:var(--visitor-accent, #128c7e);
+      border:1px solid #cbd5e1;
+      font-size:20px;
+      line-height:1;
+    }
     .msg-row { display:flex; align-items:flex-end; gap:8px; }
     .msg-row.visitor-row { justify-content:flex-end; }
     .msg-row.agent-row { justify-content:flex-start; }
@@ -848,7 +866,7 @@ export const registerQueueRoutes = (app: Express) => {
     <div id="chat" class="widget-chat agent-chat"></div>
     <form id="form" class="widget-input">
       <input id="imagePicker" class="image-picker-input" type="file" accept="image/*" />
-      <button type="button" id="attachButton" class="attach-button" title="Enviar imagem" style="background:${themeUserBubbleBg};border-color:${themeUserBubbleBg};color:${agentBubbleTextColor};">+</button>
+      <button type="button" id="attachButton" class="attach-button" title="Enviar imagem" style="background:${themeUserBubbleBg};border-color:${themeUserBubbleBg};color:${agentBubbleTextColor};"><span class="attach-button-symbol">+</span></button>
       <input id="message" placeholder="Digite sua resposta..." />
       <button type="submit" style="background:${themeUserBubbleBg};border-color:${themeUserBubbleBg};color:${agentBubbleTextColor};">Enviar</button>
     </form>
@@ -892,7 +910,7 @@ export const registerQueueRoutes = (app: Express) => {
       <div id="chat" class="chat"></div>
       <form id="form" class="input">
         <input id="imagePicker" class="image-picker-input" type="file" accept="image/*" />
-        <button type="button" id="attachButton" class="attach-button" title="Enviar imagem">+</button>
+        <button type="button" id="attachButton" class="attach-button" title="Enviar imagem"><span class="attach-button-symbol">+</span></button>
         <input id="message" placeholder="Digite sua mensagem..." />
         <button type="submit">Enviar</button>
       </form>
