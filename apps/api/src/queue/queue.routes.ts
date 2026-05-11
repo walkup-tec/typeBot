@@ -476,6 +476,7 @@ export const registerQueueRoutes = (app: Express) => {
       width: 100vw;
       margin: 0;
       min-height: 100dvh;
+      height: 100dvh;
       background: #ece5dd;
       display: flex;
       flex-direction: column;
@@ -628,7 +629,9 @@ export const registerQueueRoutes = (app: Express) => {
       background: #ece5dd;
       display: flex;
       flex-direction: column;
-      min-height: 100dvh;
+      flex: 1;
+      min-height: 0;
+      height: 100dvh;
     }
     .visitor-live-head {
       padding: 10px 12px;
@@ -648,15 +651,19 @@ export const registerQueueRoutes = (app: Express) => {
       color:#111827;
       padding: 12px 10px 14px;
       gap: 10px;
-      max-height: calc(100dvh - 132px);
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       background: #ece5dd;
+      display: flex;
+      flex-direction: column;
     }
     .visitor-live-wrap .input {
       background:#f0f2f5;
       border-top: 1px solid #d7dee8;
       padding: 8px;
-      position: sticky;
-      bottom: 0;
+      flex-shrink: 0;
       z-index: 5;
       padding-bottom: calc(8px + env(safe-area-inset-bottom));
       display:grid;
@@ -762,9 +769,11 @@ export const registerQueueRoutes = (app: Express) => {
       }
       .visitor-live-wrap {
         min-height: min(860px, 92vh);
+        height: min(860px, 92vh);
       }
       .visitor-live-wrap .chat {
-        max-height: calc(min(860px, 92vh) - 132px);
+        flex: 1;
+        min-height: 0;
       }
       .wait-overlay {
         border-radius: 16px;
