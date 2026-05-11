@@ -1,3 +1,10 @@
+## 2026-05-11 - Diagnostico sync-workspace-flows em producao
+
+- `Cannot GET .../sync-workspace-flows` no navegador: rota era so POST; adicionado GET com o mesmo handler.
+- `POST .../sync-workspace-flows` em producao: `skipReason=workspaces_list_empty`, `flowCount=1` — Builder API nao lista workspaces (base/token).
+- Resposta do sync passa a incluir `builderApiBaseUrl`, `workspaceListHttpStatus`, `workspaceNames` e `hint`.
+- Pendencia: ajustar env da API no Easypanel e redeploy; validar GET/POST do sync e Etapa 3.
+
 ## 2026-05-11 - Biblioteca ainda sem espelhar Typebot apos deploy API
 
 - Sintoma: `/health` com watcher e token OK, mas Etapa 3 segue so com `Teste` inativo; `flowsSavedCount=1`.

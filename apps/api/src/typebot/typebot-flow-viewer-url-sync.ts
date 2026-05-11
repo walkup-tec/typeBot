@@ -70,8 +70,17 @@ const excludeMasterWorkspace = (workspaces: WorkspaceRow[]): WorkspaceRow[] => {
   return workspaces.filter((workspace) => workspace.id !== MASTER_WORKSPACE_ID);
 };
 
-const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
-  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return [];
+type WorkspaceListProbe = {
+  workspaces: WorkspaceRow[];
+  lastHttpStatus: number;
+  builderApiBaseUrl: string;
+};
+
+const listTargetWorkspacesWithProbe = async (): Promise<WorkspaceListProbe> => {
+  const builderApiBaseUrl = TYPEBOT_TARGET_BUILDER_API_BASE_URL.replace(/\/$/, "");
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) {
+    return { workspaces: [], lastHttpStatus: 0, builderApiBaseUrl };
+  }
   let lastStatus = 0;
   for (const root of builderApiRoots()) {
     const base = root.replace(/\/$/, "");
@@ -86,13 +95,20 @@ const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
       const name = String(row.name ?? "").trim();
       if (id && name) rows.push({ id, name });
     }
-    if (rows.length > 0) return rows;
+    if (rows.length > 0) {
+      return { workspaces: rows, lastHttpStatus: response.status, builderApiBaseUrl };
+    }
   }
   if (lastStatus > 0 && process.env.NODE_ENV !== "test") {
     // eslint-disable-next-line no-console
     console.warn(`[typebot-flow-viewer-url-sync] list workspaces failed lastStatus=${lastStatus}`);
   }
-  return [];
+  return { workspaces: [], lastHttpStatus: lastStatus, builderApiBaseUrl };
+};
+
+const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
+  const probe = await listTargetWorkspacesWithProbe();
+  return probe.workspaces;
 };
 
 const pickWorkspaceForTenant = (
@@ -396,6 +412,9 @@ export type TenantWorkspaceFlowImportResult = {
   workspaceCandidates: number;
   typebotsScanned: number;
   skipReason?: string;
+  builderApiBaseUrl?: string;
+  workspaceListHttpStatus?: number;
+  workspaceNames?: string[];
 };
 
 /**
@@ -405,20 +424,32 @@ export type TenantWorkspaceFlowImportResult = {
 export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   tenantId: string,
 ): Promise<TenantWorkspaceFlowImportResult> => {
-  const empty = (skipReason: string, workspaceCandidates = 0): TenantWorkspaceFlowImportResult => ({
+  const empty = (
+    skipReason: string,
+    workspaceCandidates = 0,
+    probe?: WorkspaceListProbe,
+  ): TenantWorkspaceFlowImportResult => ({
     imported: 0,
     workspaceId: "",
     workspaceCandidates,
     typebotsScanned: 0,
     skipReason,
+    builderApiBaseUrl: probe?.builderApiBaseUrl,
+    workspaceListHttpStatus: probe?.lastHttpStatus,
+    workspaceNames: probe?.workspaces.map((workspace) => workspace.name),
   });
 
   if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return empty("builder_api_token_missing");
 
-  const workspaceCandidates = excludeMasterWorkspace(await listTargetWorkspaces());
+  const workspaceProbe = await listTargetWorkspacesWithProbe();
+  const workspaceCandidates = excludeMasterWorkspace(workspaceProbe.workspaces);
   const workspaceId = await resolveTenantWorkspaceId(tenantId, workspaceCandidates);
   if (!workspaceId) {
-    return empty(workspaceCandidates.length === 0 ? "workspaces_list_empty" : "workspace_not_matched", workspaceCandidates.length);
+    return empty(
+      workspaceCandidates.length === 0 ? "workspaces_list_empty" : "workspace_not_matched",
+      workspaceCandidates.length,
+      workspaceProbe,
+    );
   }
 
   const linkedTenant = tenantRepository.getById(tenantId);
@@ -433,6 +464,9 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
       workspaceCandidates: workspaceCandidates.length,
       typebotsScanned: 0,
       skipReason: "viewer_base_url_missing",
+      builderApiBaseUrl: workspaceProbe.builderApiBaseUrl,
+      workspaceListHttpStatus: workspaceProbe.lastHttpStatus,
+      workspaceNames: workspaceProbe.workspaces.map((workspace) => workspace.name),
     };
   }
 
@@ -445,6 +479,9 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
       workspaceCandidates: workspaceCandidates.length,
       typebotsScanned: 0,
       skipReason: "workspace_typebots_empty",
+      builderApiBaseUrl: workspaceProbe.builderApiBaseUrl,
+      workspaceListHttpStatus: workspaceProbe.lastHttpStatus,
+      workspaceNames: workspaceProbe.workspaces.map((workspace) => workspace.name),
     };
   }
 
@@ -490,6 +527,9 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     workspaceCandidates: workspaceCandidates.length,
     typebotsScanned: rows.length,
     skipReason: imported === 0 ? "no_new_active_typebots" : undefined,
+    builderApiBaseUrl: workspaceProbe.builderApiBaseUrl,
+    workspaceListHttpStatus: workspaceProbe.lastHttpStatus,
+    workspaceNames: workspaceProbe.workspaces.map((workspace) => workspace.name),
   };
 };
 

@@ -246,8 +246,8 @@ export const registerTenantRoutes = (app: Express) => {
     return res.status(204).send();
   });
 
-  app.post("/api/master/tenants/:id/typebot/sync-workspace-flows", async (req, res) => {
-    const tenant = tenantRepository.getById(req.params.id);
+  const syncWorkspaceFlowsHandler = async (req: { params: { id?: string } }, res: import("express").Response) => {
+    const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
     try {
       const importResult = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
@@ -255,11 +255,20 @@ export const registerTenantRoutes = (app: Express) => {
       await refreshTenantFlowViewerUrls(tenant.id);
       const refreshed = tenantRepository.getById(tenant.id);
       const flows = flowService.listByTenant(tenant.id);
+      const hint =
+        importResult.skipReason === "workspaces_list_empty"
+          ? "A Builder API nao retornou workspaces. Confira TYPEBOT_BUILDER_API_BASE_URL (com /api), TYPEBOT_BUILDER_API_TOKEN e acesso ao workspace do assinante."
+          : importResult.skipReason === "workspace_not_matched"
+            ? "Workspaces listados, mas nenhum casou com o nome/e-mail do assinante."
+            : importResult.skipReason === "viewer_base_url_missing"
+              ? "Defina TYPEBOT_TARGET_VIEWER_BASE_URL (ou TYPEBOT_SOURCE_VIEWER_BASE_URL)."
+              : undefined;
       return res.status(200).json({
         status: importResult.skipReason && importResult.imported === 0 ? "partial" : "ok",
         tenantId: tenant.id,
         typebotProvisionStatus: refreshed?.typebotProvisionStatus ?? null,
         flowCount: flows.length,
+        hint,
         ...importResult,
         workspaceId: refreshed?.typebotWorkspaceId ?? importResult.workspaceId ?? null,
         workspaceName: refreshed?.typebotWorkspaceName ?? importResult.workspaceName ?? null,
@@ -271,7 +280,10 @@ export const registerTenantRoutes = (app: Express) => {
         message,
       });
     }
-  });
+  };
+
+  app.get("/api/master/tenants/:id/typebot/sync-workspace-flows", syncWorkspaceFlowsHandler);
+  app.post("/api/master/tenants/:id/typebot/sync-workspace-flows", syncWorkspaceFlowsHandler);
 
   app.post("/api/master/tenants/:id/typebot/sync-defaults", async (req, res) => {
     const tenant = tenantRepository.getById(req.params.id);
