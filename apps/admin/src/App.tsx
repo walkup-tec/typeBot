@@ -148,16 +148,26 @@ const widgetBaseUrl =
   !/localhost|127\.0\.0\.1|loca\.lt/i.test(widgetBaseUrlFromEnv)
     ? widgetBaseUrlFromEnv.replace(/\/$/, "")
     : "";
-const getAgentViewUrl = (tenantId: string, contactId: string, agent: string, agentName?: string) =>
-  widgetBaseUrl
+const getAgentViewUrl = (
+  tenantId: string,
+  contactId: string,
+  agent: string,
+  agentName?: string,
+  contactName?: string,
+) => {
+  const encodedContactName = encodeURIComponent(contactName?.trim() || "Visitante");
+  return widgetBaseUrl
     ? `${widgetBaseUrl}/?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
         contactId,
-      )}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
+      )}&contactName=${encodedContactName}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
         agentName?.trim() || agent,
       )}&apiBase=${encodeURIComponent(apiBase)}`
     : `${apiBase}/handoff-view?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
         contactId,
-      )}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(agentName?.trim() || agent)}`;
+      )}&contactName=${encodedContactName}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
+        agentName?.trim() || agent,
+      )}`;
+};
 const getTenantUserTypeLabel = (ownerEmail: string): "Master do Sistema" | "Master Assinante" =>
   ownerEmail.trim().toLowerCase() === SYSTEM_MASTER_EMAIL ? "Master do Sistema" : "Master Assinante";
 const getTenantStatusLabel = (status: Tenant["status"]): "Ativo" | "Bloqueado" => (status === "active" ? "Ativo" : "Bloqueado");
@@ -1042,7 +1052,7 @@ export function App() {
     await loadTenants();
   }
 
-  async function assignContact(contactId: string) {
+  async function assignContact(contactId: string, contactName: string) {
     const useMasterOnly = selectedTenantObject?.noSeparateAttendants === true;
     const masterUsername = authSession?.user?.username?.trim();
     const resolvedAgentId =
@@ -1063,7 +1073,10 @@ export function App() {
     }
 
     setStatusMessage("Atendimento assumido com sucesso");
-    window.open(getAgentViewUrl(selectedTenant, contactId, resolvedAgentId, loggedAgentName), "_blank");
+    window.open(
+      getAgentViewUrl(selectedTenant, contactId, resolvedAgentId, loggedAgentName, contactName),
+      "_blank",
+    );
     await loadQueue(selectedTenant);
   }
 
@@ -2569,7 +2582,7 @@ export function App() {
                     </button>
                     <button
                       className={`queue-icon-btn queue-chat-icon ${item.status === "waiting" ? "queue-chat-icon--pulse" : ""}`}
-                      onClick={() => assignContact(item.contactId)}
+                      onClick={() => assignContact(item.contactId, item.contactName)}
                       title={item.status === "waiting" ? "Iniciar atendimento" : "Atendimento já iniciado"}
                       aria-label={item.status === "waiting" ? "Iniciar atendimento" : "Atendimento já iniciado"}
                       disabled={item.status !== "waiting"}

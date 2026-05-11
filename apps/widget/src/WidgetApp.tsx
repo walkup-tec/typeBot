@@ -100,6 +100,7 @@ export function WidgetApp() {
   const sessionTenantId = sessionTenantIdFromQuery || tenantId;
   const sessionAgentId = search.get("agentId") ?? "atendente-01";
   const sessionAgentName = search.get("agentName") ?? sessionAgentId;
+  const sessionContactNameFromQuery = search.get("contactName") ?? "";
   const bootstrapContactName = search.get("contactName") ?? "Lead Typebot";
   const bootstrapFlowLabel = search.get("flow") ?? "clt-soma";
 
@@ -108,6 +109,9 @@ export function WidgetApp() {
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [agentMessage, setAgentMessage] = useState("");
   const [resolvedAgentName, setResolvedAgentName] = useState(sessionAgentName);
+  const [leadDisplayName, setLeadDisplayName] = useState(
+    () => sessionContactNameFromQuery.trim() || "Visitante",
+  );
   const [resolvedSessionTenantId, setResolvedSessionTenantId] = useState(sessionTenantIdFromQuery || "");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const agentImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -231,6 +235,30 @@ export function WidgetApp() {
     const interval = setInterval(() => loadMessages(sessionContactId), 2500);
     return () => clearInterval(interval);
   }, [isAgentMode, sessionContactId, resolvedSessionTenantId, sessionTenantId]);
+
+  useEffect(() => {
+    if (!isAgentMode || !sessionContactId) return;
+    const fromQuery = sessionContactNameFromQuery.trim();
+    if (fromQuery) {
+      setLeadDisplayName(fromQuery);
+      return;
+    }
+    const run = async () => {
+      try {
+        const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}`, {
+          headers: buildTenantHeaders(),
+        });
+        captureResolvedTenantId(response);
+        if (!response.ok) return;
+        const data = (await response.json()) as { contactName?: string };
+        const resolved = String(data.contactName ?? "").trim();
+        if (resolved) setLeadDisplayName(resolved);
+      } catch {
+        // Mantém fallback local quando a fila não estiver acessível.
+      }
+    };
+    void run();
+  }, [isAgentMode, sessionContactId, sessionContactNameFromQuery, resolvedSessionTenantId, sessionTenantId]);
 
   useEffect(() => {
     const run = async () => {
@@ -440,7 +468,7 @@ export function WidgetApp() {
     return (
       <div className="widget-shell">
         <div className="widget-header">
-          <strong>Atendimento ao vivo</strong>
+          <strong>{leadDisplayName}</strong>
           <span>Você está conversando com o visitante em tempo real</span>
         </div>
 

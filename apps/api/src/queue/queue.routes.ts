@@ -360,11 +360,13 @@ export const registerQueueRoutes = (app: Express) => {
         req.query.session ??
         "",
     ).trim();
-    const contactName = String(req.query.contactName ?? "Visitante");
+    const queuedContact = queueService.getContactById(contactId);
+    const contactNameFromQuery = String(req.query.contactName ?? "").trim();
+    const contactName = contactNameFromQuery || String(queuedContact?.contactName ?? "").trim() || "Visitante";
     const flow = String(req.query.flow ?? "Fluxo");
     const mode = String(req.query.mode ?? "visitor");
     const senderRole = mode === "agent" ? "agent" : "visitor";
-    const resolvedTenantIdForSession = tenantIdFromQuery || queueService.getContactById(contactId)?.tenantId || "";
+    const resolvedTenantIdForSession = tenantIdFromQuery || queuedContact?.tenantId || "";
     const tenantId = resolvedTenantIdForSession;
     const tenant = tenantRepository.getById(tenantId);
     const tenantTheme = tenant?.defaultChatTheme;
@@ -455,7 +457,7 @@ export const registerQueueRoutes = (app: Express) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Atendimento ao vivo</title>
+  <title>${isAgentMode ? escapedName : "Atendimento ao vivo"}</title>
   <style>
     :root {
       --handoff-page-bg: ${themePageBg};
@@ -860,7 +862,7 @@ export const registerQueueRoutes = (app: Express) => {
     isAgentMode
       ? `<div class="agent-widget">
     <div class="widget-header">
-      <strong>Atendimento ao vivo</strong>
+      <strong>${escapedName}</strong>
       <span>Você está conversando com o visitante em tempo real</span>
     </div>
     <div id="chat" class="widget-chat agent-chat"></div>
