@@ -150,12 +150,14 @@ const widgetBaseUrl =
     : "";
 const getAgentViewUrl = (tenantId: string, contactId: string, agent: string, agentName?: string) =>
   widgetBaseUrl
-    ? `${widgetBaseUrl}/?mode=agent&contactId=${encodeURIComponent(contactId)}&agentId=${encodeURIComponent(
-        agent,
-      )}&agentName=${encodeURIComponent(agentName?.trim() || agent)}&apiBase=${encodeURIComponent(apiBase)}`
-    : `${apiBase}/handoff-view?mode=agent&contactId=${encodeURIComponent(contactId)}&agentId=${encodeURIComponent(
-        agent,
-      )}&agentName=${encodeURIComponent(agentName?.trim() || agent)}`;
+    ? `${widgetBaseUrl}/?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
+        contactId,
+      )}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
+        agentName?.trim() || agent,
+      )}&apiBase=${encodeURIComponent(apiBase)}`
+    : `${apiBase}/handoff-view?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
+        contactId,
+      )}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(agentName?.trim() || agent)}`;
 const getTenantUserTypeLabel = (ownerEmail: string): "Master do Sistema" | "Master Assinante" =>
   ownerEmail.trim().toLowerCase() === SYSTEM_MASTER_EMAIL ? "Master do Sistema" : "Master Assinante";
 const getTenantStatusLabel = (status: Tenant["status"]): "Ativo" | "Bloqueado" => (status === "active" ? "Ativo" : "Bloqueado");

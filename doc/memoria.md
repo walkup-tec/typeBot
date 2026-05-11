@@ -1,3 +1,11 @@
+## 2026-05-11 - Link do atendente sem tenantId no handoff-view
+
+- Sintoma: `/handoff-view?mode=agent` sem `tenantId` mostrava "Sessao indisponivel" mesmo com contato na fila.
+- Causa: `getAgentViewUrl` no admin nao enviava `tenantId`; modo agente exige tenant na query.
+- Correcao: `tenantId` na URL do handoff e do widget.
+- Validacao: `npm run build:admin` OK; com `tenantId=tenant_drax` o handoff abre o chat.
+- Pendencia: redeploy do painel CRM.
+
 ## 2026-05-11 - Biblioteca Etapa 3: sync silencioso sem piscar
 
 - Removido banner "Atualizado em / Proxima atualizacao" da Etapa 3.
