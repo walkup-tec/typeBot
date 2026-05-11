@@ -1,6 +1,6 @@
 import { CSSProperties, ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3333";
+const defaultApiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3333";
 const tenantId = import.meta.env.VITE_TENANT_ID ?? "demo-tenant";
 const typebotPublicUrl = import.meta.env.VITE_TYPEBOT_PUBLIC_URL ?? "";
 
@@ -93,9 +93,11 @@ const compressImageDataUrl = (dataUrl: string): Promise<string> =>
 
 export function WidgetApp() {
   const search = new URLSearchParams(window.location.search);
+  const apiBase = (search.get("apiBase") ?? defaultApiBase).trim().replace(/\/$/, "");
   const mode = search.get("mode") ?? "visitor";
   const sessionContactId = search.get("contactId") ?? "";
-  const sessionTenantId = search.get("tenantId") ?? tenantId;
+  const sessionTenantIdFromQuery = search.get("tenantId") ?? "";
+  const sessionTenantId = sessionTenantIdFromQuery || tenantId;
   const sessionAgentId = search.get("agentId") ?? "atendente-01";
   const sessionAgentName = search.get("agentName") ?? sessionAgentId;
   const bootstrapContactName = search.get("contactName") ?? "Lead Typebot";
@@ -106,12 +108,13 @@ export function WidgetApp() {
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [agentMessage, setAgentMessage] = useState("");
   const [resolvedAgentName, setResolvedAgentName] = useState(sessionAgentName);
+  const [resolvedSessionTenantId, setResolvedSessionTenantId] = useState(sessionTenantIdFromQuery || "");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const agentImageInputRef = useRef<HTMLInputElement | null>(null);
   const visitorImageInputRef = useRef<HTMLInputElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const botUrl = useMemo(() => typebotPublicUrl.trim(), []);
-  const isAgentMode = mode === "agent" && sessionContactId && sessionTenantId;
+  const isAgentMode = mode === "agent" && sessionContactId;
   const isVisitorLiveMode = mode === "visitorLive" && sessionContactId && sessionTenantId;
   const isVisitorBootstrapMode = mode === "visitorLiveBootstrap";
   const [bootstrappedContactId, setBootstrappedContactId] = useState("");
@@ -141,6 +144,19 @@ export function WidgetApp() {
     setResolvedAgentName(sessionAgentName);
   }, [sessionAgentName]);
 
+  const buildTenantHeaders = (includeJsonContentType = false): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    if (includeJsonContentType) headers["content-type"] = "application/json";
+    const tenantHeaderValue = resolvedSessionTenantId || sessionTenantId;
+    if (tenantHeaderValue) headers["x-tenant-id"] = tenantHeaderValue;
+    return headers;
+  };
+
+  const captureResolvedTenantId = (response: Response) => {
+    const resolvedHeader = String(response.headers.get("x-resolved-tenant-id") ?? "").trim();
+    if (resolvedHeader) setResolvedSessionTenantId((current) => current || resolvedHeader);
+  };
+
   async function askForHumanAgent() {
     const visitorName = `Lead-${new Date().getHours()}${new Date().getMinutes()}`;
     const response = await fetch(`${apiBase}/api/chat/queue`, {
@@ -163,9 +179,18 @@ export function WidgetApp() {
   async function loadMessages(contactId: string) {
     if (!contactId) return;
     const response = await fetch(`${apiBase}/api/chat/sessions/${contactId}/messages`, {
-      headers: { "x-tenant-id": sessionTenantId },
+      headers: buildTenantHeaders(),
     });
-    if (!response.ok) return;
+    captureResolvedTenantId(response);
+    if (!response.ok) {
+      if (response.status === 404) {
+        setStatus("Sessão não encontrada para este tenant. Reabra o atendimento pela Fila ao vivo.");
+      } else {
+        setStatus("Não foi possível carregar as mensagens da sessão.");
+      }
+      return;
+    }
+    setStatus("");
     const data = (await response.json()) as LiveMessage[];
     setMessages(data);
   }
@@ -176,12 +201,10 @@ export function WidgetApp() {
 
     const response = await fetch(`${apiBase}/api/chat/sessions/${sessionContactId}/messages`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-tenant-id": sessionTenantId,
-      },
+      headers: buildTenantHeaders(true),
       body: JSON.stringify({ sender: "agent", content: agentMessage }),
     });
+    captureResolvedTenantId(response);
 
     if (!response.ok) {
       setStatus("Não foi possível enviar mensagem para a sessão.");
@@ -195,12 +218,10 @@ export function WidgetApp() {
   async function sendLiveContent(contactId: string, sender: "agent" | "visitor", content: string) {
     const response = await fetch(`${apiBase}/api/chat/sessions/${contactId}/messages`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-tenant-id": sessionTenantId,
-      },
+      headers: buildTenantHeaders(true),
       body: JSON.stringify({ sender, content }),
     });
+    captureResolvedTenantId(response);
     return response.ok;
   }
 
@@ -209,14 +230,15 @@ export function WidgetApp() {
     loadMessages(sessionContactId);
     const interval = setInterval(() => loadMessages(sessionContactId), 2500);
     return () => clearInterval(interval);
-  }, [isAgentMode, sessionContactId, sessionTenantId]);
+  }, [isAgentMode, sessionContactId, resolvedSessionTenantId, sessionTenantId]);
 
   useEffect(() => {
     const run = async () => {
-      if (!isAgentMode || !sessionTenantId || !sessionAgentId) return;
+      const tenantForLookup = resolvedSessionTenantId || sessionTenantId;
+      if (!isAgentMode || !tenantForLookup || !sessionAgentId) return;
       if (sessionAgentName && sessionAgentName !== sessionAgentId) return;
       try {
-        const response = await fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(sessionTenantId)}/attendants`);
+        const response = await fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantForLookup)}/attendants`);
         if (!response.ok) return;
         const rows = (await response.json()) as Array<{
           id?: string;
@@ -235,11 +257,12 @@ export function WidgetApp() {
       }
     };
     run();
-  }, [isAgentMode, sessionTenantId, sessionAgentId, sessionAgentName]);
+  }, [isAgentMode, resolvedSessionTenantId, sessionTenantId, sessionAgentId, sessionAgentName]);
 
   useEffect(() => {
     const run = async () => {
-      if (!sessionTenantId) return;
+      const tenantForBranding = resolvedSessionTenantId || sessionTenantId;
+      if (!tenantForBranding) return;
       try {
         const response = await fetch(`${apiBase}/api/master/tenants`);
         if (!response.ok) return;
@@ -250,7 +273,7 @@ export function WidgetApp() {
           profileImageUrl?: string;
           defaultChatTheme?: { userBubbleBg?: string };
         }>;
-        const tenant = rows.find((row) => String(row.id ?? "").trim() === sessionTenantId);
+        const tenant = rows.find((row) => String(row.id ?? "").trim() === tenantForBranding);
         if (!tenant) return;
         const displayName = String(tenant.chatDisplayName ?? tenant.name ?? "").trim() || "Atendente";
         const logoUrl = String(tenant.profileImageUrl ?? "").trim();
@@ -265,7 +288,7 @@ export function WidgetApp() {
       }
     };
     run();
-  }, [sessionTenantId]);
+  }, [resolvedSessionTenantId, sessionTenantId]);
 
   useEffect(() => {
     if (!isVisitorBootstrapMode || bootstrappedContactId) return;
@@ -350,12 +373,10 @@ export function WidgetApp() {
 
     const response = await fetch(`${apiBase}/api/chat/sessions/${activeVisitorContactId}/messages`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-tenant-id": sessionTenantId,
-      },
+      headers: buildTenantHeaders(true),
       body: JSON.stringify({ sender: "visitor", content: agentMessage }),
     });
+    captureResolvedTenantId(response);
 
     if (!response.ok) {
       setStatus("Não foi possível enviar sua mensagem para o atendente.");

@@ -460,10 +460,15 @@ export const registerQueueRoutes = (app: Express) => {
     .shell .msg.visitor { background:var(--handoff-bot-bubble-bg); color:#111827; border-color:#e2e8f0; border-top-right-radius:4px; }
     .shell .msg.agent { background:var(--handoff-user-bubble-bg); color:#111827; border-top-left-radius:4px; }
     .shell .msg.system { max-width:100%; background:#f8fafc; border-color:#e2e8f0; color:#334155; }
-    .shell .input { padding:10px; border-top:1px solid #d7dee8; display:grid; grid-template-columns:1fr auto; gap:8px; background:var(--handoff-chat-bg); }
+    .shell .input { padding:10px; border-top:1px solid #d7dee8; display:grid; grid-template-columns:auto 1fr auto; gap:8px; background:var(--handoff-chat-bg); align-items:center; }
     .shell input, .shell button { border-radius:20px; border:1px solid #cbd5e1; padding:10px 14px; }
     .shell input { background:#fff; color:#334155; }
     .shell button { background:var(--handoff-accent); color:#fff; border-color:var(--handoff-accent); font-weight:700; cursor:pointer; }
+    .image-picker-input { display:none; }
+    .attach-button {
+      width:40px; height:40px; border-radius:999px; border:1px solid #cbd5e1; background:#fff; color:#334155;
+      font-size:22px; line-height:1; cursor:pointer; display:grid; place-items:center; padding:0;
+    }
 
     .visitor-shell {
       --visitor-accent: ${themeUserBubbleBg.replace(/"/g, "")};
@@ -653,6 +658,10 @@ export const registerQueueRoutes = (app: Express) => {
       bottom: 0;
       z-index: 5;
       padding-bottom: calc(8px + env(safe-area-inset-bottom));
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      gap:8px;
+      align-items:center;
     }
     .visitor-live-wrap.locked .input {
       pointer-events: none;
@@ -777,6 +786,8 @@ export const registerQueueRoutes = (app: Express) => {
     <div class="chat-wrap">
       <div id="chat" class="chat"></div>
       <form id="form" class="input">
+        <input id="imagePicker" class="image-picker-input" type="file" accept="image/*" />
+        <button type="button" id="attachButton" class="attach-button" title="Enviar imagem">+</button>
         <input id="message" placeholder="Digite sua resposta..." />
         <button type="submit">Enviar</button>
       </form>
@@ -819,6 +830,8 @@ export const registerQueueRoutes = (app: Express) => {
       </div>
       <div id="chat" class="chat"></div>
       <form id="form" class="input">
+        <input id="imagePicker" class="image-picker-input" type="file" accept="image/*" />
+        <button type="button" id="attachButton" class="attach-button" title="Enviar imagem">+</button>
         <input id="message" placeholder="Digite sua mensagem..." />
         <button type="submit">Enviar</button>
       </form>
@@ -1002,18 +1015,73 @@ export const registerQueueRoutes = (app: Express) => {
       chat.scrollTop = chat.scrollHeight;
     }
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (!isAgentMode && !visitorChatEnabled) return;
-      const content = messageInput.value.trim();
-      if (!content) return;
+    const imagePicker = document.getElementById("imagePicker");
+    const attachButton = document.getElementById("attachButton");
+    const MAX_IMAGE_SIDE = 900;
+    const IMAGE_JPEG_QUALITY = 0.78;
+    const MAX_IMAGE_PAYLOAD_LENGTH = 260000;
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function compressImageDataUrl(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          const ratio = Math.min(1, MAX_IMAGE_SIDE / Math.max(image.width, image.height));
+          const targetWidth = Math.max(1, Math.round(image.width * ratio));
+          const targetHeight = Math.max(1, Math.round(image.height * ratio));
+          const canvas = document.createElement("canvas");
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const context = canvas.getContext("2d");
+          if (!context) return reject(new Error("canvas failed"));
+          context.drawImage(image, 0, 0, targetWidth, targetHeight);
+          resolve(canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY));
+        };
+        image.onerror = () => reject(new Error("invalid image"));
+        image.src = dataUrl;
+      });
+    }
+
+    async function sendMessageContent(content) {
       await fetch("/api/chat/sessions/" + contactId + "/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-tenant-id": tenantId },
         body: JSON.stringify({ sender: senderRole, content })
       });
-      messageInput.value = "";
       loadMessages();
+    }
+
+    if (attachButton && imagePicker) {
+      attachButton.addEventListener("click", () => imagePicker.click());
+      imagePicker.addEventListener("change", async () => {
+        const file = imagePicker.files && imagePicker.files[0];
+        imagePicker.value = "";
+        if (!file || !String(file.type || "").startsWith("image/")) return;
+        if (!isAgentMode && !visitorChatEnabled) return;
+        try {
+          const raw = await readFileAsDataUrl(file);
+          const compressed = await compressImageDataUrl(raw);
+          if (compressed.length > MAX_IMAGE_PAYLOAD_LENGTH) return;
+          await sendMessageContent(compressed);
+        } catch {}
+      });
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!isAgentMode && !visitorChatEnabled) return;
+      const content = messageInput.value.trim();
+      if (!content) return;
+      await sendMessageContent(content);
+      messageInput.value = "";
     });
 
     loadAndPersistLeadCache();
