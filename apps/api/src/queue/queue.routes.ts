@@ -442,6 +442,7 @@ export const registerQueueRoutes = (app: Express) => {
       --handoff-accent: ${themeUserBubbleBg};
     }
     body { margin:0; font-family: Inter, Arial, sans-serif; background:var(--handoff-page-bg); color:#111827; }
+    body.agent-screen { background:#0b1224; min-height:100vh; }
     .shell { max-width: 880px; margin: 18px auto; padding: 12px; border:1px solid #d7dee8; border-radius:14px; background:var(--handoff-chat-bg); box-shadow: 0 18px 48px rgba(15,23,42,.12); }
     .shell.visitor { max-width: 520px; padding: 0; background: transparent; border: 0; box-shadow: none; }
     .top { display:flex; flex-direction:column; gap:6px; margin-bottom: 12px; }
@@ -750,6 +751,7 @@ export const registerQueueRoutes = (app: Express) => {
     .warn { padding:12px; color:#fecaca; font-size: 13px; }
     @media (min-width: 900px) {
       body { display:grid; place-items:center; background: rgba(15, 23, 42, 0.5); min-height: 100vh; }
+      body.agent-screen { background:#0b1224; }
       .visitor-shell {
         width: min(460px, 92vw);
         min-height: min(860px, 92vh);
@@ -772,7 +774,7 @@ export const registerQueueRoutes = (app: Express) => {
     }
   </style>
 </head>
-<body>
+<body class="${isAgentMode ? "agent-screen" : ""}">
   ${
     isAgentMode
       ? `<div class="shell">
