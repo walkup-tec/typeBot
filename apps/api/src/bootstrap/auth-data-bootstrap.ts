@@ -1,6 +1,14 @@
 import { attendantRepository, tenantRepository } from "../lib/repositories";
 import { isAuthPostgresEnabled, resolveInitialAuthRowsFromPostgres } from "../lib/auth-postgres";
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const isPostgresConnectivityError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const code = String((error as NodeJS.ErrnoException).code ?? "");
+  return ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN"].includes(code);
+};
+
 /** Em produção, pode obrigar Postgres para não perder login entre redeploys. */
 export function enforceProductionAuthEnv(): void {
   const prod = String(process.env.NODE_ENV ?? "").toLowerCase() === "production";
@@ -21,9 +29,36 @@ export async function bootstrapAuthDataFromDatabase(): Promise<void> {
   if (!isAuthPostgresEnabled()) {
     return;
   }
-  const { tenants, attendants } = await resolveInitialAuthRowsFromPostgres();
-  tenantRepository.hydrate(tenants);
-  attendantRepository.hydrate(attendants);
+
+  const attempts = 6;
+  const delayMs = 2500;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const { tenants, attendants } = await resolveInitialAuthRowsFromPostgres();
+      tenantRepository.hydrate(tenants);
+      attendantRepository.hydrate(attendants);
+      if (attempt > 1) {
+        // eslint-disable-next-line no-console
+        console.log(`[auth] Postgres disponivel apos ${attempt} tentativa(s).`);
+      }
+      return;
+    } catch (error) {
+      const canRetry = isPostgresConnectivityError(error) && attempt < attempts;
+      if (!canRetry) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[auth] Falha ao ligar ao Postgres (DATABASE_URL). Revise host interno, credenciais e se o servico Postgres esta verde no Easypanel.",
+        );
+        throw error;
+      }
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[auth] Postgres indisponivel no arranque (tentativa ${attempt}/${attempts}). Nova tentativa em ${delayMs}ms...`,
+      );
+      await sleep(delayMs);
+    }
+  }
 }
 
 export function logAuthPersistenceMode(): void {
