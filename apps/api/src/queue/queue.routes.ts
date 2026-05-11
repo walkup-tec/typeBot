@@ -100,9 +100,9 @@ type ViewerVisualConfig = {
 };
 
 const DEFAULT_VISUAL_CONFIG: ViewerVisualConfig = {
-  pageBg: "#FFFFFF",
-  chatBg: "#FFFFFF",
-  userBubbleBg: "#4aa3d1",
+  pageBg: "#ECE5DD",
+  chatBg: "#F0F2F5",
+  userBubbleBg: "#128C7E",
   botBubbleBg: "#FFFFFF",
 };
 
@@ -232,6 +232,20 @@ const getTenantId = (req: Request) => {
   return tenantId;
 };
 
+const resolveTenantIdForContact = (req: Request, contactId: string): string => {
+  const headerTenantId = String(req.header("x-tenant-id") ?? "").trim();
+  const normalizedContactId = String(contactId ?? "").trim();
+  if (!normalizedContactId) throw new Error("contactId is required");
+  if (headerTenantId) {
+    const strictMatch = queueService.getContact(headerTenantId, normalizedContactId);
+    if (strictMatch) return headerTenantId;
+  }
+  const byContact = queueService.getContactById(normalizedContactId);
+  if (byContact?.tenantId) return byContact.tenantId;
+  if (headerTenantId) return headerTenantId;
+  throw new Error("x-tenant-id is required");
+};
+
 /** Quando o tenant marca “sem atendentes”, só o usuário Master entra na roleta/distribuição automática. */
 const attendantsForQueueRouting = (
   tenantId: string,
@@ -313,7 +327,7 @@ export const registerQueueRoutes = (app: Express) => {
   });
 
   app.get("/handoff-view", (req, res) => {
-    const tenantId = String(
+    const tenantIdFromQuery = String(
       req.query.tenantId ??
         req.query.tenant ??
         req.query.tenant_id ??
@@ -332,6 +346,8 @@ export const registerQueueRoutes = (app: Express) => {
     const flow = String(req.query.flow ?? "Fluxo");
     const mode = String(req.query.mode ?? "visitor");
     const senderRole = mode === "agent" ? "agent" : "visitor";
+    const resolvedTenantIdForSession = tenantIdFromQuery || queueService.getContactById(contactId)?.tenantId || "";
+    const tenantId = resolvedTenantIdForSession;
     const tenant = tenantRepository.getById(tenantId);
     const tenantTheme = tenant?.defaultChatTheme;
     const tenantDisplayName =
@@ -350,7 +366,7 @@ export const registerQueueRoutes = (app: Express) => {
     const tenantProfileImageUrl = tenant?.profileImageUrl ?? "";
     const profileImageUrl = String(req.query.profileImageUrl ?? "").trim() || tenantProfileImageUrl.trim();
 
-    if (!tenantId || !contactId) {
+    if (!contactId || (mode === "agent" && !tenantId) || (mode !== "agent" && !tenantId)) {
       return res.status(200).send(`<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -418,24 +434,36 @@ export const registerQueueRoutes = (app: Express) => {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Atendimento ao vivo</title>
   <style>
-    body { margin:0; font-family: Inter, Arial, sans-serif; background:#dfe5ec; color:#111827; }
-    .shell { max-width: 880px; margin: 18px auto; padding: 12px; border:1px solid #1f2a44; border-radius:14px; background:#111b34; box-shadow: 0 18px 48px rgba(0,0,0,.35); }
+    :root {
+      --handoff-page-bg: ${themePageBg};
+      --handoff-chat-bg: ${themeChatBg};
+      --handoff-user-bubble-bg: ${themeUserBubbleBg};
+      --handoff-bot-bubble-bg: ${themeBotBubbleBg};
+      --handoff-accent: ${themeUserBubbleBg};
+    }
+    body { margin:0; font-family: Inter, Arial, sans-serif; background:var(--handoff-page-bg); color:#111827; }
+    .shell { max-width: 880px; margin: 18px auto; padding: 12px; border:1px solid #d7dee8; border-radius:14px; background:var(--handoff-chat-bg); box-shadow: 0 18px 48px rgba(15,23,42,.12); }
     .shell.visitor { max-width: 520px; padding: 0; background: transparent; border: 0; box-shadow: none; }
     .top { display:flex; flex-direction:column; gap:6px; margin-bottom: 12px; }
-    h2 { margin:0; font-size: 18px; }
-    .meta { color:#a2b2cf; font-size: 13px; line-height: 1.35; }
+    h2 { margin:0; font-size: 18px; color:#111827; }
+    .meta { color:#64748b; font-size: 13px; line-height: 1.35; }
     .lead-info { margin: 8px 0 12px; display:flex; flex-wrap:wrap; gap:8px; }
-    .chip { border:1px solid #304264; background:#0d1630; color:#dbe6ff; padding:6px 10px; border-radius:999px; font-size:12px; white-space:nowrap; }
-    .chat-wrap { border:1px solid #243455; border-radius:12px; overflow:hidden; background:linear-gradient(180deg,#0f1b37 0%,#0b1530 100%); min-height: 64vh; display:flex; flex-direction:column; }
-    .chat { flex:1; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
-    .msg { max-width: 86%; border:1px solid #334b73; border-radius:14px; padding:10px; }
-    .visitor { align-self:flex-end; background:#1f2948; border-color:#4f6fb1; }
-    .agent { align-self:flex-start; background:#132a2a; border-color:#2fa6a1; }
-    .system { align-self:center; max-width:100%; background:#1a2340; border-color:#46527a; }
-    .input { padding:10px; border-top:1px solid #243455; display:grid; grid-template-columns:1fr auto; gap:8px; background:#0d1630; }
-    input, button { border-radius:10px; border:1px solid #334b73; padding:10px; }
-    input { background:#0b1530; color:#eef2ff; }
-    button { background:#39d0c7; color:#062422; border-color:#39d0c7; font-weight:700; cursor:pointer; }
+    .chip { border:1px solid #e2e8f0; background:#fff; color:#334155; padding:6px 10px; border-radius:999px; font-size:12px; white-space:nowrap; }
+    .shell .chat-wrap { border:1px solid #d7dee8; border-radius:12px; overflow:hidden; background:var(--handoff-page-bg); min-height: 64vh; display:flex; flex-direction:column; }
+    .shell .chat { flex:1; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px; color:#111827; }
+    .shell .msg-row { display:flex; align-items:flex-end; gap:8px; }
+    .shell .msg-row.visitor-row { justify-content:flex-end; }
+    .shell .msg-row.agent-row { justify-content:flex-start; }
+    .shell .msg-row.system-row { justify-content:center; }
+    .shell .msg { max-width: 78%; border-radius:10px; padding:9px 11px; border:1px solid transparent; box-shadow:0 1px 0 rgba(15,23,42,.03); }
+    .shell .msg strong { display:block; font-size:11px; color:#64748b; margin-bottom:2px; font-weight:600; text-transform:lowercase; }
+    .shell .msg.visitor { background:var(--handoff-bot-bubble-bg); color:#111827; border-color:#e2e8f0; border-top-right-radius:4px; }
+    .shell .msg.agent { background:var(--handoff-user-bubble-bg); color:#111827; border-top-left-radius:4px; }
+    .shell .msg.system { max-width:100%; background:#f8fafc; border-color:#e2e8f0; color:#334155; }
+    .shell .input { padding:10px; border-top:1px solid #d7dee8; display:grid; grid-template-columns:1fr auto; gap:8px; background:var(--handoff-chat-bg); }
+    .shell input, .shell button { border-radius:20px; border:1px solid #cbd5e1; padding:10px 14px; }
+    .shell input { background:#fff; color:#334155; }
+    .shell button { background:var(--handoff-accent); color:#fff; border-color:var(--handoff-accent); font-weight:700; cursor:pointer; }
 
     .visitor-shell {
       --visitor-accent: ${themeUserBubbleBg.replace(/"/g, "")};
@@ -1057,7 +1085,21 @@ export const registerQueueRoutes = (app: Express) => {
       const matchingFlows = [...matchingFlowsMap.values()];
 
       const resolvedTenantIds = [...new Set(matchingFlows.map((flow) => flow.tenantId))];
-      const resolvedTenantId = payload.tenantId ?? payload.tenant_id ?? (resolvedTenantIds.length === 1 ? resolvedTenantIds[0] : null);
+      const requestedTenantId = String(payload.tenantId ?? payload.tenant_id ?? "").trim();
+      const requestedTenantExists = requestedTenantId ? Boolean(tenantRepository.getById(requestedTenantId)) : false;
+      const singleMatchedTenantId = resolvedTenantIds.length === 1 ? resolvedTenantIds[0] : "";
+      const resolvedTenantId = (() => {
+        if (requestedTenantExists && requestedTenantId) {
+          const hasFlowForRequested = matchingFlows.some((flow) => flow.tenantId === requestedTenantId);
+          if (hasFlowForRequested) return requestedTenantId;
+          // Quando o payload vem com tenant antigo/incorreto, prioriza o tenant inferido pelo fluxo.
+          if (singleMatchedTenantId) return singleMatchedTenantId;
+          return requestedTenantId;
+        }
+        if (singleMatchedTenantId) return singleMatchedTenantId;
+        if (requestedTenantId) return requestedTenantId;
+        return null;
+      })();
 
       if (!resolvedTenantId) {
         return res.status(400).json({
@@ -1068,7 +1110,7 @@ export const registerQueueRoutes = (app: Express) => {
 
       const payloadRecord = payload as Record<string, unknown>;
       const resolvedContactName = pickLeadNameFromPayload(payloadRecord);
-      const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId);
+      const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId) ?? matchingFlows[0];
       const resolvedFlowLabel = String(
         payload.flowAlias ??
           inferredFlow?.displayLabel ??
@@ -1120,6 +1162,8 @@ export const registerQueueRoutes = (app: Express) => {
       const distributionMode = tenant?.queueDistributionMode ?? "shared_pool";
       const attendantsForTenant = attendantsForQueueRouting(resolvedTenantId, tenant);
       const displayFlowLabel = (
+        inferredFlow?.displayLabel?.trim() ||
+        inferredFlow?.nickname?.trim() ||
         payload.flowAlias?.trim() ||
         payload.sourceFlowLabel?.trim() ||
         payload.source_flow_label?.trim() ||
@@ -1131,7 +1175,7 @@ export const registerQueueRoutes = (app: Express) => {
         tenantId: resolvedTenantId,
         sourceFlowLabel: sourceFlowLabelCandidate || viewerPidFromBody || displayFlowLabel,
         viewerUrl: resolvedViewerUrlFromPayload,
-        flowAlias: payload.flowAlias,
+        flowAlias: payload.flowAlias ?? inferredFlow?.displayLabel ?? inferredFlow?.nickname,
       });
 
       const item = queueService.enqueue(resolvedTenantId, {
@@ -1275,9 +1319,10 @@ export const registerQueueRoutes = (app: Express) => {
 
   app.get("/api/chat/queue/:contactId", (req, res) => {
     try {
-      const tenantId = getTenantId(req);
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
       const item = queueService.getContact(tenantId, req.params.contactId);
       if (!item) return res.status(404).json({ message: "Contact not found for tenant" });
+      res.setHeader("x-resolved-tenant-id", tenantId);
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       return res.status(200).json(item);
     } catch (error) {
@@ -1287,7 +1332,7 @@ export const registerQueueRoutes = (app: Express) => {
 
   app.patch("/api/chat/queue/:contactId/assign", (req, res) => {
     try {
-      const tenantId = getTenantId(req);
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
       const input = assignSchema.parse(req.body);
       const assigned = queueService.assign(tenantId, req.params.contactId, input);
 
@@ -1300,9 +1345,10 @@ export const registerQueueRoutes = (app: Express) => {
 
   app.get("/api/chat/sessions/:contactId/messages", (req, res) => {
     try {
-      const tenantId = getTenantId(req);
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
       const messages = queueService.getMessages(tenantId, req.params.contactId);
       if (!messages) return res.status(404).json({ message: "Session not found for tenant" });
+      res.setHeader("x-resolved-tenant-id", tenantId);
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       return res.status(200).json(messages);
     } catch (error) {
@@ -1312,10 +1358,11 @@ export const registerQueueRoutes = (app: Express) => {
 
   app.post("/api/chat/sessions/:contactId/messages", (req, res) => {
     try {
-      const tenantId = getTenantId(req);
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
       const input = sendLiveMessageSchema.parse(req.body);
       const message = queueService.sendMessage(tenantId, req.params.contactId, input);
       if (!message) return res.status(404).json({ message: "Session not found for tenant" });
+      res.setHeader("x-resolved-tenant-id", tenantId);
       return res.status(201).json(message);
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });

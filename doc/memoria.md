@@ -1,3 +1,11 @@
+## 2026-05-11 - Cores do painel do atendente no handoff-view
+
+- Sintoma: modo agente com tema escuro fixo, fora do padrao WhatsApp/tenant do projeto local.
+- Correcao: `handoff-view` do atendente usa `defaultChatTheme` do assinante (page/chat/bubbles/botao) com defaults alinhados ao lead.
+- Arquivo: `apps/api/src/queue/queue.routes.ts`.
+- Validacao: `npm run build:api` OK.
+- Pendencia: redeploy da API.
+
 ## 2026-05-11 - Link do atendente sem tenantId no handoff-view
 
 - Sintoma: `/handoff-view?mode=agent` sem `tenantId` mostrava "Sessao indisponivel" mesmo com contato na fila.
