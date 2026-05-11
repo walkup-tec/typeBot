@@ -20,10 +20,8 @@ const TYPEBOT_TARGET_BUILDER_API_BASE_URL = String(
   process.env.TYPEBOT_TARGET_BUILDER_API_BASE_URL ?? TYPEBOT_BUILDER_API_BASE_URL,
 ).trim();
 const targetTokenFromEnv = process.env.TYPEBOT_TARGET_BUILDER_API_TOKEN;
-const sameHostAsSource =
-  normalizeText(TYPEBOT_TARGET_BUILDER_API_BASE_URL) === normalizeText(TYPEBOT_SOURCE_BUILDER_API_BASE_URL);
 const TYPEBOT_TARGET_BUILDER_API_TOKEN = String(
-  sameHostAsSource ? (targetTokenFromEnv ?? process.env.TYPEBOT_BUILDER_API_TOKEN ?? "") : (targetTokenFromEnv ?? ""),
+  targetTokenFromEnv ?? process.env.TYPEBOT_BUILDER_API_TOKEN ?? "",
 ).trim();
 
 /** Raízes da Builder API (`...` e `.../api`) para montar `/v1/typebots`. */
@@ -53,6 +51,13 @@ const normalizeWorkspaceText = (value: string | undefined): string =>
     .trim()
     .toLowerCase();
 
+const sanitizeWorkspaceLabel = (value: string | undefined, fallback = "Workspace"): string => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return fallback;
+  if (/^data:image\//i.test(normalized)) return fallback;
+  return normalized;
+};
+
 type WorkspaceRow = { id: string; name: string };
 
 const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
@@ -74,27 +79,52 @@ const listTargetWorkspaces = async (): Promise<WorkspaceRow[]> => {
   return [];
 };
 
+const pickWorkspaceForTenant = (
+  tenant: { name?: string | null; ownerEmail?: string | null },
+  workspaces: WorkspaceRow[],
+): WorkspaceRow | null => {
+  if (workspaces.length === 0) return null;
+
+  const tenantName = normalizeWorkspaceText(sanitizeWorkspaceLabel(tenant?.name ?? undefined));
+  if (tenantName) {
+    const exact = workspaces.find((workspace) => normalizeWorkspaceText(workspace.name) === tenantName);
+    if (exact) return exact;
+  }
+
+  const ownerEmail = normalizeText(tenant?.ownerEmail ?? undefined);
+  if (ownerEmail) {
+    const localPart = ownerEmail.split("@")[0] ?? "";
+    const ownerNeedle = normalizeWorkspaceText(localPart.replace(/[._-]+/g, " "));
+    if (ownerNeedle) {
+      const byOwner = workspaces.filter((workspace) => {
+        const workspaceName = normalizeWorkspaceText(workspace.name);
+        return workspaceName.includes(ownerNeedle) || ownerNeedle.includes(workspaceName);
+      });
+      if (byOwner.length === 1) return byOwner[0];
+    }
+  }
+
+  return null;
+};
+
 const resolveTenantWorkspaceId = async (tenantId: string): Promise<string> => {
   const tenant = tenantRepository.getById(tenantId);
   const current = String(tenant?.typebotWorkspaceId ?? "").trim();
   if (current) return current;
-  const tenantName = normalizeWorkspaceText(tenant?.name);
-  if (!tenantName) return "";
-  const workspaces = await listTargetWorkspaces();
-  if (workspaces.length === 0) return "";
+  if (!tenant) return "";
 
-  // Regra segura: vincula automaticamente apenas quando há match exato por nome.
-  const exact = workspaces.find((w) => normalizeWorkspaceText(w.name) === tenantName);
-  if (!exact) return "";
+  const workspaces = await listTargetWorkspaces();
+  const matched = pickWorkspaceForTenant(tenant, workspaces);
+  if (!matched) return "";
 
   tenantRepository.updateTypebotProvision(tenantId, {
-    typebotWorkspaceId: exact.id,
-    typebotWorkspaceName: exact.name,
+    typebotWorkspaceId: matched.id,
+    typebotWorkspaceName: matched.name,
     typebotProvisionStatus: "provisioned",
     typebotProvisionError: "",
     typebotLastSyncAt: new Date().toISOString(),
   });
-  return exact.id;
+  return matched.id;
 };
 
 const viewerOriginFromUrl = (rawUrl: string): string | null => {

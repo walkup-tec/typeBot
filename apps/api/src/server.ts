@@ -31,6 +31,9 @@ const TYPEBOT_AUTO_SYNC_INTERVAL_MS = Number(process.env.TYPEBOT_AUTO_SYNC_INTER
 const TYPEBOT_TENANT_FLOW_WATCHER_ENABLED =
   String(process.env.TYPEBOT_TENANT_FLOW_WATCHER_ENABLED ?? "true").trim().toLowerCase() !== "false";
 const TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS = Number(process.env.TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS ?? 7000);
+const TYPEBOT_TARGET_BUILDER_API_TOKEN = String(
+  process.env.TYPEBOT_TARGET_BUILDER_API_TOKEN ?? process.env.TYPEBOT_BUILDER_API_TOKEN ?? "",
+).trim();
 let isMasterAutoSyncRunning = false;
 let isTenantFlowWatcherRunning = false;
 
@@ -129,6 +132,8 @@ app.get("/health", (_req, res) => {
     operationalSavedFlowsFile: savedFlowsPath,
     operationalDataHint:
       "Montar volume persistente no diretório de dados da API (operationalDataDirectory). Sem volume, cada redeploy recria disco e pode esvaziar a biblioteca de fluxos.",
+    typebotTenantFlowWatcherEnabled: TYPEBOT_TENANT_FLOW_WATCHER_ENABLED,
+    typebotTenantFlowImportConfigured: Boolean(TYPEBOT_TARGET_BUILDER_API_TOKEN),
   });
 });
 
@@ -220,6 +225,12 @@ async function startApi(): Promise<void> {
 
     if (TYPEBOT_TENANT_FLOW_WATCHER_ENABLED) {
       const watcherIntervalMs = Math.min(8000, Math.max(5000, TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS));
+      if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[typebot-tenant-flow-sync] TYPEBOT_TARGET_BUILDER_API_TOKEN ou TYPEBOT_BUILDER_API_TOKEN ausente; importacao automatica de fluxos do workspace fica desativada.",
+        );
+      }
       // Captura novos fluxos criados/publicados no Typebot do assinante sem depender de ação manual no painel.
       setTimeout(() => {
         void runTenantFlowWatcher();

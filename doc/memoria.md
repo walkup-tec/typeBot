@@ -1,3 +1,20 @@
+## 2026-05-11 - Divergencia biblioteca x Typebot (Drax Sistemas)
+
+- Sintoma em producao: workspace Typebot com `Teste 5`, `Empréstimo do Trabalhador CLT` e `Drax Sistemas` (Live); biblioteca SaaS com apenas `Teste` inativo (`teste-0rzqap7` 404) e `Teste 5` ativo no viewer (`teste-5-olx3rjp` 200).
+- Causa raiz: importacao automatica do watcher/listagem nao autenticava na Builder API quando `TYPEBOT_TARGET_BUILDER_API_TOKEN` estava vazio e o fallback era `TYPEBOT_BUILDER_API_TOKEN` (mesma regra do `typebot-builder.service`); tenant `tenant_drax` seguia sem `typebotWorkspaceId` (`not_started`).
+- Correcao: alinhar resolucao de token no `typebot-flow-viewer-url-sync`; vinculo automatico de workspace por nome sanitizado do assinante e fallback unico por e-mail; `/health` expoe `typebotTenantFlowImportConfigured` e aviso no boot se token ausente.
+- Validacao local: `npm run build:api` OK.
+- Pendencia: redeploy da API no Easypanel; conferir env `TYPEBOT_TARGET_BUILDER_API_TOKEN` ou `TYPEBOT_BUILDER_API_TOKEN` e `TYPEBOT_TARGET_VIEWER_BASE_URL`; apos deploy, reabrir Etapa 3 e validar importacao dos fluxos Live.
+
+## 2026-05-11 - Abertura do chat Typebot
+
+- Solicitacao: abrir o chat nomeado Typebot.
+- Chat principal: `946834a9-5796-434d-b8d2-6ac05dbfe776` (projeto `D:\typebot-Saas`).
+- Chat anterior de retomada: `02e7118b-8434-4de2-9be6-27202fc61c7d`.
+- Ultimo commit citado no chat: `236b026` (auto-descoberta de workspace Typebot no backend).
+- Acao nesta sessao: workspace `D:\typebot-Saas` reaberto no Cursor; contexto do chat recuperado por `doc/memoria.md` e transcript.
+- Pendencias de retomada: deploy da API no Easypanel; publicar fluxo novo no Typebot; validar importacao automatica na biblioteca; se falhar, revisar match exato de nome do workspace versus nome do tenant.
+
 ## 2026-05-08 - Backend autonomo: auto-descoberta de workspace Typebot
 
 - Ajuste de arquitetura conforme solicitacao do usuario: nao depender de acao no painel para importacao automatica.
