@@ -314,12 +314,9 @@ function abbreviateUrlForDisplay(raw: string, maxLen = 56): string {
 export function App() {
   const QUEUE_REFRESH_INTERVAL_MS = 3000;
   const FLOW_LIBRARY_REFRESH_INTERVAL_MS = 7000;
-  const FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS = Math.max(1, Math.ceil(FLOW_LIBRARY_REFRESH_INTERVAL_MS / 1000));
   const [activeScreen, setActiveScreen] = useState<ScreenId>("master");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [queueItems, setQueueItems] = useState<QueueContact[]>([]);
-  const [libraryLastUpdatedAt, setLibraryLastUpdatedAt] = useState<Date | null>(null);
-  const [libraryNextRefreshInSeconds, setLibraryNextRefreshInSeconds] = useState(FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS);
   const [selectedTenant, setSelectedTenant] = useState<string>("");
   const [newTenantName, setNewTenantName] = useState("");
   const [newTenantEmail, setNewTenantEmail] = useState("");
@@ -555,8 +552,6 @@ export function App() {
     () => queueItems.filter((item) => item.status === "waiting").length,
     [queueItems],
   );
-  const libraryLastUpdatedLabel = libraryLastUpdatedAt ? libraryLastUpdatedAt.toLocaleTimeString("pt-BR") : "--:--:--";
-
   function playPendingLeadAlertTone(repeats = 1) {
     try {
       const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -629,14 +624,62 @@ export function App() {
     setQueueItems(normalized);
   }
 
-  async function loadFlows(tenantId: string) {
+  const flowListSignature = (flows: SavedFlow[]) =>
+    flows
+      .map(
+        (flow) =>
+          `${flow.id}|${flow.url}|${flow.nickname}|${flow.displayLabel ?? ""}|${flow.librarySourceId ?? ""}`,
+      )
+      .sort()
+      .join("\n");
+
+  async function refreshFlowStatuses(flows: SavedFlow[]) {
+    if (flows.length === 0) return;
+    const results = await Promise.all(
+      flows.map(async (flow) => {
+        try {
+          const response = await fetch(`${apiBase}/api/typebot/flow-status?url=${encodeURIComponent(flow.url)}`);
+          const data = (await response.json()) as { status: "active" | "inactive" };
+          return { flowId: flow.id, status: data.status as FlowStatus };
+        } catch {
+          return { flowId: flow.id, status: "inactive" as FlowStatus };
+        }
+      }),
+    );
+    setFlowStatuses((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const flow of flows) {
+        if (!(flow.id in next)) {
+          next[flow.id] = "checking";
+          changed = true;
+        }
+      }
+      for (const item of results) {
+        if (next[item.flowId] !== item.status) {
+          next[item.flowId] = item.status;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }
+
+  async function loadFlows(tenantId: string, options?: { silentList?: boolean }) {
     if (!tenantId) return;
     const response = await fetch(`${apiBase}/api/master/tenants/${tenantId}/flows`);
     if (!response.ok) {
       throw new Error("Falha ao carregar fluxos");
     }
     const data = (await response.json()) as SavedFlow[];
-    setSavedFlowsByTenant((current) => ({ ...current, [tenantId]: data }));
+    setSavedFlowsByTenant((current) => {
+      const previous = current[tenantId] ?? [];
+      if (options?.silentList && flowListSignature(previous) === flowListSignature(data)) {
+        return current;
+      }
+      return { ...current, [tenantId]: data };
+    });
+    await refreshFlowStatuses(data);
   }
 
   async function loadAttendants(tenantId: string) {
@@ -819,24 +862,13 @@ export function App() {
   useEffect(() => {
     if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== 3) return;
     const refreshLibrary = async () => {
-      await loadFlows(selectedTenant);
-      setLibraryLastUpdatedAt(new Date());
-      setLibraryNextRefreshInSeconds(FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS);
+      await loadFlows(selectedTenant, { silentList: true });
     };
     void refreshLibrary().catch(() => undefined);
     const libraryTimer = window.setInterval(() => {
       void refreshLibrary().catch(() => undefined);
     }, FLOW_LIBRARY_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(libraryTimer);
-  }, [selectedTenant, activeScreen, masterWizardStep]);
-
-  useEffect(() => {
-    if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== 3) return;
-    setLibraryNextRefreshInSeconds(FLOW_LIBRARY_REFRESH_INTERVAL_SECONDS);
-    const countdownTimer = window.setInterval(() => {
-      setLibraryNextRefreshInSeconds((current) => (current <= 1 ? 0 : current - 1));
-    }, 1000);
-    return () => window.clearInterval(countdownTimer);
   }, [selectedTenant, activeScreen, masterWizardStep]);
 
   useEffect(() => {
@@ -890,40 +922,6 @@ export function App() {
       setDidMigrateLocalFlows(true);
     });
   }, [didMigrateLocalFlows, tenants]);
-
-  useEffect(() => {
-    if (!selectedTenant) return;
-    const flows = savedFlowsByTenant[selectedTenant] ?? [];
-    if (flows.length === 0) return;
-
-    const checkStatuses = async () => {
-      setFlowStatuses((current) => {
-        const next = { ...current };
-        for (const flow of flows) next[flow.id] = "checking";
-        return next;
-      });
-
-      const results = await Promise.all(
-        flows.map(async (flow) => {
-          try {
-            const response = await fetch(`${apiBase}/api/typebot/flow-status?url=${encodeURIComponent(flow.url)}`);
-            const data = (await response.json()) as { status: "active" | "inactive" };
-            return { flowId: flow.id, status: data.status as FlowStatus };
-          } catch {
-            return { flowId: flow.id, status: "inactive" as FlowStatus };
-          }
-        }),
-      );
-
-      setFlowStatuses((current) => {
-        const next = { ...current };
-        for (const item of results) next[item.flowId] = item.status;
-        return next;
-      });
-    };
-
-    checkStatuses();
-  }, [selectedTenant, savedFlowsByTenant]);
 
   async function createTenant() {
     const response = await fetch(`${apiBase}/api/master/tenants`, {
@@ -2173,15 +2171,6 @@ export function App() {
                   Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
                   <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
                 </p>
-                <div className="queue-refresh-banner" role="status" aria-live="polite">
-                  <span className="queue-refresh-pill">
-                    <i className="queue-refresh-dot" aria-hidden="true" />
-                    Atualizado em {libraryLastUpdatedLabel}
-                  </span>
-                  <span className="queue-refresh-pill queue-refresh-pill--countdown">
-                    Próxima atualização em {libraryNextRefreshInSeconds}s
-                  </span>
-                </div>
                 {selectableFlowLibrary.some((item) => !systemDefaultLibraryIds.has(item.id)) ? (
                   <div className="grid-form">
                     <select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)}>

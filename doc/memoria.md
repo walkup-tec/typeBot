@@ -1,3 +1,11 @@
+## 2026-05-11 - Biblioteca Etapa 3: sync silencioso sem piscar
+
+- Removido banner "Atualizado em / Proxima atualizacao" da Etapa 3.
+- Polling de 7s mantido em background; lista so re-renderiza se fluxos mudarem; status atualiza sem voltar tudo para "Verificando".
+- Arquivo: `apps/admin/src/App.tsx`.
+- Validacao: `npm run build:admin` OK.
+- Pendencia: redeploy do painel CRM.
+
 ## 2026-05-11 - Biblioteca Etapa 3: exibir somente fluxos ativos
 
 - Ajuste no admin: listas da Etapa 3 filtram por saude da URL (`active` ou `checking`); inativos somem da UI.
