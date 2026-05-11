@@ -79,6 +79,10 @@ export class QueueService {
     return this.queueRepository.getByTenantAndContactId(tenantId, contactId);
   }
 
+  getContactById(contactId: string) {
+    return this.queueRepository.getByContactId(contactId);
+  }
+
   assign(tenantId: string, contactId: string, input: z.infer<typeof assignSchema>) {
     return this.queueRepository.assign(tenantId, contactId, input.agentId, input.agentName);
   }
