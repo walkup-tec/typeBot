@@ -109,6 +109,10 @@ export class QueueRepository {
     return contact;
   }
 
+  getByContactId(contactId: string) {
+    return waitingQueue.get(contactId) ?? null;
+  }
+
   assign(tenantId: string, contactId: string, agentId: string, agentName?: string): QueueContact | null {
     const contact = waitingQueue.get(contactId);
     if (!contact || contact.tenantId !== tenantId) return null;
