@@ -20,6 +20,18 @@ export const sendLiveMessageSchema = z.object({
   content: z.string().min(1).max(300000),
 });
 
+export const updateQueueContactSchema = z.object({
+  contactName: z.string().min(2).max(120).optional(),
+  leadWhatsapp: z.string().max(24).optional(),
+  agentNotes: z.string().max(4000).optional(),
+});
+
+export const addLeadAttachmentSchema = z.object({
+  fileName: z.string().min(1).max(180),
+  mimeType: z.string().min(3).max(120),
+  content: z.string().min(1).max(300000),
+});
+
 export class QueueService {
   private readonly roundRobinCursorByTenant = new Map<string, number>();
 
@@ -102,5 +114,31 @@ export class QueueService {
       content: input.content,
       createdAt: new Date().toISOString(),
     });
+  }
+
+  updateContact(tenantId: string, contactId: string, input: z.infer<typeof updateQueueContactSchema>) {
+    const patch: Partial<{
+      contactName: string;
+      leadWhatsapp: string;
+      agentNotes: string;
+    }> = {};
+    if (input.contactName !== undefined) patch.contactName = input.contactName;
+    if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
+    if (input.agentNotes !== undefined) patch.agentNotes = input.agentNotes;
+    return this.queueRepository.updateContact(tenantId, contactId, patch);
+  }
+
+  addAttachment(tenantId: string, contactId: string, input: z.infer<typeof addLeadAttachmentSchema>) {
+    const contact = this.queueRepository.getByTenantAndContactId(tenantId, contactId);
+    if (!contact) return null;
+    const attachment = {
+      id: randomUUID(),
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      content: input.content,
+      createdAt: new Date().toISOString(),
+    };
+    const attachments = [...(contact.attachments ?? []), attachment];
+    return this.queueRepository.updateContact(tenantId, contactId, { attachments });
   }
 }

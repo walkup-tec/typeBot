@@ -12,6 +12,28 @@ type LiveMessage = {
   createdAt: string;
 };
 
+type LeadAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  content: string;
+  createdAt: string;
+};
+
+type QueueContactProfile = {
+  contactName?: string;
+  leadWhatsapp?: string;
+  agentNotes?: string;
+  leadContext?: Record<string, string | number | boolean>;
+  attachments?: LeadAttachment[];
+  assignedAgentId?: string;
+};
+
+type AttendantOption = {
+  username: string;
+  displayName: string;
+};
+
 type TenantBranding = {
   displayName: string;
   logoUrl: string;
@@ -112,9 +134,20 @@ export function WidgetApp() {
   const [leadDisplayName, setLeadDisplayName] = useState(
     () => sessionContactNameFromQuery.trim() || "Visitante",
   );
+  const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
+  const [leadNameDraft, setLeadNameDraft] = useState("");
+  const [leadWhatsappDraft, setLeadWhatsappDraft] = useState("");
+  const [leadNotesDraft, setLeadNotesDraft] = useState("");
+  const [leadAssignTo, setLeadAssignTo] = useState("");
+  const [leadVariables, setLeadVariables] = useState<Array<{ key: string; value: string }>>([]);
+  const [leadAttachments, setLeadAttachments] = useState<LeadAttachment[]>([]);
+  const [leadAttendants, setLeadAttendants] = useState<AttendantOption[]>([]);
+  const [leadAssignedAgentId, setLeadAssignedAgentId] = useState("");
+  const [leadDrawerStatus, setLeadDrawerStatus] = useState("");
   const [resolvedSessionTenantId, setResolvedSessionTenantId] = useState(sessionTenantIdFromQuery || "");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const agentImageInputRef = useRef<HTMLInputElement | null>(null);
+  const leadFilesInputRef = useRef<HTMLInputElement | null>(null);
   const visitorImageInputRef = useRef<HTMLInputElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const botUrl = useMemo(() => typebotPublicUrl.trim(), []);
@@ -228,6 +261,145 @@ export function WidgetApp() {
     captureResolvedTenantId(response);
     return response.ok;
   }
+
+  const applyLeadContactToForm = (contact: QueueContactProfile) => {
+    const nextName = String(contact.contactName ?? "").trim();
+    setLeadNameDraft(nextName);
+    setLeadWhatsappDraft(String(contact.leadWhatsapp ?? "").trim());
+    setLeadNotesDraft(String(contact.agentNotes ?? "").trim());
+    setLeadAssignedAgentId(String(contact.assignedAgentId ?? "").trim().toLowerCase());
+    if (nextName) setLeadDisplayName(nextName);
+    const variables = Object.entries(contact.leadContext ?? {})
+      .filter(([key, value]) => key && String(value ?? "").trim())
+      .map(([key, value]) => ({ key, value: String(value) }));
+    setLeadVariables(variables);
+    setLeadAttachments(Array.isArray(contact.attachments) ? contact.attachments : []);
+  };
+
+  const refreshLeadDrawer = async () => {
+    if (!sessionContactId) return;
+    setLeadDrawerStatus("Carregando dados do lead...");
+    try {
+      const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}`, {
+        headers: buildTenantHeaders(),
+      });
+      captureResolvedTenantId(response);
+      if (!response.ok) {
+        setLeadDrawerStatus("Não foi possível carregar os dados do lead.");
+        return;
+      }
+      const contact = (await response.json()) as QueueContactProfile;
+      applyLeadContactToForm(contact);
+      const tenantForLookup = resolvedSessionTenantId || sessionTenantId;
+      if (tenantForLookup) {
+        const attendantsResponse = await fetch(
+          `${apiBase}/api/master/tenants/${encodeURIComponent(tenantForLookup)}/attendants`,
+        );
+        if (attendantsResponse.ok) {
+          const rows = (await attendantsResponse.json()) as Array<{ username?: string; displayName?: string }>;
+          setLeadAttendants(
+            rows
+              .map((row) => ({
+                username: String(row.username ?? "").trim(),
+                displayName: String(row.displayName ?? row.username ?? "").trim(),
+              }))
+              .filter((row) => row.username),
+          );
+        }
+      }
+      setLeadAssignTo("");
+      setLeadDrawerStatus("");
+    } catch {
+      setLeadDrawerStatus("Não foi possível carregar os dados do lead.");
+    }
+  };
+
+  const saveLeadProfile = async () => {
+    if (!sessionContactId) return;
+    setLeadDrawerStatus("Salvando...");
+    const payload: { contactName?: string; leadWhatsapp: string; agentNotes: string } = {
+      leadWhatsapp: leadWhatsappDraft.trim(),
+      agentNotes: leadNotesDraft.trim(),
+    };
+    const nextName = leadNameDraft.trim();
+    if (nextName.length >= 2) payload.contactName = nextName;
+    try {
+      const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/profile`, {
+        method: "PATCH",
+        headers: buildTenantHeaders(true),
+        body: JSON.stringify(payload),
+      });
+      captureResolvedTenantId(response);
+      if (!response.ok) {
+        setLeadDrawerStatus("Falha ao salvar dados do lead.");
+        return;
+      }
+      const updated = (await response.json()) as QueueContactProfile;
+      applyLeadContactToForm(updated);
+      const assignTo = leadAssignTo.trim();
+      if (assignTo) {
+        const attendant = leadAttendants.find((row) => row.username === assignTo);
+        const assignResponse = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/assign`, {
+          method: "PATCH",
+          headers: buildTenantHeaders(true),
+          body: JSON.stringify({
+            agentId: assignTo,
+            agentName: attendant?.displayName || assignTo,
+          }),
+        });
+        captureResolvedTenantId(assignResponse);
+        if (!assignResponse.ok) {
+          setLeadDrawerStatus("Dados salvos, mas a transferência falhou.");
+          return;
+        }
+        applyLeadContactToForm((await assignResponse.json()) as QueueContactProfile);
+      }
+      setLeadDrawerStatus("Dados do lead salvos.");
+    } catch {
+      setLeadDrawerStatus("Falha ao salvar dados do lead.");
+    }
+  };
+
+  const uploadLeadAttachment = async (file: File) => {
+    const fileName = String(file.name || "anexo").trim();
+    const mimeType = String(file.type || "application/octet-stream").trim();
+    let content = "";
+    if (mimeType.startsWith("image/")) {
+      const raw = await readFileAsDataUrl(file);
+      content = await compressImageDataUrl(raw);
+    } else {
+      content = await readFileAsDataUrl(file);
+    }
+    if (content.length > MAX_IMAGE_PAYLOAD_LENGTH) throw new Error("Arquivo grande demais.");
+    const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/attachments`, {
+      method: "POST",
+      headers: buildTenantHeaders(true),
+      body: JSON.stringify({ fileName, mimeType, content }),
+    });
+    captureResolvedTenantId(response);
+    if (!response.ok) throw new Error("Falha no upload.");
+    applyLeadContactToForm((await response.json()) as QueueContactProfile);
+  };
+
+  const handleLeadFilesSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? [...event.target.files] : [];
+    event.target.value = "";
+    if (files.length === 0) return;
+    setLeadDrawerStatus("Enviando anexos...");
+    try {
+      for (const file of files) {
+        await uploadLeadAttachment(file);
+      }
+      setLeadDrawerStatus("Anexos enviados.");
+    } catch {
+      setLeadDrawerStatus("Falha ao enviar um ou mais anexos.");
+    }
+  };
+
+  useEffect(() => {
+    if (!isAgentMode || !leadDrawerOpen) return;
+    void refreshLeadDrawer();
+  }, [isAgentMode, leadDrawerOpen, sessionContactId, resolvedSessionTenantId, sessionTenantId]);
 
   useEffect(() => {
     if (!isAgentMode) return;
@@ -467,9 +639,22 @@ export function WidgetApp() {
   if (isAgentMode) {
     return (
       <div className="widget-shell">
-        <div className="widget-header">
-          <strong>{leadDisplayName}</strong>
-          <span>Você está conversando com o visitante em tempo real</span>
+        <div className="widget-header widget-header--agent">
+          <div className="lead-header-main">
+            <strong>{leadDisplayName}</strong>
+            <span>Você está conversando com o visitante em tempo real</span>
+          </div>
+          <button
+            type="button"
+            className="lead-info-button"
+            title="Dados do lead"
+            aria-label="Abrir dados do lead"
+            onClick={() => setLeadDrawerOpen(true)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+            </svg>
+          </button>
         </div>
 
         <div className="widget-chat agent-chat">
@@ -550,6 +735,106 @@ export function WidgetApp() {
         </small>
 
         {status ? <small>{status}</small> : null}
+
+        <div
+          className={`lead-drawer-overlay${leadDrawerOpen ? " open" : ""}`}
+          aria-hidden={!leadDrawerOpen}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setLeadDrawerOpen(false);
+          }}
+        >
+          <aside className="lead-drawer-panel" role="dialog" aria-labelledby="leadDrawerTitle">
+            <div className="lead-drawer-head">
+              <strong id="leadDrawerTitle">Dados do lead</strong>
+              <button
+                type="button"
+                className="lead-drawer-close"
+                aria-label="Fechar painel"
+                onClick={() => setLeadDrawerOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="lead-drawer-body">
+              <label className="lead-field">
+                <span>Nome do lead</span>
+                <input value={leadNameDraft} onChange={(event) => setLeadNameDraft(event.target.value)} />
+              </label>
+              <label className="lead-field">
+                <span>WhatsApp</span>
+                <input
+                  value={leadWhatsappDraft}
+                  onChange={(event) => setLeadWhatsappDraft(event.target.value)}
+                  inputMode="tel"
+                />
+              </label>
+              <label className="lead-field">
+                <span>Atribuir para outro atendente</span>
+                <select value={leadAssignTo} onChange={(event) => setLeadAssignTo(event.target.value)}>
+                  <option value="">Manter atendente atual</option>
+                  {leadAttendants.map((attendant) => (
+                    <option key={attendant.username} value={attendant.username}>
+                      {attendant.displayName} ({attendant.username})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="lead-field">
+                <span>Anexos (imagens e documentos)</span>
+                <input
+                  ref={leadFilesInputRef}
+                  type="file"
+                  accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  multiple
+                  onChange={handleLeadFilesSelected}
+                />
+              </label>
+              <div className="lead-attachments-list">
+                {leadAttachments.map((item) => (
+                  <div className="lead-attachment-item" key={item.id}>
+                    <strong>{item.fileName}</strong>
+                    {item.mimeType.startsWith("image/") || item.content.startsWith(IMAGE_DATA_URL_PREFIX) ? (
+                      <img className="live-message-image" src={item.content} alt={item.fileName} />
+                    ) : (
+                      <a href={item.content} download={item.fileName}>
+                        Baixar
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <label className="lead-field">
+                <span>Variáveis do Typebot</span>
+              </label>
+              <div className="lead-variables-list">
+                {leadVariables.length === 0 ? (
+                  <div className="lead-variable-chip">
+                    <strong>Sem variáveis registradas</strong>
+                  </div>
+                ) : (
+                  leadVariables.map((item) => (
+                    <div className="lead-variable-chip" key={item.key}>
+                      <strong>{item.key}</strong>
+                      {item.value}
+                    </div>
+                  ))
+                )}
+              </div>
+              <label className="lead-field">
+                <span>Observações do atendimento</span>
+                <textarea
+                  rows={5}
+                  value={leadNotesDraft}
+                  onChange={(event) => setLeadNotesDraft(event.target.value)}
+                />
+              </label>
+              <button type="button" className="lead-save-button" onClick={() => void saveLeadProfile()}>
+                Salvar dados do lead
+              </button>
+              {leadDrawerStatus ? <small className="lead-drawer-status">{leadDrawerStatus}</small> : null}
+            </div>
+          </aside>
+        </div>
       </div>
     );
   }

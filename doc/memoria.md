@@ -1,10 +1,86 @@
+## 2026-05-11 - Painel lateral de dados do lead no chat do atendente
+
+- Pedido: icone ao lado do nome do lead abre painel com edicao de nome, WhatsApp, observacoes, atribuicao a outro atendente, anexos e variaveis do Typebot.
+- Correcao: `handoff-view?mode=agent` com botao no header e drawer lateral; APIs `PATCH /api/chat/queue/:contactId/profile`, `POST .../attachments` e reutilizacao de `PATCH .../assign`; widget agente com o mesmo painel.
+- Arquivos: `apps/api/src/queue/queue.routes.ts`, `queue.service.ts`, `queue.repository.ts`, `apps/widget/src/WidgetApp.tsx`, `apps/widget/src/widget.css`.
+- Validacao: `npm run build:api`, `npm run build:widget` OK.
+- Pendencia: redeploy API e widget; smoke em producao (abrir painel, salvar perfil, anexar arquivo, transferir atendente).
+
+## 2026-05-11 - Handoff lead: barra de envio fixa no rodape
+
+- Sintoma: no mobile, campo `+` / mensagem / Enviar aparecia logo abaixo da primeira bolha, com area vazia abaixo.
+- Causa: `.chat` sem `flex:1` e input com `sticky` sem coluna flex preenchendo a tela.
+- Correcao: coluna flex em `visitor-shell` e `visitor-live-wrap`; chat com scroll; input `flex-shrink:0` no rodape.
+- Arquivo: `apps/api/src/queue/queue.routes.ts`.
+- Validacao: `npm run build:api` OK.
+- Pendencia: redeploy da API.
+
+## 2026-05-11 - Chat do atendente: titulo com nome do lead
+
+- Pedido: no painel do atendente, trocar "Atendimento ao vivo" pelo nome do lead.
+- Correcao: `handoff-view` agente e widget usam `contactName` (query ou fila); admin envia `contactName` ao abrir a sessao.
+- Arquivos: `apps/api/src/queue/queue.routes.ts`, `apps/admin/src/App.tsx`, `apps/widget/src/WidgetApp.tsx`.
+- Validacao: `npm run build:api`, `build:admin`, `build:widget` OK.
+- Pendencia: redeploy API, painel e widget.
+
+## 2026-05-11 - Handoff lead: centralizar icone + do anexo
+
+- Sintoma: sinal `+` desalinhado no botao de imagem da tela do lead.
+- Causa: estilos genericos de `.visitor-live-wrap button` sobrescreviam o botao circular de anexo.
+- Correcao: override `.visitor-live-wrap .attach-button` e `span.attach-button-symbol` com flex e ajuste vertical.
+- Arquivo: `apps/api/src/queue/queue.routes.ts`.
+- Validacao: `npm run build:api` OK.
+- Pendencia: redeploy da API.
+
+## 2026-05-11 - Handoff atendente alinhado ao widget (cores, icones, layout)
+
+- Referencia: tela escura do widget com header, avatares, timestamps, `+`/Enviar na cor do tenant e rodape de sessao.
+- Correcao: `handoff-view?mode=agent` reutiliza estrutura e estilos do widget; bolhas do atendente com `defaultChatTheme.userBubbleBg` e logo do tenant.
+- Arquivo: `apps/api/src/queue/queue.routes.ts`.
+- Validacao: `npm run build:api` OK.
+- Pendencia: redeploy da API; opcional rebuild do painel com `VITE_WIDGET_BASE_URL` do widget publico.
+
+## 2026-05-11 - Fundo escuro fixo no handoff-view do atendente
+
+- Pedido: background da tela do chat do atendente sempre escuro.
+- Correcao: `body.agent-screen` no `handoff-view` com `#0b1224`, inclusive no breakpoint desktop.
+- Arquivo: `apps/api/src/queue/queue.routes.ts`.
+- Validacao: `npm run build:api` OK.
+- Pendencia: redeploy da API.
+
+## 2026-05-11 - Divergencia chat atendimento local x producao
+
+- Sintoma: tela do atendente em producao sem botao `+`, tema e UX do chat local.
+- Historico nos logs: WhatsApp/avatar do lead (`LOG-2026-04-21__130454`); botao `+` e imagem no widget (`memoria` 2026-04-28); auto-scroll de imagem (`LOG-2026-04-28__113600`); tema tenant no `handoff-view` agente (`ad04b76`).
+- Causa: painel pode abrir widget (`VITE_WIDGET_BASE_URL`) ou fallback `/handoff-view`; producao sem widget atualizado e `handoff-view` sem picker de imagem; `WidgetApp.tsx` com ajustes locais nao publicados.
+- Correcao: `handoff-view` ganhou picker `+` (agente e lead); widget passa a aceitar `apiBase` na query e resolver `tenantId` via `x-resolved-tenant-id`.
+- Validacao: `npm run build:api` e `npm run build:widget` OK.
+- Pendencia: redeploy API + widget; rebuild painel com `VITE_WIDGET_BASE_URL` apontando para o widget publico.
+
+## 2026-05-11 - Build Easypanel: getByContactId ausente no QueueRepository
+
+- Sintoma: apos `a42a7d2`, deploy falhou com TS2339 em `queue.service.ts` (`getByContactId` inexistente em `QueueRepository`).
+- Causa: lookup por `contactId` existia so localmente em `queue.repository.ts`; service no remoto chamava metodo nao publicado.
+- Correcao: `QueueRepository.getByContactId` retorna contato em `waitingQueue` sem exigir `tenantId`.
+- Validacao: `npm run build:api` OK.
+- Pendencia: push e redeploy da API no Easypanel.
+
+## 2026-05-11 - Build Easypanel: getContactById ausente no QueueService
+
+- Sintoma: redeploy da API falhou em `npm run build:api` com TS2551 em `queue.routes.ts` (`getContactById` inexistente em `QueueService`).
+- Causa: metodo adicionado apenas localmente em `queue.service.ts`; commit `ad04b76` alterou rotas sem publicar o service.
+- Correcao: expor `getContactById` delegando a `queueRepository.getByContactId`.
+- Commit: `a42a7d2`.
+- Validacao: `npm run build:api` OK.
+- Pendencia: redeploy da API no Easypanel apos publicar repository.
+
 ## 2026-05-11 - Cores do painel do atendente no handoff-view
 
 - Sintoma: modo agente com tema escuro fixo, fora do padrao WhatsApp/tenant do projeto local.
 - Correcao: `handoff-view` do atendente usa `defaultChatTheme` do assinante (page/chat/bubbles/botao) com defaults alinhados ao lead.
 - Arquivo: `apps/api/src/queue/queue.routes.ts`.
 - Validacao: `npm run build:api` OK.
-- Pendencia: redeploy da API.
+- Pendencia: redeploy da API apos commit `a42a7d2`.
 
 ## 2026-05-11 - Link do atendente sem tenantId no handoff-view
 

@@ -4,7 +4,14 @@ import { z } from "zod";
 import type { SavedFlow } from "../flows/flow.repository";
 import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
-import { QueueService, assignSchema, enqueueSchema, sendLiveMessageSchema } from "./queue.service";
+import {
+  QueueService,
+  addLeadAttachmentSchema,
+  assignSchema,
+  enqueueSchema,
+  sendLiveMessageSchema,
+  updateQueueContactSchema,
+} from "./queue.service";
 
 function normalizeHandoffMatchToken(value: string): string {
   return value.trim().toLowerCase();
@@ -469,8 +476,30 @@ export const registerQueueRoutes = (app: Express) => {
     body { margin:0; font-family: Inter, Arial, sans-serif; background:var(--handoff-page-bg); color:#111827; }
     body.agent-screen { background:#0b1224; min-height:100vh; color:#f1f5f9; }
     body.agent-screen .agent-widget { width:min(500px,92vw); margin:20px auto; background:#111827; border:1px solid #1f2937; border-radius:12px; display:grid; gap:12px; padding:16px; box-sizing:border-box; }
-    body.agent-screen .widget-header { display:flex; flex-direction:column; gap:4px; }
+    body.agent-screen .widget-header { display:flex; flex-direction:row; align-items:flex-start; justify-content:space-between; gap:10px; }
+    body.agent-screen .lead-header-main { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }
+    body.agent-screen .lead-header-main strong { font-size:18px; line-height:1.25; word-break:break-word; }
     body.agent-screen .widget-header span { color:#94a3b8; font-size:14px; }
+    body.agent-screen .lead-info-button { width:38px; height:38px; min-width:38px; flex-shrink:0; border-radius:999px; border:1px solid #334155; background:#0f172a; color:#cbd5e1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
+    body.agent-screen .lead-info-button svg { width:18px; height:18px; fill:currentColor; }
+    body.agent-screen .lead-drawer-overlay { position:fixed; inset:0; background:rgba(2,6,23,.62); z-index:80; display:none; }
+    body.agent-screen .lead-drawer-overlay.open { display:block; }
+    body.agent-screen .lead-drawer-panel { position:fixed; top:0; right:0; width:min(380px,92vw); height:100dvh; background:#111827; border-left:1px solid #1f2937; box-shadow:-18px 0 40px rgba(2,6,23,.45); overflow:auto; transform:translateX(100%); transition:transform .2s ease; z-index:90; padding:16px; box-sizing:border-box; }
+    body.agent-screen .lead-drawer-overlay.open .lead-drawer-panel { transform:translateX(0); }
+    body.agent-screen .lead-drawer-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+    body.agent-screen .lead-drawer-head strong { font-size:16px; color:#f8fafc; }
+    body.agent-screen .lead-drawer-close { width:34px; height:34px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:22px; line-height:1; cursor:pointer; }
+    body.agent-screen .lead-drawer-body { display:grid; gap:12px; }
+    body.agent-screen .lead-field { display:grid; gap:6px; }
+    body.agent-screen .lead-field span { color:#94a3b8; font-size:12px; font-weight:600; }
+    body.agent-screen .lead-field input, body.agent-screen .lead-field select, body.agent-screen .lead-field textarea { width:100%; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#f1f5f9; padding:10px; box-sizing:border-box; font:inherit; }
+    body.agent-screen .lead-field textarea { resize:vertical; min-height:110px; }
+    body.agent-screen .lead-variables-list, body.agent-screen .lead-attachments-list { display:grid; gap:8px; }
+    body.agent-screen .lead-variable-chip, body.agent-screen .lead-attachment-item { border:1px solid #334155; border-radius:8px; background:#0f172a; padding:8px 10px; font-size:12px; color:#e2e8f0; word-break:break-word; }
+    body.agent-screen .lead-variable-chip strong, body.agent-screen .lead-attachment-item strong { display:block; color:#94a3b8; font-size:11px; margin-bottom:4px; }
+    body.agent-screen .lead-attachment-item a { color:#93c5fd; text-decoration:none; }
+    body.agent-screen .lead-save-button { border-radius:8px; border:1px solid #334155; background:var(--handoff-user-bubble-bg, #2f6ca3); color:#f8fafc; font-weight:700; padding:11px 12px; cursor:pointer; }
+    body.agent-screen .lead-drawer-status { color:#94a3b8; min-height:16px; }
     body.agent-screen .widget-chat { min-height:320px; max-height:min(420px,52vh); overflow:auto; padding:10px; border:1px solid #1f2937; border-radius:10px; display:flex; flex-direction:column; gap:10px; background:#0b1224; }
     body.agent-screen .live-message-row { display:flex; align-items:flex-end; gap:8px; }
     body.agent-screen .live-message-row.mine { justify-content:flex-end; }
@@ -862,8 +891,13 @@ export const registerQueueRoutes = (app: Express) => {
     isAgentMode
       ? `<div class="agent-widget">
     <div class="widget-header">
-      <strong>${escapedName}</strong>
-      <span>Você está conversando com o visitante em tempo real</span>
+      <div class="lead-header-main">
+        <strong id="leadTitle">${escapedName}</strong>
+        <span>Você está conversando com o visitante em tempo real</span>
+      </div>
+      <button type="button" id="leadInfoButton" class="lead-info-button" title="Dados do lead" aria-label="Abrir dados do lead">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+      </button>
     </div>
     <div id="chat" class="widget-chat agent-chat"></div>
     <form id="form" class="widget-input">
@@ -873,6 +907,43 @@ export const registerQueueRoutes = (app: Express) => {
       <button type="submit" style="background:${themeUserBubbleBg};border-color:${themeUserBubbleBg};color:${agentBubbleTextColor};">Enviar</button>
     </form>
     <small class="session-meta">Sessão: ${escapedContactId} | Atendente: ${agentName.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</small>
+    <div id="leadDrawerOverlay" class="lead-drawer-overlay" aria-hidden="true">
+      <aside id="leadDrawerPanel" class="lead-drawer-panel" role="dialog" aria-labelledby="leadDrawerTitle">
+        <div class="lead-drawer-head">
+          <strong id="leadDrawerTitle">Dados do lead</strong>
+          <button type="button" id="leadDrawerClose" class="lead-drawer-close" aria-label="Fechar painel">×</button>
+        </div>
+        <div class="lead-drawer-body">
+          <label class="lead-field">
+            <span>Nome do lead</span>
+            <input id="leadNameInput" />
+          </label>
+          <label class="lead-field">
+            <span>WhatsApp</span>
+            <input id="leadWhatsappInput" inputmode="tel" />
+          </label>
+          <label class="lead-field">
+            <span>Atribuir para outro atendente</span>
+            <select id="leadAssignSelect"><option value="">Selecione...</option></select>
+          </label>
+          <label class="lead-field">
+            <span>Anexos (imagens e documentos)</span>
+            <input id="leadFilesInput" type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" multiple />
+          </label>
+          <div id="leadAttachmentsList" class="lead-attachments-list"></div>
+          <label class="lead-field">
+            <span>Variáveis do Typebot</span>
+          </label>
+          <div id="leadVariablesList" class="lead-variables-list"></div>
+          <label class="lead-field">
+            <span>Observações do atendimento</span>
+            <textarea id="leadNotesInput" rows="5"></textarea>
+          </label>
+          <button type="button" id="leadSaveButton" class="lead-save-button">Salvar dados do lead</button>
+          <small id="leadDrawerStatus" class="lead-drawer-status"></small>
+        </div>
+      </aside>
+    </div>
   </div>`
       : `<div class="visitor-shell">
     <div id="waitOverlay" class="wait-overlay">
@@ -1237,6 +1308,241 @@ export const registerQueueRoutes = (app: Express) => {
       messageInput.value = "";
     });
 
+    let leadDrawerContact = null;
+    let leadAttendants = [];
+    const leadTitle = document.getElementById("leadTitle");
+    const leadInfoButton = document.getElementById("leadInfoButton");
+    const leadDrawerOverlay = document.getElementById("leadDrawerOverlay");
+    const leadDrawerClose = document.getElementById("leadDrawerClose");
+    const leadNameInput = document.getElementById("leadNameInput");
+    const leadWhatsappInput = document.getElementById("leadWhatsappInput");
+    const leadAssignSelect = document.getElementById("leadAssignSelect");
+    const leadFilesInput = document.getElementById("leadFilesInput");
+    const leadAttachmentsList = document.getElementById("leadAttachmentsList");
+    const leadVariablesList = document.getElementById("leadVariablesList");
+    const leadNotesInput = document.getElementById("leadNotesInput");
+    const leadSaveButton = document.getElementById("leadSaveButton");
+    const leadDrawerStatus = document.getElementById("leadDrawerStatus");
+
+    function setLeadDrawerStatus(text) {
+      if (!leadDrawerStatus) return;
+      leadDrawerStatus.textContent = String(text || "");
+    }
+
+    function openLeadDrawer() {
+      if (!leadDrawerOverlay) return;
+      leadDrawerOverlay.classList.add("open");
+      leadDrawerOverlay.setAttribute("aria-hidden", "false");
+      void refreshLeadDrawer();
+    }
+
+    function closeLeadDrawer() {
+      if (!leadDrawerOverlay) return;
+      leadDrawerOverlay.classList.remove("open");
+      leadDrawerOverlay.setAttribute("aria-hidden", "true");
+      setLeadDrawerStatus("");
+    }
+
+    function renderLeadVariables(contextMap) {
+      if (!leadVariablesList) return;
+      const entries = Object.entries(contextMap || {}).filter(([key, value]) => key && String(value ?? "").trim());
+      if (entries.length === 0) {
+        leadVariablesList.innerHTML = '<div class="lead-variable-chip"><strong>Sem variáveis registradas</strong></div>';
+        return;
+      }
+      leadVariablesList.innerHTML = entries
+        .map(
+          ([key, value]) =>
+            '<div class="lead-variable-chip"><strong>' +
+            escapeHtml(key) +
+            "</strong>" +
+            escapeHtml(String(value)) +
+            "</div>",
+        )
+        .join("");
+    }
+
+    function renderLeadAttachments(attachments) {
+      if (!leadAttachmentsList) return;
+      const items = Array.isArray(attachments) ? attachments : [];
+      if (items.length === 0) {
+        leadAttachmentsList.innerHTML = "";
+        return;
+      }
+      leadAttachmentsList.innerHTML = items
+        .map((item) => {
+          const fileName = escapeHtml(item.fileName || "arquivo");
+          const mimeType = String(item.mimeType || "");
+          const content = String(item.content || "").replace(/"/g, "&quot;");
+          if (mimeType.startsWith("image/") || String(item.content || "").startsWith("data:image/")) {
+            return (
+              '<div class="lead-attachment-item"><strong>' +
+              fileName +
+              '</strong><img class="msg-image" src="' +
+              content +
+              '" alt="' +
+              fileName +
+              '" /></div>'
+            );
+          }
+          return (
+            '<div class="lead-attachment-item"><strong>' +
+            fileName +
+            '</strong><a href="' +
+            content +
+            '" download="' +
+            fileName +
+            '">Baixar</a></div>'
+          );
+        })
+        .join("");
+    }
+
+    function applyLeadContactToDrawer(contact) {
+      leadDrawerContact = contact;
+      if (leadNameInput) leadNameInput.value = String(contact?.contactName || "");
+      if (leadWhatsappInput) leadWhatsappInput.value = String(contact?.leadWhatsapp || "");
+      if (leadNotesInput) leadNotesInput.value = String(contact?.agentNotes || "");
+      if (leadTitle) leadTitle.textContent = String(contact?.contactName || leadTitle.textContent || "Visitante");
+      renderLeadVariables(contact?.leadContext || {});
+      renderLeadAttachments(contact?.attachments || []);
+    }
+
+    async function loadLeadAttendants() {
+      if (!isAgentMode || !leadAssignSelect) return;
+      const response = await fetch("/api/master/tenants/" + encodeURIComponent(tenantId) + "/attendants?t=" + Date.now(), {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      leadAttendants = Array.isArray(data) ? data : [];
+      const currentAssigned = String(leadDrawerContact?.assignedAgentId || "").trim().toLowerCase();
+      leadAssignSelect.innerHTML = '<option value="">Manter atendente atual</option>';
+      leadAttendants.forEach((attendant) => {
+        const username = String(attendant.username || "").trim();
+        if (!username) return;
+        const displayName = String(attendant.displayName || username).trim();
+        const option = document.createElement("option");
+        option.value = username;
+        option.textContent = displayName + " (" + username + ")";
+        if (username.toLowerCase() === currentAssigned) option.selected = true;
+        leadAssignSelect.appendChild(option);
+      });
+    }
+
+    async function refreshLeadDrawer() {
+      if (!isAgentMode) return;
+      setLeadDrawerStatus("Carregando dados do lead...");
+      const response = await fetch("/api/chat/queue/" + contactId + "?t=" + Date.now(), {
+        cache: "no-store",
+        headers: { "x-tenant-id": tenantId },
+      });
+      if (!response.ok) {
+        setLeadDrawerStatus("Não foi possível carregar os dados do lead.");
+        return;
+      }
+      const contact = await response.json();
+      applyLeadContactToDrawer(contact);
+      await loadLeadAttendants();
+      setLeadDrawerStatus("");
+    }
+
+    async function saveLeadProfile() {
+      if (!isAgentMode) return;
+      setLeadDrawerStatus("Salvando...");
+      const payload = {};
+      const name = leadNameInput ? String(leadNameInput.value || "").trim() : "";
+      const whatsapp = leadWhatsappInput ? String(leadWhatsappInput.value || "").trim() : "";
+      const notes = leadNotesInput ? String(leadNotesInput.value || "").trim() : "";
+      if (name.length >= 2) payload.contactName = name;
+      payload.leadWhatsapp = whatsapp;
+      payload.agentNotes = notes;
+      const response = await fetch("/api/chat/queue/" + contactId + "/profile", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        setLeadDrawerStatus("Falha ao salvar dados do lead.");
+        return;
+      }
+      const updated = await response.json();
+      applyLeadContactToDrawer(updated);
+
+      const assignTo = leadAssignSelect ? String(leadAssignSelect.value || "").trim() : "";
+      if (assignTo) {
+        const attendant = leadAttendants.find((item) => String(item.username || "").trim() === assignTo);
+        const assignResponse = await fetch("/api/chat/queue/" + contactId + "/assign", {
+          method: "PATCH",
+          headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+          body: JSON.stringify({
+            agentId: assignTo,
+            agentName: attendant ? String(attendant.displayName || assignTo).trim() : undefined,
+          }),
+        });
+        if (!assignResponse.ok) {
+          setLeadDrawerStatus("Dados salvos, mas a transferência falhou.");
+          return;
+        }
+        applyLeadContactToDrawer(await assignResponse.json());
+      }
+      setLeadDrawerStatus("Dados do lead salvos.");
+    }
+
+    async function uploadLeadAttachment(file) {
+      const fileName = String(file?.name || "anexo").trim();
+      const mimeType = String(file?.type || "application/octet-stream").trim();
+      let content = "";
+      if (mimeType.startsWith("image/")) {
+        const raw = await readFileAsDataUrl(file);
+        content = await compressImageDataUrl(raw);
+        if (content.length > MAX_IMAGE_PAYLOAD_LENGTH) throw new Error("image too large");
+      } else {
+        content = await readFileAsDataUrl(file);
+        if (content.length > MAX_IMAGE_PAYLOAD_LENGTH) throw new Error("file too large");
+      }
+      const response = await fetch("/api/chat/queue/" + contactId + "/attachments", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+        body: JSON.stringify({ fileName, mimeType, content }),
+      });
+      if (!response.ok) throw new Error("upload failed");
+      applyLeadContactToDrawer(await response.json());
+    }
+
+    if (isAgentMode && leadInfoButton) {
+      leadInfoButton.addEventListener("click", openLeadDrawer);
+    }
+    if (isAgentMode && leadDrawerClose) {
+      leadDrawerClose.addEventListener("click", closeLeadDrawer);
+    }
+    if (isAgentMode && leadDrawerOverlay) {
+      leadDrawerOverlay.addEventListener("click", (event) => {
+        if (event.target === leadDrawerOverlay) closeLeadDrawer();
+      });
+    }
+    if (isAgentMode && leadSaveButton) {
+      leadSaveButton.addEventListener("click", () => {
+        void saveLeadProfile();
+      });
+    }
+    if (isAgentMode && leadFilesInput) {
+      leadFilesInput.addEventListener("change", async () => {
+        const files = leadFilesInput.files ? [...leadFilesInput.files] : [];
+        leadFilesInput.value = "";
+        if (files.length === 0) return;
+        setLeadDrawerStatus("Enviando anexos...");
+        try {
+          for (const file of files) {
+            await uploadLeadAttachment(file);
+          }
+          setLeadDrawerStatus("Anexos enviados.");
+        } catch {
+          setLeadDrawerStatus("Falha ao enviar um ou mais anexos.");
+        }
+      });
+    }
+
     loadAndPersistLeadCache();
     setVisitorChatEnabled(isAgentMode);
     syncVisitorSessionState();
@@ -1559,6 +1865,32 @@ export const registerQueueRoutes = (app: Express) => {
 
       if (!assigned) return res.status(404).json({ message: "Contact not found for tenant" });
       return res.status(200).json(assigned);
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
+  });
+
+  app.patch("/api/chat/queue/:contactId/profile", (req, res) => {
+    try {
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
+      const input = updateQueueContactSchema.parse(req.body);
+      const updated = queueService.updateContact(tenantId, req.params.contactId, input);
+      if (!updated) return res.status(404).json({ message: "Contact not found for tenant" });
+      res.setHeader("x-resolved-tenant-id", tenantId);
+      return res.status(200).json(updated);
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
+  });
+
+  app.post("/api/chat/queue/:contactId/attachments", (req, res) => {
+    try {
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
+      const input = addLeadAttachmentSchema.parse(req.body);
+      const updated = queueService.addAttachment(tenantId, req.params.contactId, input);
+      if (!updated) return res.status(404).json({ message: "Contact not found for tenant" });
+      res.setHeader("x-resolved-tenant-id", tenantId);
+      return res.status(201).json(updated);
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
     }

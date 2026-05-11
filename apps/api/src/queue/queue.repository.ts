@@ -2,6 +2,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { getDataFilePath } from "../lib/data-path";
 
+export interface LeadAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface QueueContact {
   contactId: string;
   tenantId: string;
@@ -9,6 +17,9 @@ export interface QueueContact {
   source: "typebot" | "widget";
   sourceFlowLabel: string;
   leadContext?: Record<string, string | number | boolean>;
+  leadWhatsapp?: string;
+  agentNotes?: string;
+  attachments?: LeadAttachment[];
   status: "waiting" | "in_service";
   assignedAgentId?: string;
   assignedAgentName?: string;
@@ -111,6 +122,24 @@ export class QueueRepository {
 
   getByContactId(contactId: string) {
     return waitingQueue.get(contactId) ?? null;
+  }
+
+  updateContact(
+    tenantId: string,
+    contactId: string,
+    patch: Partial<Pick<QueueContact, "contactName" | "leadWhatsapp" | "agentNotes" | "leadContext" | "attachments">>,
+  ): QueueContact | null {
+    const contact = waitingQueue.get(contactId);
+    if (!contact || contact.tenantId !== tenantId) return null;
+
+    const updated: QueueContact = {
+      ...contact,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    waitingQueue.set(contactId, updated);
+    saveQueueState(waitingQueue, liveMessages);
+    return updated;
   }
 
   assign(tenantId: string, contactId: string, agentId: string, agentName?: string): QueueContact | null {
