@@ -1,3 +1,10 @@
+## 2026-05-11 - API Easypanel vermelha apos redeploy
+
+- Sintoma: servico `api-typebot-crm` vermelho; `/health` publico com "Service is not started".
+- Causas provaveis: `AUTH_REQUIRE_DATABASE_URL_IN_PRODUCTION=true` sem `DATABASE_URL`, `DATABASE_URL` invalido ou Postgres ainda indisponivel no arranque.
+- Correcao: retry de bootstrap Postgres em `auth-data-bootstrap.ts` e logs de orientacao no Easypanel.
+- Pendencia: redeploy da API e validar variaveis de ambiente.
+
 ## 2026-05-11 - Painel lead compacto com acordeoes e atalhos
 
 - Pedido: otimizar painel lateral do lead com icones, resumo do contato e secoes recolhiveis.
