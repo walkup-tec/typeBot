@@ -67,9 +67,10 @@ body {
 .lead-drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.62);
+  background: transparent;
   z-index: 80;
   display: none;
+  pointer-events: none;
 }
 
 .lead-drawer-overlay.open {
@@ -91,10 +92,15 @@ body {
   z-index: 90;
   padding: 16px;
   box-sizing: border-box;
+  pointer-events: auto;
 }
 
 .lead-drawer-overlay.open .lead-drawer-panel {
   transform: translateX(0);
+}
+
+.widget-shell.lead-drawer-open {
+  margin-right: min(380px, 92vw);
 }
 
 .lead-drawer-head {

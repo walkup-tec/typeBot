@@ -700,7 +700,7 @@ export function WidgetApp() {
 
   if (isAgentMode) {
     return (
-      <div className="widget-shell">
+      <div className={`widget-shell${leadDrawerOpen ? " lead-drawer-open" : ""}`}>
         <div className="widget-header widget-header--agent">
           <div className="lead-header-main">
             <strong>{leadDisplayName}</strong>

@@ -134,9 +134,6 @@ export function LeadDrawerPanel({
     <div
       className={`lead-drawer-overlay${open ? " open" : ""}`}
       aria-hidden={!open}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
       <aside className="lead-drawer-panel" role="dialog" aria-labelledby="leadDrawerTitle">
         <div className="lead-drawer-head">
