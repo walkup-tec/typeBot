@@ -8,6 +8,7 @@ export const enqueueSchema = z.object({
   source: z.enum(["typebot", "widget"]).default("widget"),
   sourceFlowLabel: z.string().min(2).max(150).default("Fluxo sem identificação"),
   leadContext: z.record(z.string().min(1).max(80), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  leadWhatsapp: z.string().max(24).optional(),
 });
 
 export const assignSchema = z.object({
@@ -52,6 +53,7 @@ export class QueueService {
       source: input.source,
       sourceFlowLabel: input.sourceFlowLabel,
       leadContext: input.leadContext,
+      leadWhatsapp: input.leadWhatsapp,
       status: "waiting",
       updatedAt: new Date().toISOString(),
     });

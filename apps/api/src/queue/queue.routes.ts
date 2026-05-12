@@ -3,6 +3,11 @@ import type { Express, Request } from "express";
 import { z } from "zod";
 import type { SavedFlow } from "../flows/flow.repository";
 import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
+import {
+  formatAgentSessionMeta,
+  resolveAttendantDisplayName,
+  resolveServiceStartedAt,
+} from "../lib/agent-session-meta";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   QueueService,
@@ -235,14 +240,129 @@ const extractNamedVariables = (value: unknown): Record<string, string | number |
   }, {});
 };
 
-const pickLeadNameFromPayload = (payload: Record<string, unknown>): string => {
+const pruneEmptyLeadContext = (
+  context: Record<string, string | number | boolean>,
+): Record<string, string | number | boolean> => {
+  return Object.fromEntries(
+    Object.entries(context).filter(([, value]) => String(value ?? "").trim().length > 0),
+  );
+};
+
+const extractAnswersContext = (value: unknown): Record<string, string | number | boolean> => {
+  if (!Array.isArray(value)) return {};
+  return value.reduce<Record<string, string | number | boolean>>((acc, item) => {
+    if (!item || typeof item !== "object") return acc;
+    const answer = item as { name?: unknown; key?: unknown; label?: unknown; value?: unknown };
+    const name = String(answer.name ?? answer.key ?? answer.label ?? "").trim();
+    const rawValue = answer.value;
+    if (!name) return acc;
+    if (typeof rawValue === "string" || typeof rawValue === "number" || typeof rawValue === "boolean") {
+      acc[name] = rawValue;
+      return acc;
+    }
+    if (Array.isArray(rawValue)) {
+      const joined = rawValue.map((entry) => String(entry ?? "")).filter((entry) => entry.trim()).join(", ");
+      if (joined) acc[name] = joined;
+    }
+    return acc;
+  }, {});
+};
+
+const mergeLeadContextLayers = (
+  ...layers: Array<Record<string, string | number | boolean>>
+): Record<string, string | number | boolean> => {
+  return pruneEmptyLeadContext(
+    layers.reduce<Record<string, string | number | boolean>>((acc, layer) => ({ ...acc, ...layer }), {}),
+  );
+};
+
+const resolveLeadContextFromHandoffPayload = (
+  payload: Record<string, unknown>,
+): Record<string, string | number | boolean> => {
+  const knownKeys = new Set([
+    "tenantId",
+    "tenant_id",
+    "contactName",
+    "source",
+    "sourceFlowLabel",
+    "source_flow_label",
+    "flowAlias",
+    "initialMessage",
+    "typebotViewerUrl",
+    "viewer_url",
+    "leadContext",
+    "variables",
+    "answers",
+    "resultId",
+    "leadWhatsapp",
+  ]);
+  const autoLeadContext = Object.entries(payload)
+    .filter(([key]) => !knownKeys.has(key))
+    .reduce<Record<string, string | number | boolean>>((acc, [key, value]) => {
+      return flattenPrimitiveValues(value, key, acc);
+    }, {});
+  const variablesLeadContext = extractNamedVariables(payload.variables);
+  const answersLeadContext = extractAnswersContext(payload.answers);
+  let parsedLeadContext: Record<string, string | number | boolean> = {};
+  if (typeof payload.leadContext === "string") {
+    try {
+      parsedLeadContext = flattenPrimitiveValues(JSON.parse(payload.leadContext));
+    } catch {
+      parsedLeadContext = {};
+    }
+  } else if (payload.leadContext && typeof payload.leadContext === "object") {
+    parsedLeadContext = payload.leadContext as Record<string, string | number | boolean>;
+  }
+  return mergeLeadContextLayers(autoLeadContext, answersLeadContext, variablesLeadContext, parsedLeadContext);
+};
+
+const pickLeadWhatsappFromContext = (
+  context: Record<string, string | number | boolean>,
+  payload: Record<string, unknown>,
+): string | undefined => {
+  const directCandidates = [
+    payload.leadWhatsapp,
+    payload.Whatsapp,
+    payload.WhatsApp,
+    payload.whatsapp,
+    payload.telefone,
+    payload.celular,
+  ];
+  for (const candidate of directCandidates) {
+    const value = String(candidate ?? "").trim();
+    if (value) return value;
+  }
+  const preferredKeys = ["WhatsApp", "Whatsapp", "whatsapp", "telefone", "celular", "phone", "fone"];
+  for (const key of preferredKeys) {
+    const value = String(context[key] ?? "").trim();
+    if (value) return value;
+  }
+  for (const [key, value] of Object.entries(context)) {
+    const normalized = key.trim().toLowerCase();
+    if (!["whatsapp", "telefone", "celular", "phone", "fone"].includes(normalized)) continue;
+    const resolved = String(value ?? "").trim();
+    if (resolved) return resolved;
+  }
+  return undefined;
+};
+
+const pickLeadNameFromPayload = (
+  payload: Record<string, unknown>,
+  leadContext?: Record<string, string | number | boolean>,
+): string => {
   const candidates = [
     payload.contactName,
     payload.Nome,
+    payload.Nome_Contato,
     payload.nome,
     payload.nome_completo,
     payload["nome completo"],
     payload.name,
+    leadContext?.Nome,
+    leadContext?.Nome_Contato,
+    leadContext?.nome,
+    leadContext?.nome_completo,
+    leadContext?.name,
   ];
   for (const candidate of candidates) {
     const value = String(candidate ?? "").trim();
@@ -394,6 +514,28 @@ export const registerQueueRoutes = (app: Express) => {
     const profileImageUrl = String(req.query.profileImageUrl ?? "").trim() || tenantProfileImageUrl.trim();
     const agentId = String(req.query.agentId ?? "").trim();
     const agentName = String(req.query.agentName ?? (agentId || "atendente-01")).trim();
+    const attendantForAgent = resolvedTenantIdForSession
+      ? attendantRepository
+          .listByTenant(resolvedTenantIdForSession)
+          .find((row) => row.username.trim().toLowerCase() === agentId.toLowerCase())
+      : undefined;
+    const resolvedAgentDisplayName = resolveAttendantDisplayName(
+      {
+        username: agentId,
+        displayName: attendantForAgent?.displayName ?? agentName,
+      },
+      {
+        assignedAgentId: queuedContact?.assignedAgentId,
+        assignedAgentName: queuedContact?.assignedAgentName,
+        sessionAgentId: agentId,
+        sessionAgentName: agentName,
+      },
+    );
+    const serviceStartedAt = resolveServiceStartedAt(
+      resolvedTenantIdForSession && contactId ? queueService.getMessages(resolvedTenantIdForSession, contactId) : null,
+      queuedContact,
+    );
+    const sessionMetaLabel = formatAgentSessionMeta(serviceStartedAt, resolvedAgentDisplayName);
     const agentBubbleTextColor = getReadableTextColor(themeUserBubbleBg);
     const agentAvatarInitials = getInitials(tenantDisplayName);
     const safeAgentLogoUrl = profileImageUrl && isSafeImageSrc(profileImageUrl) ? profileImageUrl : "";
@@ -926,7 +1068,7 @@ export const registerQueueRoutes = (app: Express) => {
       <input id="message" placeholder="Digite sua resposta..." />
       <button type="submit" style="background:${themeUserBubbleBg};border-color:${themeUserBubbleBg};color:${agentBubbleTextColor};">Enviar</button>
     </form>
-    <small class="session-meta">Sessão: ${escapedContactId} | Atendente: ${agentName.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</small>
+    <small class="session-meta" id="sessionMeta">${sessionMetaLabel.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</small>
     <div id="leadDrawerOverlay" class="lead-drawer-overlay" aria-hidden="true">
       <aside id="leadDrawerPanel" class="lead-drawer-panel" role="dialog" aria-labelledby="leadDrawerTitle">
         <div class="lead-drawer-head">
@@ -1054,6 +1196,8 @@ export const registerQueueRoutes = (app: Express) => {
     const contactId = ${JSON.stringify(contactId)};
     const senderRole = ${JSON.stringify(senderRole)};
     const isAgentMode = ${JSON.stringify(isAgentMode)};
+    const sessionAgentId = ${JSON.stringify(agentId)};
+    const sessionAgentName = ${JSON.stringify(agentName)};
     const tenantChatLabel = ${JSON.stringify(tenantDisplayName)};
     const tenantBubbleColor = ${JSON.stringify(themeUserBubbleBg)};
     const tenantBubbleText = ${JSON.stringify(agentBubbleTextColor)};
@@ -1232,6 +1376,9 @@ export const registerQueueRoutes = (app: Express) => {
       });
       if (!response.ok) return;
       const data = await response.json();
+      if (isAgentMode) {
+        void refreshSessionMeta(data);
+      }
       if (!isAgentMode && !visitorChatEnabled) {
         const hasLiveStartSignal = data.some(
           (item) =>
@@ -1386,6 +1533,50 @@ export const registerQueueRoutes = (app: Express) => {
     const leadProfileName = document.getElementById("leadProfileName");
     const leadWhatsappPreview = document.getElementById("leadWhatsappPreview");
     const leadWhatsappCopy = document.getElementById("leadWhatsappCopy");
+    const sessionMeta = document.getElementById("sessionMeta");
+
+    function formatSessionMetaLabel(startedAt, agentLabel) {
+      const formattedDate = formatCreatedAt(startedAt);
+      const normalizedAgent = String(agentLabel || "").trim();
+      if (!formattedDate && !normalizedAgent) return "";
+      if (!formattedDate) return "Atendente: " + normalizedAgent;
+      if (!normalizedAgent) return "Atendimento iniciado em " + formattedDate;
+      return "Atendimento iniciado em " + formattedDate + " | Atendente: " + normalizedAgent;
+    }
+
+    function resolveServiceStartedAtFromMessages(messages, contact) {
+      const assignmentMessage = (messages || []).find(
+        (item) =>
+          item?.sender === "system" && String(item?.content || "").toLowerCase().includes("atendimento assumido"),
+      );
+      if (assignmentMessage?.createdAt) return assignmentMessage.createdAt;
+      if (contact?.status === "in_service" && contact?.updatedAt) return contact.updatedAt;
+      return String(contact?.updatedAt || "").trim();
+    }
+
+    async function refreshSessionMeta(messages) {
+      if (!isAgentMode || !sessionMeta) return;
+      const queueResponse = await fetch("/api/chat/queue/" + contactId + "?t=" + Date.now(), {
+        cache: "no-store",
+        headers: { "x-tenant-id": tenantId },
+      });
+      if (!queueResponse.ok) return;
+      const contact = await queueResponse.json();
+      const startedAt = resolveServiceStartedAtFromMessages(messages, contact);
+      const agentLabel = resolveAttendantDisplayName(
+        {
+          username: sessionAgentId,
+          displayName: String(contact?.assignedAgentName || sessionAgentName || "").trim(),
+        },
+        {
+          assignedAgentId: String(contact?.assignedAgentId || "").trim(),
+          assignedAgentName: String(contact?.assignedAgentName || "").trim(),
+          sessionAgentId,
+          sessionAgentName,
+        },
+      );
+      sessionMeta.textContent = formatSessionMetaLabel(startedAt, agentLabel);
+    }
 
     function getLeadInitials(value) {
       return (
@@ -1400,9 +1591,34 @@ export const registerQueueRoutes = (app: Express) => {
       );
     }
 
+    function pickLeadWhatsappFromContext(context) {
+      const source = context && typeof context === "object" ? context : {};
+      const preferredKeys = ["WhatsApp", "Whatsapp", "whatsapp", "telefone", "celular", "phone", "fone"];
+      for (const key of preferredKeys) {
+        const value = String(source[key] || "").trim();
+        if (value) return value;
+      }
+      for (const [key, value] of Object.entries(source)) {
+        const normalized = String(key || "").trim().toLowerCase();
+        if (!["whatsapp", "telefone", "celular", "phone", "fone"].includes(normalized)) continue;
+        const resolved = String(value || "").trim();
+        if (resolved) return resolved;
+      }
+      return "";
+    }
+
+    function resolveLeadWhatsappDisplay(leadWhatsapp, context) {
+      const direct = String(leadWhatsapp || "").trim();
+      if (direct) return direct;
+      return pickLeadWhatsappFromContext(context);
+    }
+
     function syncLeadProfilePreview() {
       const name = leadNameInput ? String(leadNameInput.value || "").trim() : "";
-      const whatsapp = leadWhatsappInput ? String(leadWhatsappInput.value || "").trim() : "";
+      const whatsapp = resolveLeadWhatsappDisplay(
+        leadWhatsappInput ? leadWhatsappInput.value : "",
+        leadDrawerContact?.leadContext,
+      );
       if (leadProfileAvatar) leadProfileAvatar.textContent = getLeadInitials(name);
       if (leadProfileName) leadProfileName.textContent = name || "Visitante";
       if (leadWhatsappPreview) leadWhatsappPreview.textContent = whatsapp || "Indisponível";
@@ -1431,7 +1647,9 @@ export const registerQueueRoutes = (app: Express) => {
         button.addEventListener("click", () => {
           const section = String(button.getAttribute("data-open-section") || "").trim();
           if (!section) return;
-          setLeadAccordionOpen(section, true);
+          const item = document.querySelector('[data-lead-section="' + section + '"]');
+          const isOpen = item ? item.classList.contains("open") : false;
+          setLeadAccordionOpen(section, !isOpen);
         });
       });
     }
@@ -1513,12 +1731,41 @@ export const registerQueueRoutes = (app: Express) => {
     function applyLeadContactToDrawer(contact) {
       leadDrawerContact = contact;
       if (leadNameInput) leadNameInput.value = String(contact?.contactName || "");
-      if (leadWhatsappInput) leadWhatsappInput.value = String(contact?.leadWhatsapp || "");
+      if (leadWhatsappInput) {
+        leadWhatsappInput.value = resolveLeadWhatsappDisplay(contact?.leadWhatsapp, contact?.leadContext);
+      }
       if (leadNotesInput) leadNotesInput.value = String(contact?.agentNotes || "");
       if (leadTitle) leadTitle.textContent = String(contact?.contactName || leadTitle.textContent || "Visitante");
       syncLeadProfilePreview();
       renderLeadVariables(contact?.leadContext || {});
       renderLeadAttachments(contact?.attachments || []);
+    }
+
+    function looksLikeEmail(value) {
+      return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(value || "").trim());
+    }
+
+    function resolveAttendantDisplayName(attendant, hints) {
+      const source = hints && typeof hints === "object" ? hints : {};
+      const username = String(attendant?.username || "").trim();
+      const usernameKey = username.toLowerCase();
+      const displayName = String(attendant?.displayName || "").trim();
+      const assignedAgentId = String(source.assignedAgentId || "").trim().toLowerCase();
+      const assignedAgentName = String(source.assignedAgentName || "").trim();
+      const sessionId = String(source.sessionAgentId || "").trim().toLowerCase();
+      const sessionName = String(source.sessionAgentName || "").trim();
+      if (displayName && !looksLikeEmail(displayName)) return displayName;
+      if (usernameKey && usernameKey === assignedAgentId && assignedAgentName && !looksLikeEmail(assignedAgentName)) {
+        return assignedAgentName;
+      }
+      if (usernameKey && usernameKey === sessionId && sessionName && !looksLikeEmail(sessionName)) {
+        return sessionName;
+      }
+      if (looksLikeEmail(username)) {
+        const prefix = username.split("@")[0];
+        if (prefix) return prefix.trim();
+      }
+      return username;
     }
 
     async function loadLeadAttendants() {
@@ -1530,14 +1777,21 @@ export const registerQueueRoutes = (app: Express) => {
       const data = await response.json();
       leadAttendants = Array.isArray(data) ? data : [];
       const currentAssigned = String(leadDrawerContact?.assignedAgentId || "").trim().toLowerCase();
+      const currentAssignedName = String(leadDrawerContact?.assignedAgentName || "").trim();
+      const labelHints = {
+        assignedAgentId: currentAssigned,
+        assignedAgentName: currentAssignedName,
+        sessionAgentId,
+        sessionAgentName,
+      };
       leadAssignSelect.innerHTML = '<option value="">Manter atendente atual</option>';
       leadAttendants.forEach((attendant) => {
         const username = String(attendant.username || "").trim();
         if (!username) return;
-        const displayName = String(attendant.displayName || username).trim();
+        const displayName = resolveAttendantDisplayName(attendant, labelHints);
         const option = document.createElement("option");
         option.value = username;
-        option.textContent = displayName + " (" + username + ")";
+        option.textContent = displayName;
         if (username.toLowerCase() === currentAssigned) option.selected = true;
         leadAssignSelect.appendChild(option);
       });
@@ -1590,7 +1844,14 @@ export const registerQueueRoutes = (app: Express) => {
           headers: { "content-type": "application/json", "x-tenant-id": tenantId },
           body: JSON.stringify({
             agentId: assignTo,
-            agentName: attendant ? String(attendant.displayName || assignTo).trim() : undefined,
+            agentName: attendant
+              ? resolveAttendantDisplayName(attendant, {
+                  assignedAgentId: String(leadDrawerContact?.assignedAgentId || "").trim(),
+                  assignedAgentName: String(leadDrawerContact?.assignedAgentName || "").trim(),
+                  sessionAgentId,
+                  sessionAgentName,
+                })
+              : undefined,
           }),
         });
         if (!assignResponse.ok) {
@@ -1634,7 +1895,10 @@ export const registerQueueRoutes = (app: Express) => {
     }
     if (isAgentMode && leadWhatsappCopy) {
       leadWhatsappCopy.addEventListener("click", async () => {
-        const value = leadWhatsappInput ? String(leadWhatsappInput.value || "").trim() : "";
+        const value = resolveLeadWhatsappDisplay(
+          leadWhatsappInput ? leadWhatsappInput.value : "",
+          leadDrawerContact?.leadContext,
+        );
         if (!value) return;
         try {
           await navigator.clipboard.writeText(value);
@@ -1770,7 +2034,9 @@ export const registerQueueRoutes = (app: Express) => {
       }
 
       const payloadRecord = payload as Record<string, unknown>;
-      const resolvedContactName = pickLeadNameFromPayload(payloadRecord);
+      const resolvedLeadContext = resolveLeadContextFromHandoffPayload(payloadRecord);
+      const resolvedContactName = pickLeadNameFromPayload(payloadRecord, resolvedLeadContext);
+      const resolvedLeadWhatsapp = pickLeadWhatsappFromContext(resolvedLeadContext, payloadRecord);
       const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId) ?? matchingFlows[0];
       const resolvedFlowLabel = String(
         payload.flowAlias ??
@@ -1781,44 +2047,6 @@ export const registerQueueRoutes = (app: Express) => {
           viewerPidFromBody ??
           "Fluxo",
       ).trim();
-      const knownKeys = new Set([
-        "tenantId",
-        "tenant_id",
-        "contactName",
-        "source",
-        "sourceFlowLabel",
-        "source_flow_label",
-        "flowAlias",
-        "initialMessage",
-        "typebotViewerUrl",
-        "viewer_url",
-        "leadContext",
-        "variables",
-        "answers",
-        "resultId",
-      ]);
-      const autoLeadContext = Object.entries(payload)
-        .filter(([key]) => !knownKeys.has(key))
-        .reduce<Record<string, string | number | boolean>>((acc, [key, value]) => {
-          return flattenPrimitiveValues(value, key, acc);
-        }, {});
-      const variablesLeadContext = extractNamedVariables(payloadRecord.variables);
-      let parsedLeadContext: Record<string, string | number | boolean> = {};
-      if (typeof payload.leadContext === "string") {
-        try {
-          parsedLeadContext = flattenPrimitiveValues(JSON.parse(payload.leadContext));
-        } catch {
-          parsedLeadContext = {};
-        }
-      } else if (payload.leadContext && typeof payload.leadContext === "object") {
-        parsedLeadContext = payload.leadContext;
-      }
-      const resolvedLeadContext =
-        Object.keys(parsedLeadContext).length > 0
-          ? parsedLeadContext
-          : Object.keys(variablesLeadContext).length > 0
-            ? variablesLeadContext
-            : autoLeadContext;
       const tenant = tenantRepository.getById(resolvedTenantId);
       const distributionMode = tenant?.queueDistributionMode ?? "shared_pool";
       const attendantsForTenant = attendantsForQueueRouting(resolvedTenantId, tenant);
@@ -1844,6 +2072,7 @@ export const registerQueueRoutes = (app: Express) => {
         source: "typebot",
         sourceFlowLabel: resolvedFlowLabel || "Fluxo",
         leadContext: Object.keys(resolvedLeadContext).length > 0 ? resolvedLeadContext : undefined,
+        leadWhatsapp: resolvedLeadWhatsapp,
       }, {
         distributionMode,
         attendants: attendantsForTenant,

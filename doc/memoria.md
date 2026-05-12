@@ -1,3 +1,67 @@
+## 2026-05-12 - Rodape do atendimento com inicio e nome
+
+- Rodape do painel do atendente: data/hora do inicio do atendimento e nome do usuario logado (sem UUID da sessao nem e-mail).
+- Pendencia: redeploy API e widget.
+
+## 2026-05-12 - Nome do atendente na atribuicao do lead
+
+- Ajuste: select de atribuicao mostra nome humano (sessao/atendente atual) em vez de e-mail de cadastro.
+- Pendencia: redeploy API e widget.
+
+## 2026-05-12 - Toggle dos icones do painel do lead
+
+- Ajuste: icones da barra do painel do lead alternam abrir/fechar a secao correspondente (widget + handoff-view).
+- Pendencia: redeploy API e widget.
+
+## 2026-05-12 - WhatsApp no topo do painel do lead
+
+- Sintoma: card do contato mostrava "Indisponivel" no topo mesmo com `WhatsApp` em `leadContext` do Typebot.
+- Ajuste: preview/copia usam `leadWhatsapp` salvo ou fallback nas variaveis do Typebot (widget + handoff-view).
+- Pendencia: redeploy API e widget; validar painel com lead que informou WhatsApp no fluxo.
+
+## 2026-05-11 - Persistencia das respostas do lead no handoff Typebot
+
+- Causa raiz: fluxo Drax Sistemas enviava no webhook apenas `tenantId`, `sourceFlowLabel`, `contactName` e `typebotViewerUrl` (sem variaveis do fluxo).
+- API: handoff agora mescla `leadContext`, `variables`, `answers` e campos extras do body; grava `leadWhatsapp` na fila ao enfileirar.
+- Builder: `patchHandoffWebhookAndRedirectConfig` injeta no body do webhook as variaveis nao-sessao do typebot (`{{nome}}`) para novos syncs/imports.
+- Correcao imediata no builder: typebot `cmopzmivk0025ru1czpx5k4a3` (Drax Sistemas) atualizado com `Nome_Contato`, `email`, `WhatsApp`, `categoria`, etc.
+- Validacao: `npm run build:api` OK; API local nao subiu (Postgres `ECONNREFUSED` no `.env`).
+- Pendencia: redeploy da API em producao; novo handoff real para confirmar `leadContext`/`leadWhatsapp` no painel; republicar viewer se necessario.
+
+## 2026-05-11 - Handoff sem variaveis do Typebot na fila (producao)
+
+- Sintoma: painel do atendente mostra WhatsApp indisponivel e sem variaveis.
+- Producao `tenant_drax`: 11 contatos na fila, todos com `leadContext` e `leadWhatsapp` nulos.
+- Ultimo teste (Marcelo, `ba0c320b-...`, 17:52Z): so nome + fluxo + atendente gravados.
+- Causa: webhook do Typebot nao envia/persiste `leadContext`/`variables`; UI nao preenche WhatsApp sem `leadWhatsapp`.
+
+## 2026-05-11 - API Easypanel vermelha: restart restaurou servico
+
+- Sintoma: servico da API vermelho apos redeploy; usuario adicionou `JWT_SECRET` sem efeito.
+- Acao do usuario: reiniciar o servico no Easypanel.
+- Resultado: API voltou a responder.
+- Leitura: falha provavelmente transitoria de arranque/restart do contentor, nao bloqueio por JWT (variavel nao usada no backend).
+- Pendencia: se repetir, guardar log do deploy/start e comparar com commits `003d5d6`..`8dd86c5`.
+
+## 2026-05-11 - Diff deploy API vermelho (antes x depois painel lead)
+
+- Baseline: `003d5d6` (~1508 linhas em `queue.routes.ts`).
+- Depois: `c211d99` + `ad34d48` + `79c6382` (~1955 linhas; APIs perfil/anexos; acordeoes; retry Postgres se `DATABASE_URL`).
+- JWT e deps npm nao mudaram no intervalo; build local OK.
+- Teste de isolamento: redeploy do commit `003d5d6` no Easypanel; se verde, bisseccionar commits seguintes.
+
+## 2026-05-11 - JWT_SECRET nao e obrigatorio na API atual
+
+- `JWT_SECRET` aparece so em exemplos de env; o backend nao le essa variavel no login atual (sessao no admin via storage local).
+- Nao ha portal para "pegar" o segredo: se no futuro usar JWT, gera-se localmente (ex.: `openssl rand -base64 48`).
+
+## 2026-05-11 - Easypanel API sem DATABASE_URL (modo JSON)
+
+- Esclarecimento: `DATABASE_URL`, `AUTH_ALLOW_JSON_IN_PRODUCTION` e `AUTH_REQUIRE_DATABASE_URL_IN_PRODUCTION` sao opcionais.
+- Sem `DATABASE_URL`, login/assinantes usam JSON em `apps/api/data`; a API nao exige Postgres para arrancar.
+- Nao adicionar `AUTH_REQUIRE_DATABASE_URL_IN_PRODUCTION=true` sem `DATABASE_URL`.
+- Persistencia: volume no path de `operationalDataDirectory` em `/health` (fluxos/fila/login em JSON).
+
 ## 2026-05-11 - API Easypanel vermelha apos redeploy
 
 - Sintoma: servico `api-typebot-crm` vermelho; `/health` publico com "Service is not started".

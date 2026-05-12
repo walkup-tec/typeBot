@@ -1,5 +1,7 @@
 import { CSSProperties, ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { LeadDrawerPanel, type AttendantOption, type LeadAttachment } from "./LeadDrawerPanel";
+import { formatAgentSessionMeta, resolveServiceStartedAt } from "./agentSessionMeta";
+import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
 const defaultApiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3333";
 const tenantId = import.meta.env.VITE_TENANT_ID ?? "demo-tenant";
@@ -20,6 +22,9 @@ type QueueContactProfile = {
   leadContext?: Record<string, string | number | boolean>;
   attachments?: LeadAttachment[];
   assignedAgentId?: string;
+  assignedAgentName?: string;
+  status?: string;
+  updatedAt?: string;
 };
 
 type TenantBranding = {
@@ -131,6 +136,8 @@ export function WidgetApp() {
   const [leadAttachments, setLeadAttachments] = useState<LeadAttachment[]>([]);
   const [leadAttendants, setLeadAttendants] = useState<AttendantOption[]>([]);
   const [leadAssignedAgentId, setLeadAssignedAgentId] = useState("");
+  const [leadAssignedAgentName, setLeadAssignedAgentName] = useState("");
+  const [sessionMetaLabel, setSessionMetaLabel] = useState("");
   const [leadDrawerStatus, setLeadDrawerStatus] = useState("");
   const [resolvedSessionTenantId, setResolvedSessionTenantId] = useState(sessionTenantIdFromQuery || "");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -201,6 +208,38 @@ export function WidgetApp() {
     setStatus("Você entrou na fila de atendimento. Aguarde um atendente assumir.");
   }
 
+  async function refreshAgentSessionMeta(messages: LiveMessage[]) {
+    if (!isAgentMode || !sessionContactId) return;
+    const tenantForLookup = resolvedSessionTenantId || sessionTenantId;
+    if (!tenantForLookup) return;
+    try {
+      const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}`, {
+        headers: buildTenantHeaders(),
+      });
+      captureResolvedTenantId(response);
+      if (!response.ok) return;
+      const contact = (await response.json()) as QueueContactProfile;
+      const agentLabel = resolveAttendantDisplayName(
+        {
+          username: sessionAgentId,
+          displayName: String(contact.assignedAgentName ?? sessionAgentName).trim(),
+        },
+        {
+          assignedAgentId: contact.assignedAgentId,
+          assignedAgentName: contact.assignedAgentName,
+          sessionAgentId,
+          sessionAgentName,
+        },
+      );
+      setResolvedAgentName(agentLabel);
+      setSessionMetaLabel(
+        formatAgentSessionMeta(resolveServiceStartedAt(messages, contact), agentLabel),
+      );
+    } catch {
+      // Mantém o rodapé com o último valor conhecido.
+    }
+  }
+
   async function loadMessages(contactId: string) {
     if (!contactId) return;
     const response = await fetch(`${apiBase}/api/chat/sessions/${contactId}/messages`, {
@@ -218,6 +257,9 @@ export function WidgetApp() {
     setStatus("");
     const data = (await response.json()) as LiveMessage[];
     setMessages(data);
+    if (isAgentMode) {
+      await refreshAgentSessionMeta(data);
+    }
   }
 
   async function sendAgentMessage(event: FormEvent) {
@@ -253,9 +295,10 @@ export function WidgetApp() {
   const applyLeadContactToForm = (contact: QueueContactProfile) => {
     const nextName = String(contact.contactName ?? "").trim();
     setLeadNameDraft(nextName);
-    setLeadWhatsappDraft(String(contact.leadWhatsapp ?? "").trim());
+    setLeadWhatsappDraft(resolveLeadWhatsapp(contact.leadWhatsapp, contact.leadContext));
     setLeadNotesDraft(String(contact.agentNotes ?? "").trim());
     setLeadAssignedAgentId(String(contact.assignedAgentId ?? "").trim().toLowerCase());
+    setLeadAssignedAgentName(String(contact.assignedAgentName ?? "").trim());
     if (nextName) setLeadDisplayName(nextName);
     const variables = Object.entries(contact.leadContext ?? {})
       .filter(([key, value]) => key && String(value ?? "").trim())
@@ -285,13 +328,26 @@ export function WidgetApp() {
         );
         if (attendantsResponse.ok) {
           const rows = (await attendantsResponse.json()) as Array<{ username?: string; displayName?: string }>;
+          const labelHints = {
+            assignedAgentId: String(contact.assignedAgentId ?? "").trim(),
+            assignedAgentName: String(contact.assignedAgentName ?? "").trim(),
+            sessionAgentId: sessionAgentId,
+            sessionAgentName: resolvedAgentName,
+          };
           setLeadAttendants(
             rows
-              .map((row) => ({
-                username: String(row.username ?? "").trim(),
-                displayName: String(row.displayName ?? row.username ?? "").trim(),
-              }))
-              .filter((row) => row.username),
+              .map((row) => {
+                const username = String(row.username ?? "").trim();
+                if (!username) return null;
+                return {
+                  username,
+                  displayName: resolveAttendantDisplayName(
+                    { username, displayName: String(row.displayName ?? "").trim() },
+                    labelHints,
+                  ),
+                };
+              })
+              .filter((row): row is AttendantOption => Boolean(row)),
           );
         }
       }
@@ -332,7 +388,12 @@ export function WidgetApp() {
           headers: buildTenantHeaders(true),
           body: JSON.stringify({
             agentId: assignTo,
-            agentName: attendant?.displayName || assignTo,
+            agentName: attendant?.displayName || resolveAttendantDisplayName({ username: assignTo }, {
+              sessionAgentId,
+              sessionAgentName: resolvedAgentName,
+              assignedAgentId: leadAssignedAgentId,
+              assignedAgentName: leadAssignedAgentName,
+            }) || assignTo,
           }),
         });
         captureResolvedTenantId(assignResponse);
@@ -424,7 +485,14 @@ export function WidgetApp() {
     const run = async () => {
       const tenantForLookup = resolvedSessionTenantId || sessionTenantId;
       if (!isAgentMode || !tenantForLookup || !sessionAgentId) return;
-      if (sessionAgentName && sessionAgentName !== sessionAgentId) return;
+      const sessionLabel = resolveAttendantDisplayName(
+        { username: sessionAgentId, displayName: sessionAgentName },
+        { sessionAgentId, sessionAgentName },
+      );
+      if (sessionLabel && sessionLabel !== sessionAgentId) {
+        setResolvedAgentName(sessionLabel);
+        return;
+      }
       try {
         const response = await fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantForLookup)}/attendants`);
         if (!response.ok) return;
@@ -438,7 +506,13 @@ export function WidgetApp() {
           const rowId = String(row.id ?? "").trim();
           return rowUsername === sessionAgentId.trim().toLowerCase() || rowId === sessionAgentId;
         });
-        const nextName = String(match?.displayName ?? "").trim();
+        const nextName = resolveAttendantDisplayName(
+          {
+            username: sessionAgentId,
+            displayName: String(match?.displayName ?? "").trim(),
+          },
+          { sessionAgentId, sessionAgentName },
+        );
         if (nextName) setResolvedAgentName(nextName);
       } catch {
         // mantém fallback com agentId quando não conseguir resolver displayName
@@ -718,9 +792,7 @@ export function WidgetApp() {
           <button type="submit" style={sendButtonStyle} disabled={isUploadingImage}>Enviar</button>
         </form>
 
-        <small className="session-meta">
-          Sessão: {sessionContactId} | Atendente: {resolvedAgentName}
-        </small>
+        {sessionMetaLabel ? <small className="session-meta">{sessionMetaLabel}</small> : null}
 
         {status ? <small>{status}</small> : null}
 

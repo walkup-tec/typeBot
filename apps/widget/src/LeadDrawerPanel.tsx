@@ -1,4 +1,5 @@
 import { ChangeEvent, ReactNode, RefObject, useMemo, useState } from "react";
+import { resolveLeadWhatsapp } from "./resolveLeadWhatsapp";
 
 export type LeadAttachment = {
   id: string;
@@ -103,18 +104,22 @@ export function LeadDrawerPanel({
     notes: false,
   });
 
-  const whatsappPreview = useMemo(() => leadWhatsappDraft.trim() || "Indisponível", [leadWhatsappDraft]);
+  const contextFromVariables = useMemo(
+    () => Object.fromEntries(leadVariables.map((item) => [item.key, item.value])),
+    [leadVariables],
+  );
+  const displayedWhatsapp = useMemo(
+    () => resolveLeadWhatsapp(leadWhatsappDraft, contextFromVariables),
+    [leadWhatsappDraft, contextFromVariables],
+  );
+  const whatsappPreview = displayedWhatsapp || "Indisponível";
 
   const toggleSection = (section: LeadDrawerSection) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
   };
 
-  const openSection = (section: LeadDrawerSection) => {
-    setOpenSections((current) => ({ ...current, [section]: true }));
-  };
-
   const copyWhatsapp = async () => {
-    const value = leadWhatsappDraft.trim();
+    const value = displayedWhatsapp;
     if (!value) return;
     try {
       await navigator.clipboard.writeText(value);
@@ -167,7 +172,7 @@ export function LeadDrawerPanel({
                 aria-label="Copiar WhatsApp"
                 title="Copiar WhatsApp"
                 onClick={() => void copyWhatsapp()}
-                disabled={!leadWhatsappDraft.trim()}
+                disabled={!displayedWhatsapp}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v16h13a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 18H8V7h11v16Z" />
@@ -182,7 +187,7 @@ export function LeadDrawerPanel({
               className="lead-toolbar-button"
               aria-label="Editar dados do contato"
               title="Editar dados"
-              onClick={() => openSection("contact")}
+              onClick={() => toggleSection("contact")}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25Zm18-11.5a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.13 1.13 3.75 3.75 1.13-1.13Z" />
@@ -193,7 +198,7 @@ export function LeadDrawerPanel({
               className="lead-toolbar-button"
               aria-label="Atribuir atendente"
               title="Atribuir atendente"
-              onClick={() => openSection("assign")}
+              onClick={() => toggleSection("assign")}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3Zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.3 0-7 1.2-7 3.5V18h8v-2.5C9 15.2 8.3 14.4 8 14Zm8 0c-.3 0-1.2.4-2 2.5V18h7v-2.5C21 14.2 16.3 13 14 13Z" />
@@ -204,7 +209,7 @@ export function LeadDrawerPanel({
               className="lead-toolbar-button"
               aria-label="Anexos"
               title="Anexos"
-              onClick={() => openSection("attachments")}
+              onClick={() => toggleSection("attachments")}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M16.5 6.5v9a4.5 4.5 0 0 1-9 0v-10a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V7h-1.5v8.5a3 3 0 0 0 6 0v-10a4.5 4.5 0 0 0-9 0v10a6 6 0 0 0 12 0V6.5h-1.5Z" />
@@ -215,7 +220,7 @@ export function LeadDrawerPanel({
               className="lead-toolbar-button"
               aria-label="Observações"
               title="Observações"
-              onClick={() => openSection("notes")}
+              onClick={() => toggleSection("notes")}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 2.5L18.5 9H14V4.5ZM8 13h8v1.5H8V13Zm0 3.5h8V18H8v-1.5Z" />
@@ -251,7 +256,7 @@ export function LeadDrawerPanel({
                   <option value="">Manter atendente atual</option>
                   {leadAttendants.map((attendant) => (
                     <option key={attendant.username} value={attendant.username}>
-                      {attendant.displayName} ({attendant.username})
+                      {attendant.displayName}
                     </option>
                   ))}
                 </select>

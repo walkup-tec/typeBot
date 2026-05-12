@@ -180,6 +180,65 @@ type HandoffRuntimeVars = {
   typebotViewerUrl?: string;
 };
 
+const HANDOFF_WEBHOOK_RESERVED_KEYS = new Set([
+  "tenantId",
+  "tenant_id",
+  "sourceFlowLabel",
+  "source_flow_label",
+  "flowAlias",
+  "typebotViewerUrl",
+  "viewer_url",
+  "contactName",
+  "source",
+  "initialMessage",
+  "leadContext",
+  "variables",
+  "answers",
+  "resultId",
+  "leadWhatsapp",
+]);
+
+const isHandoffSystemVariableName = (name: string): boolean => {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return true;
+  if (HANDOFF_WEBHOOK_RESERVED_KEYS.has(name)) return true;
+  if (normalized.includes("url_direct")) return true;
+  if (normalized.startsWith("handoff_")) return true;
+  if (normalized === "viewer_url" || normalized === "viewer url") return true;
+  return false;
+};
+
+const collectHandoffLeadVariableNames = (schema: Record<string, unknown>): string[] => {
+  const variables = schema.variables;
+  if (!Array.isArray(variables)) return [];
+  const names = new Set<string>();
+  for (const variable of variables) {
+    if (!variable || typeof variable !== "object") continue;
+    const record = variable as { name?: unknown; isSessionVariable?: unknown };
+    if (record.isSessionVariable) continue;
+    const name = String(record.name ?? "").trim();
+    if (!name || isHandoffSystemVariableName(name)) continue;
+    names.add(name);
+  }
+  return [...names];
+};
+
+const mergeHandoffWebhookLeadFields = (rawBody: string, variableNames: string[]): string => {
+  const body = String(rawBody ?? "").trim();
+  if (!body || variableNames.length === 0) return body;
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return body;
+    for (const name of variableNames) {
+      if (Object.prototype.hasOwnProperty.call(parsed, name)) continue;
+      parsed[name] = `{{${name}}}`;
+    }
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return body;
+  }
+};
+
 const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntimeVars): string => {
   const body = String(rawBody ?? "").trim();
   if (!body) return body;
@@ -240,11 +299,12 @@ const patchHandoffWebhookAndRedirectConfig = (
         webhook.url = TYPEBOT_HANDOFF_WEBHOOK_URL;
       }
       const body = String(webhook.body ?? "");
-      webhook.body = normalizeTypebotWebhookBody(body, {
+      const normalizedBody = normalizeTypebotWebhookBody(body, {
         tenantId: String(tenant.id ?? "").trim(),
         sourceFlowLabel: runtimeVars?.sourceFlowLabel,
         typebotViewerUrl: runtimeVars?.typebotViewerUrl,
       });
+      webhook.body = mergeHandoffWebhookLeadFields(normalizedBody, collectHandoffLeadVariableNames(schema));
       options.webhook = webhook;
       const responseVariableMappingRaw = options.responseVariableMapping;
       const responseVariableMapping = Array.isArray(responseVariableMappingRaw)
