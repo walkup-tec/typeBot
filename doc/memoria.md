@@ -1,3 +1,9 @@
+## 2026-05-12 - Historico de observacoes do lead
+
+- API: `agentNotesHistory` com `POST /api/chat/queue/:contactId/notes`; nota legada `agentNotes` vira entrada no historico.
+- UI: registrar observacao e listar data/texto no painel (widget + handoff-view); "Salvar alteracoes" tambem grava observacao pendente.
+- Pendencia: redeploy API e widget.
+
 ## 2026-05-12 - Chat centralizado com card do lead na margem direita
 
 - Sintoma: ao abrir o card do lead, o chat deslocava para a direita.

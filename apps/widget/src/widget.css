@@ -167,9 +167,48 @@ body {
 }
 
 .lead-variables-list,
-.lead-attachments-list {
+.lead-attachments-list,
+.lead-notes-history {
   display: grid;
   gap: 8px;
+}
+
+.lead-note-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0b1224;
+  padding: 10px;
+}
+
+.lead-note-item p {
+  margin: 0;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lead-note-item small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.lead-note-empty {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.lead-note-register-button {
+  width: 100%;
+  margin-top: 8px;
+  border-radius: 8px;
+  border: 1px solid #2f6ca3;
+  background: #2f6ca3;
+  color: #f8fafc;
+  padding: 10px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .lead-variable-chip,
@@ -434,7 +473,8 @@ button.lead-info-button--active {
   color: #5eead4;
 }
 
-button.lead-save-button {
+button.lead-save-button,
+button.lead-note-register-button {
   padding: 11px 12px;
   border-radius: 8px;
   background: #2f6ca3;
@@ -442,6 +482,13 @@ button.lead-save-button {
   color: #f8fafc;
   font-weight: 700;
 }
+
+button.lead-note-register-button {
+  width: 100%;
+  margin-top: 8px;
+}
+
+button.lead-save-button {
 
 button.lead-drawer-close {
   width: 34px;

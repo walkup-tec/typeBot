@@ -11,6 +11,7 @@ import {
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   QueueService,
+  addAgentNoteSchema,
   addLeadAttachmentSchema,
   assignSchema,
   enqueueSchema,
@@ -659,7 +660,12 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-field span { color:#94a3b8; font-size:12px; font-weight:600; }
     body.agent-screen .lead-field input, body.agent-screen .lead-field select, body.agent-screen .lead-field textarea { width:100%; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#f1f5f9; padding:10px; box-sizing:border-box; font:inherit; }
     body.agent-screen .lead-field textarea { resize:vertical; min-height:110px; }
-    body.agent-screen .lead-variables-list, body.agent-screen .lead-attachments-list { display:grid; gap:8px; }
+    body.agent-screen .lead-variables-list, body.agent-screen .lead-attachments-list, body.agent-screen .lead-notes-history { display:grid; gap:8px; }
+    body.agent-screen .lead-note-item { display:grid; gap:4px; padding:10px; border:1px solid #1f2937; border-radius:10px; background:#0b1224; }
+    body.agent-screen .lead-note-item p { margin:0; color:#e2e8f0; white-space:pre-wrap; word-break:break-word; }
+    body.agent-screen .lead-note-item small { color:#94a3b8; font-size:12px; }
+    body.agent-screen .lead-note-empty { color:#94a3b8; font-size:13px; }
+    body.agent-screen .lead-note-register-button { width:100%; margin-top:8px; border-radius:8px; border:1px solid #2f6ca3; background:#2f6ca3; color:#f8fafc; padding:10px; font-weight:700; cursor:pointer; }
     body.agent-screen .lead-variable-chip, body.agent-screen .lead-attachment-item { border:1px solid #334155; border-radius:8px; background:#0f172a; padding:8px 10px; font-size:12px; color:#e2e8f0; word-break:break-word; }
     body.agent-screen .lead-variable-chip strong, body.agent-screen .lead-attachment-item strong { display:block; color:#94a3b8; font-size:11px; margin-bottom:4px; }
     body.agent-screen .lead-attachment-item a { color:#93c5fd; text-decoration:none; }
@@ -1140,7 +1146,9 @@ export const registerQueueRoutes = (app: Express) => {
             <section class="lead-accordion-item" data-lead-section="notes">
               <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Observações do atendimento</span><span class="lead-accordion-icon">+</span></button>
               <div class="lead-accordion-panel">
-                <label class="lead-field"><span>Registro interno</span><textarea id="leadNotesInput" rows="5"></textarea></label>
+                <label class="lead-field"><span>Registro interno</span><textarea id="leadNotesInput" rows="5" placeholder="Descreva a observação..."></textarea></label>
+                <button type="button" id="leadNotesRegisterButton" class="lead-note-register-button">Registrar observação</button>
+                <div id="leadNotesHistory" class="lead-notes-history"></div>
               </div>
             </section>
             <section class="lead-accordion-item" data-lead-section="attachments">
@@ -1540,6 +1548,8 @@ export const registerQueueRoutes = (app: Express) => {
     const leadAttachmentsList = document.getElementById("leadAttachmentsList");
     const leadVariablesList = document.getElementById("leadVariablesList");
     const leadNotesInput = document.getElementById("leadNotesInput");
+    const leadNotesHistory = document.getElementById("leadNotesHistory");
+    const leadNotesRegisterButton = document.getElementById("leadNotesRegisterButton");
     const leadSaveButton = document.getElementById("leadSaveButton");
     const leadDrawerStatus = document.getElementById("leadDrawerStatus");
     const leadProfileAvatar = document.getElementById("leadProfileAvatar");
@@ -1706,6 +1716,26 @@ export const registerQueueRoutes = (app: Express) => {
         .join("");
     }
 
+    function renderLeadNotesHistory(notes) {
+      if (!leadNotesHistory) return;
+      const items = Array.isArray(notes) ? notes : [];
+      if (items.length === 0) {
+        leadNotesHistory.innerHTML = '<div class="lead-note-empty">Nenhuma observação registrada ainda.</div>';
+        syncLeadToolbarIndicators();
+        return;
+      }
+      leadNotesHistory.innerHTML = items
+        .map((item) => {
+          const createdAt = formatCreatedAt(item.createdAt);
+          const text = escapeHtml(String(item.text || ""));
+          const author = escapeHtml(String(item.authorName || "").trim());
+          const meta = author ? createdAt + " · " + author : createdAt;
+          return '<article class="lead-note-item"><small>' + meta + '</small><p>' + text + '</p></article>';
+        })
+        .join("");
+      syncLeadToolbarIndicators();
+    }
+
     function renderLeadAttachments(attachments) {
       if (!leadAttachmentsList) return;
       const items = Array.isArray(attachments) ? attachments : [];
@@ -1749,9 +1779,7 @@ export const registerQueueRoutes = (app: Express) => {
       const notesButton = document.querySelector('[data-open-section="notes"]');
       const hasAttachments =
         Array.isArray(leadDrawerContact?.attachments) && leadDrawerContact.attachments.length > 0;
-      const hasNotes = leadNotesInput
-        ? String(leadNotesInput.value || "").trim().length > 0
-        : String(leadDrawerContact?.agentNotes || "").trim().length > 0;
+      const hasNotes = Array.isArray(leadDrawerContact?.agentNotesHistory) && leadDrawerContact.agentNotesHistory.length > 0;
       if (attachmentsButton) attachmentsButton.classList.toggle("lead-toolbar-button--active", hasAttachments);
       if (notesButton) notesButton.classList.toggle("lead-toolbar-button--active", hasNotes);
       if (leadAttachmentsHeaderButton) {
@@ -1768,11 +1796,12 @@ export const registerQueueRoutes = (app: Express) => {
       if (leadWhatsappInput) {
         leadWhatsappInput.value = resolveLeadWhatsappDisplay(contact?.leadWhatsapp, contact?.leadContext);
       }
-      if (leadNotesInput) leadNotesInput.value = String(contact?.agentNotes || "");
+      if (leadNotesInput) leadNotesInput.value = "";
       if (leadTitle) leadTitle.textContent = String(contact?.contactName || leadTitle.textContent || "Visitante");
       syncLeadProfilePreview();
       renderLeadVariables(contact?.leadContext || {});
       renderLeadAttachments(contact?.attachments || []);
+      renderLeadNotesHistory(contact?.agentNotesHistory || []);
       syncLeadToolbarIndicators();
     }
 
@@ -1849,16 +1878,35 @@ export const registerQueueRoutes = (app: Express) => {
       setLeadDrawerStatus("");
     }
 
+    async function registerLeadNote() {
+      if (!isAgentMode) return true;
+      const text = leadNotesInput ? String(leadNotesInput.value || "").trim() : "";
+      if (!text) return true;
+      setLeadDrawerStatus("Registrando observação...");
+      const response = await fetch("/api/chat/queue/" + contactId + "/notes", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+        body: JSON.stringify({ text, authorName: sessionAgentName, authorId: sessionAgentId }),
+      });
+      if (!response.ok) {
+        setLeadDrawerStatus("Falha ao registrar observação.");
+        return false;
+      }
+      applyLeadContactToDrawer(await response.json());
+      setLeadDrawerStatus("Observação registrada.");
+      return true;
+    }
+
     async function saveLeadProfile() {
       if (!isAgentMode) return;
       setLeadDrawerStatus("Salvando...");
+      const noteSaved = await registerLeadNote();
+      if (!noteSaved) return;
       const payload = {};
       const name = leadNameInput ? String(leadNameInput.value || "").trim() : "";
       const whatsapp = leadWhatsappInput ? String(leadWhatsappInput.value || "").trim() : "";
-      const notes = leadNotesInput ? String(leadNotesInput.value || "").trim() : "";
       if (name.length >= 2) payload.contactName = name;
       payload.leadWhatsapp = whatsapp;
-      payload.agentNotes = notes;
       const response = await fetch("/api/chat/queue/" + contactId + "/profile", {
         method: "PATCH",
         headers: { "content-type": "application/json", "x-tenant-id": tenantId },
@@ -1928,8 +1976,10 @@ export const registerQueueRoutes = (app: Express) => {
     if (isAgentMode && leadWhatsappInput) {
       leadWhatsappInput.addEventListener("input", syncLeadProfilePreview);
     }
-    if (isAgentMode && leadNotesInput) {
-      leadNotesInput.addEventListener("input", syncLeadToolbarIndicators);
+    if (isAgentMode && leadNotesRegisterButton) {
+      leadNotesRegisterButton.addEventListener("click", () => {
+        void registerLeadNote();
+      });
     }
     if (isAgentMode && leadWhatsappCopy) {
       leadWhatsappCopy.addEventListener("click", async () => {
@@ -2280,6 +2330,19 @@ export const registerQueueRoutes = (app: Express) => {
       if (!updated) return res.status(404).json({ message: "Contact not found for tenant" });
       res.setHeader("x-resolved-tenant-id", tenantId);
       return res.status(200).json(updated);
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
+  });
+
+  app.post("/api/chat/queue/:contactId/notes", (req, res) => {
+    try {
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
+      const input = addAgentNoteSchema.parse(req.body);
+      const updated = queueService.addAgentNote(tenantId, req.params.contactId, input);
+      if (!updated) return res.status(404).json({ message: "Contact not found for tenant" });
+      res.setHeader("x-resolved-tenant-id", tenantId);
+      return res.status(201).json(updated);
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
     }

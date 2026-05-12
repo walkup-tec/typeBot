@@ -9,6 +9,14 @@ export type LeadAttachment = {
   createdAt: string;
 };
 
+export type LeadAgentNote = {
+  id: string;
+  text: string;
+  createdAt: string;
+  authorName?: string;
+  authorId?: string;
+};
+
 export type AttendantOption = {
   username: string;
   displayName: string;
@@ -26,6 +34,8 @@ type LeadDrawerPanelProps = {
   onLeadWhatsappDraftChange: (value: string) => void;
   leadNotesDraft: string;
   onLeadNotesDraftChange: (value: string) => void;
+  leadNotesHistory: LeadAgentNote[];
+  onRegisterLeadNote: () => void;
   leadAssignTo: string;
   onLeadAssignToChange: (value: string) => void;
   leadAttendants: AttendantOption[];
@@ -87,6 +97,8 @@ export function LeadDrawerPanel({
   onLeadWhatsappDraftChange,
   leadNotesDraft,
   onLeadNotesDraftChange,
+  leadNotesHistory,
+  onRegisterLeadNote,
   leadAssignTo,
   onLeadAssignToChange,
   leadAttendants,
@@ -116,7 +128,7 @@ export function LeadDrawerPanel({
   );
   const whatsappPreview = displayedWhatsapp || "Indisponível";
   const hasAttachments = leadAttachments.length > 0;
-  const hasNotes = leadNotesDraft.trim().length > 0;
+  const hasNotes = leadNotesHistory.length > 0;
 
   useEffect(() => {
     if (!open || !focusSection) return;
@@ -299,8 +311,31 @@ export function LeadDrawerPanel({
             >
               <label className="lead-field">
                 <span>Registro interno</span>
-                <textarea rows={5} value={leadNotesDraft} onChange={(event) => onLeadNotesDraftChange(event.target.value)} />
+                <textarea
+                  rows={5}
+                  value={leadNotesDraft}
+                  placeholder="Descreva a observação..."
+                  onChange={(event) => onLeadNotesDraftChange(event.target.value)}
+                />
               </label>
+              <button type="button" className="lead-note-register-button" onClick={onRegisterLeadNote}>
+                Registrar observação
+              </button>
+              <div className="lead-notes-history">
+                {leadNotesHistory.length === 0 ? (
+                  <div className="lead-note-empty">Nenhuma observação registrada ainda.</div>
+                ) : (
+                  leadNotesHistory.map((note) => (
+                    <article className="lead-note-item" key={note.id}>
+                      <small>
+                        {new Date(note.createdAt).toLocaleString("pt-BR")}
+                        {note.authorName ? ` · ${note.authorName}` : ""}
+                      </small>
+                      <p>{note.text}</p>
+                    </article>
+                  ))
+                )}
+              </div>
             </AccordionSection>
 
             <AccordionSection

@@ -10,6 +10,14 @@ export interface LeadAttachment {
   createdAt: string;
 }
 
+export interface LeadAgentNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  authorName?: string;
+  authorId?: string;
+}
+
 export interface QueueContact {
   contactId: string;
   tenantId: string;
@@ -19,6 +27,7 @@ export interface QueueContact {
   leadContext?: Record<string, string | number | boolean>;
   leadWhatsapp?: string;
   agentNotes?: string;
+  agentNotesHistory?: LeadAgentNote[];
   attachments?: LeadAttachment[];
   status: "waiting" | "in_service";
   assignedAgentId?: string;
@@ -127,7 +136,12 @@ export class QueueRepository {
   updateContact(
     tenantId: string,
     contactId: string,
-    patch: Partial<Pick<QueueContact, "contactName" | "leadWhatsapp" | "agentNotes" | "leadContext" | "attachments">>,
+    patch: Partial<
+      Pick<
+        QueueContact,
+        "contactName" | "leadWhatsapp" | "agentNotes" | "agentNotesHistory" | "leadContext" | "attachments"
+      >
+    >,
   ): QueueContact | null {
     const contact = waitingQueue.get(contactId);
     if (!contact || contact.tenantId !== tenantId) return null;

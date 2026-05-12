@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { resolveLeadAgentNotes, withResolvedLeadAgentNotes } from "../lib/lead-agent-notes";
 import { QueueRepository } from "./queue.repository";
 import type { QueueDistributionMode } from "../tenants/tenant.repository";
 
@@ -24,7 +25,12 @@ export const sendLiveMessageSchema = z.object({
 export const updateQueueContactSchema = z.object({
   contactName: z.string().min(2).max(120).optional(),
   leadWhatsapp: z.string().max(24).optional(),
-  agentNotes: z.string().max(4000).optional(),
+});
+
+export const addAgentNoteSchema = z.object({
+  text: z.string().min(1).max(4000),
+  authorName: z.string().min(1).max(120).optional(),
+  authorId: z.string().min(1).max(80).optional(),
 });
 
 export const addLeadAttachmentSchema = z.object({
@@ -82,6 +88,7 @@ export class QueueService {
   list(tenantId: string) {
     return this.queueRepository
       .listByTenant(tenantId)
+      .map((contact) => withResolvedLeadAgentNotes(contact))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
@@ -90,15 +97,18 @@ export class QueueService {
   }
 
   getContact(tenantId: string, contactId: string) {
-    return this.queueRepository.getByTenantAndContactId(tenantId, contactId);
+    const contact = this.queueRepository.getByTenantAndContactId(tenantId, contactId);
+    return contact ? withResolvedLeadAgentNotes(contact) : null;
   }
 
   getContactById(contactId: string) {
-    return this.queueRepository.getByContactId(contactId);
+    const contact = this.queueRepository.getByContactId(contactId);
+    return contact ? withResolvedLeadAgentNotes(contact) : null;
   }
 
   assign(tenantId: string, contactId: string, input: z.infer<typeof assignSchema>) {
-    return this.queueRepository.assign(tenantId, contactId, input.agentId, input.agentName);
+    const assigned = this.queueRepository.assign(tenantId, contactId, input.agentId, input.agentName);
+    return assigned ? withResolvedLeadAgentNotes(assigned) : null;
   }
 
   getMessages(tenantId: string, contactId: string) {
@@ -122,12 +132,33 @@ export class QueueService {
     const patch: Partial<{
       contactName: string;
       leadWhatsapp: string;
-      agentNotes: string;
     }> = {};
     if (input.contactName !== undefined) patch.contactName = input.contactName;
     if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
-    if (input.agentNotes !== undefined) patch.agentNotes = input.agentNotes;
-    return this.queueRepository.updateContact(tenantId, contactId, patch);
+    const updated = this.queueRepository.updateContact(tenantId, contactId, patch);
+    return updated ? withResolvedLeadAgentNotes(updated) : null;
+  }
+
+  addAgentNote(tenantId: string, contactId: string, input: z.infer<typeof addAgentNoteSchema>) {
+    const contact = this.queueRepository.getByTenantAndContactId(tenantId, contactId);
+    if (!contact) return null;
+
+    const text = input.text.trim();
+    if (!text) return null;
+
+    const note = {
+      id: randomUUID(),
+      text,
+      createdAt: new Date().toISOString(),
+      authorName: input.authorName?.trim() || undefined,
+      authorId: input.authorId?.trim() || undefined,
+    };
+    const agentNotesHistory = [...resolveLeadAgentNotes(contact), note];
+    const updated = this.queueRepository.updateContact(tenantId, contactId, {
+      agentNotesHistory,
+      agentNotes: "",
+    });
+    return updated ? withResolvedLeadAgentNotes(updated) : null;
   }
 
   addAttachment(tenantId: string, contactId: string, input: z.infer<typeof addLeadAttachmentSchema>) {
@@ -141,6 +172,7 @@ export class QueueService {
       createdAt: new Date().toISOString(),
     };
     const attachments = [...(contact.attachments ?? []), attachment];
-    return this.queueRepository.updateContact(tenantId, contactId, { attachments });
+    const updated = this.queueRepository.updateContact(tenantId, contactId, { attachments });
+    return updated ? withResolvedLeadAgentNotes(updated) : null;
   }
 }

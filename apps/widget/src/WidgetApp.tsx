@@ -1,5 +1,5 @@
 import { CSSProperties, ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { LeadDrawerPanel, type AttendantOption, type LeadAttachment, type LeadDrawerSection } from "./LeadDrawerPanel";
+import { LeadDrawerPanel, type AttendantOption, type LeadAgentNote, type LeadAttachment, type LeadDrawerSection } from "./LeadDrawerPanel";
 import { formatAgentSessionMeta, resolveServiceStartedAt } from "./agentSessionMeta";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
@@ -19,6 +19,7 @@ type QueueContactProfile = {
   contactName?: string;
   leadWhatsapp?: string;
   agentNotes?: string;
+  agentNotesHistory?: LeadAgentNote[];
   leadContext?: Record<string, string | number | boolean>;
   attachments?: LeadAttachment[];
   assignedAgentId?: string;
@@ -132,6 +133,7 @@ export function WidgetApp() {
   const [leadNameDraft, setLeadNameDraft] = useState("");
   const [leadWhatsappDraft, setLeadWhatsappDraft] = useState("");
   const [leadNotesDraft, setLeadNotesDraft] = useState("");
+  const [leadNotesHistory, setLeadNotesHistory] = useState<LeadAgentNote[]>([]);
   const [leadAssignTo, setLeadAssignTo] = useState("");
   const [leadVariables, setLeadVariables] = useState<Array<{ key: string; value: string }>>([]);
   const [leadAttachments, setLeadAttachments] = useState<LeadAttachment[]>([]);
@@ -297,7 +299,8 @@ export function WidgetApp() {
     const nextName = String(contact.contactName ?? "").trim();
     setLeadNameDraft(nextName);
     setLeadWhatsappDraft(resolveLeadWhatsapp(contact.leadWhatsapp, contact.leadContext));
-    setLeadNotesDraft(String(contact.agentNotes ?? "").trim());
+    setLeadNotesDraft("");
+    setLeadNotesHistory(Array.isArray(contact.agentNotesHistory) ? contact.agentNotesHistory : []);
     setLeadAssignedAgentId(String(contact.assignedAgentId ?? "").trim().toLowerCase());
     setLeadAssignedAgentName(String(contact.assignedAgentName ?? "").trim());
     if (nextName) setLeadDisplayName(nextName);
@@ -359,12 +362,43 @@ export function WidgetApp() {
     }
   };
 
+  const registerLeadNote = async (): Promise<boolean> => {
+    if (!sessionContactId) return false;
+    const text = leadNotesDraft.trim();
+    if (!text) return true;
+    setLeadDrawerStatus("Registrando observação...");
+    try {
+      const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/notes`, {
+        method: "POST",
+        headers: buildTenantHeaders(true),
+        body: JSON.stringify({
+          text,
+          authorName: resolvedAgentName,
+          authorId: sessionAgentId,
+        }),
+      });
+      captureResolvedTenantId(response);
+      if (!response.ok) {
+        setLeadDrawerStatus("Falha ao registrar observação.");
+        return false;
+      }
+      const updated = (await response.json()) as QueueContactProfile;
+      applyLeadContactToForm(updated);
+      setLeadDrawerStatus("Observação registrada.");
+      return true;
+    } catch {
+      setLeadDrawerStatus("Falha ao registrar observação.");
+      return false;
+    }
+  };
+
   const saveLeadProfile = async () => {
     if (!sessionContactId) return;
     setLeadDrawerStatus("Salvando...");
-    const payload: { contactName?: string; leadWhatsapp: string; agentNotes: string } = {
+    const noteSaved = await registerLeadNote();
+    if (!noteSaved) return;
+    const payload: { contactName?: string; leadWhatsapp: string } = {
       leadWhatsapp: leadWhatsappDraft.trim(),
-      agentNotes: leadNotesDraft.trim(),
     };
     const nextName = leadNameDraft.trim();
     if (nextName.length >= 2) payload.contactName = nextName;
@@ -686,7 +720,7 @@ export function WidgetApp() {
   }
 
   const hasLeadAttachments = leadAttachments.length > 0;
-  const hasLeadNotes = leadNotesDraft.trim().length > 0;
+  const hasLeadNotes = leadNotesHistory.length > 0;
 
   const openLeadDrawer = (section?: LeadDrawerSection) => {
     setLeadDrawerFocusSection(section ?? null);
@@ -844,6 +878,8 @@ export function WidgetApp() {
           onLeadWhatsappDraftChange={setLeadWhatsappDraft}
           leadNotesDraft={leadNotesDraft}
           onLeadNotesDraftChange={setLeadNotesDraft}
+          leadNotesHistory={leadNotesHistory}
+          onRegisterLeadNote={() => void registerLeadNote()}
           leadAssignTo={leadAssignTo}
           onLeadAssignToChange={setLeadAssignTo}
           leadAttendants={leadAttendants}
