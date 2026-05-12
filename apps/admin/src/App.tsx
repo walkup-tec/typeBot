@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LeadDetailModal } from "./LeadDetailModal";
 
 type TenantDefaultChatTheme = {
   templateName?: string;
@@ -45,23 +46,6 @@ type QueueContact = {
   assignedAgentName?: string;
   updatedAt: string;
 };
-
-const PLACEHOLDER_LEAD_CONTEXT_VALUES = new Set(["-", "—", "null", "undefined", "n/a", "na"]);
-
-const hasLeadContextValue = (value: unknown): boolean => {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "boolean") return true;
-  if (typeof value === "number") return Number.isFinite(value);
-  const normalized = String(value).trim();
-  if (!normalized) return false;
-  return !PLACEHOLDER_LEAD_CONTEXT_VALUES.has(normalized.toLowerCase());
-};
-
-const getLeadContextEntries = (context?: Record<string, string | number | boolean> | null) =>
-  Object.entries(context ?? {}).filter(([key, value]) => String(key).trim() && hasLeadContextValue(value));
-
-const hasLeadContextData = (context?: Record<string, string | number | boolean> | null) =>
-  getLeadContextEntries(context).length > 0;
 
 type SavedFlow = {
   id: string;
@@ -354,9 +338,9 @@ export function App() {
   const [newTenantTypebotAccessUrl, setNewTenantTypebotAccessUrl] = useState("");
   const [newTenantPassword, setNewTenantPassword] = useState("");
   const [isSubscriberModalOpen, setIsSubscriberModalOpen] = useState(false);
-  const [isLeadContextModalOpen, setIsLeadContextModalOpen] = useState(false);
-  const [selectedLeadContext, setSelectedLeadContext] = useState<Record<string, string | number | boolean> | null>(null);
-  const [selectedLeadContextContactName, setSelectedLeadContextContactName] = useState("");
+  const [isLeadDetailModalOpen, setIsLeadDetailModalOpen] = useState(false);
+  const [selectedLeadContactId, setSelectedLeadContactId] = useState("");
+  const [selectedLeadTenantId, setSelectedLeadTenantId] = useState("");
   const [isSavingSubscriber, setIsSavingSubscriber] = useState(false);
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
   const [agentId, setAgentId] = useState("atendente-01");
@@ -1097,11 +1081,10 @@ export function App() {
     await loadQueue(selectedTenant);
   }
 
-  function openLeadContextModal(item: QueueContact) {
-    const entries = getLeadContextEntries(item.leadContext ?? null);
-    setSelectedLeadContext(entries.length > 0 ? Object.fromEntries(entries) : null);
-    setSelectedLeadContextContactName(item.contactName);
-    setIsLeadContextModalOpen(true);
+  function openLeadDetailModal(item: QueueContact) {
+    setSelectedLeadContactId(item.contactId);
+    setSelectedLeadTenantId(item.tenantId);
+    setIsLeadDetailModalOpen(true);
   }
 
   async function saveTenantFlow() {
@@ -2586,10 +2569,9 @@ export function App() {
                   <span className="queue-actions">
                     <button
                       className="queue-icon-btn queue-icon-btn--lead"
-                      onClick={() => openLeadContextModal(item)}
-                      title="Ver dados do Lead"
-                      aria-label="Ver dados do Lead"
-                      disabled={!hasLeadContextData(item.leadContext)}
+                      onClick={() => openLeadDetailModal(item)}
+                      title="Ver detalhes do Lead"
+                      aria-label="Ver detalhes do Lead"
                     >
                       <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path
@@ -2763,45 +2745,17 @@ export function App() {
           </div>
         ) : null}
 
-        {isLeadContextModalOpen ? (
-          <div
-            className="modal-overlay"
-            onClick={() => {
-              setIsLeadContextModalOpen(false);
-              setSelectedLeadContext(null);
-              setSelectedLeadContextContactName("");
-            }}
-          >
-            <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-              <h3>Dados informados pelo Lead</h3>
-              <p className="muted">Contato: {selectedLeadContextContactName || "-"}</p>
-              {selectedLeadContext && hasLeadContextData(selectedLeadContext) ? (
-                <div className="lead-context-list">
-                  {getLeadContextEntries(selectedLeadContext).map(([key, value]) => (
-                    <div className="lead-context-row" key={key}>
-                      <span>{key}</span>
-                      <strong>{String(value)}</strong>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="muted">Este contato não possui dados estruturados salvos.</p>
-              )}
-              <div className="modal-actions">
-                <button
-                  className="ghost-btn"
-                  onClick={() => {
-                    setIsLeadContextModalOpen(false);
-                    setSelectedLeadContext(null);
-                    setSelectedLeadContextContactName("");
-                  }}
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <LeadDetailModal
+          open={isLeadDetailModalOpen}
+          onClose={() => {
+            setIsLeadDetailModalOpen(false);
+            setSelectedLeadContactId("");
+            setSelectedLeadTenantId("");
+          }}
+          apiBase={apiBase}
+          tenantId={selectedLeadTenantId}
+          contactId={selectedLeadContactId}
+        />
 
       </main>
     </div>

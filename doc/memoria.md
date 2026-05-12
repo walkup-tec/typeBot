@@ -1,3 +1,8 @@
+## 2026-05-12 - Modal da fila com card de detalhamento do lead
+
+- Fila ao vivo: icone do lead abre modal com o mesmo conteudo do card de detalhamento (contato, WhatsApp, atribuicao, Typebot, observacoes e anexos).
+- Pendencia: redeploy do admin.
+
 ## 2026-05-12 - Modal do lead sem campos vazios na fila ao vivo
 
 - Modal e fila ao vivo removem chaves sem valor util; API normaliza `leadContext` na leitura/gravacao.

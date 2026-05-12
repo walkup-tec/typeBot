@@ -713,6 +713,31 @@ button:disabled {
   word-break: break-word;
 }
 
+.lead-detail-modal {
+  width: min(420px, 100%);
+  max-height: min(92dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 12px;
+  overflow: hidden;
+  background: #111827;
+  color: #f1f5f9;
+}
+
+.lead-detail-modal .lead-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.lead-detail-modal .lead-field-value {
+  margin: 0;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .muted {
   color: #94a3b8;
 }
