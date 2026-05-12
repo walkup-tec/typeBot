@@ -1,3 +1,9 @@
+## 2026-05-12 - Salvar lead sem repetir assumir atendimento e rodape fixo
+
+- Causa: salvar reatribuia o mesmo atendente e gerava mensagem de sistema no chat.
+- Ajuste: atribuicao so quando o atendente muda; mensagem de assumir so na troca real; select sem pre-selecionar o atual; botao Salvar alteracoes fixo no rodape do card.
+- Pendencia: redeploy API e widget.
+
 ## 2026-05-12 - Historico de observacoes do lead
 
 - API: `agentNotesHistory` com `POST /api/chat/queue/:contactId/notes`; nota legada `agentNotes` vira entrada no historico.

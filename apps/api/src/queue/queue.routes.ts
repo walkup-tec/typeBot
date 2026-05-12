@@ -629,12 +629,13 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-info-button svg { width:18px; height:18px; fill:currentColor; }
     body.agent-screen .lead-drawer-overlay { position:fixed; inset:0; background:transparent; z-index:80; display:none; pointer-events:none; }
     body.agent-screen .lead-drawer-overlay.open { display:block; }
-    body.agent-screen .lead-drawer-panel { position:fixed; top:0; right:0; width:min(380px,92vw); height:100dvh; background:#111827; border-left:1px solid #1f2937; box-shadow:-18px 0 40px rgba(2,6,23,.45); overflow:auto; transform:translateX(100%); transition:transform .2s ease; z-index:90; padding:16px; box-sizing:border-box; pointer-events:auto; }
+    body.agent-screen .lead-drawer-panel { position:fixed; top:0; right:0; width:min(380px,92vw); height:100dvh; background:#111827; border-left:1px solid #1f2937; box-shadow:-18px 0 40px rgba(2,6,23,.45); overflow:hidden; transform:translateX(100%); transition:transform .2s ease; z-index:90; padding:16px 16px 12px; box-sizing:border-box; pointer-events:auto; display:flex; flex-direction:column; }
     body.agent-screen .lead-drawer-overlay.open .lead-drawer-panel { transform:translateX(0); }
-    body.agent-screen .lead-drawer-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+    body.agent-screen .lead-drawer-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; flex-shrink:0; }
     body.agent-screen .lead-drawer-head strong { font-size:16px; color:#f8fafc; }
     body.agent-screen .lead-drawer-close { width:34px; height:34px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:22px; line-height:1; cursor:pointer; }
-    body.agent-screen .lead-drawer-body { display:grid; gap:12px; }
+    body.agent-screen .lead-drawer-body { display:grid; gap:12px; flex:1; min-height:0; overflow:auto; padding-right:2px; }
+    body.agent-screen .lead-drawer-footer { display:grid; gap:8px; flex-shrink:0; padding-top:12px; border-top:1px solid #1f2937; background:#111827; box-shadow:0 -12px 24px rgba(2,6,23,.4); }
     body.agent-screen .lead-profile-card { display:flex; align-items:center; gap:12px; padding:4px 2px 10px; }
     body.agent-screen .lead-profile-avatar { width:52px; height:52px; border-radius:999px; background:#1d4ed8; color:#eff6ff; display:inline-flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; flex-shrink:0; }
     body.agent-screen .lead-profile-meta strong { display:block; font-size:18px; line-height:1.2; color:#f8fafc; word-break:break-word; }
@@ -1159,9 +1160,11 @@ export const registerQueueRoutes = (app: Express) => {
               </div>
             </section>
           </div>
+        </div>
+        <div class="lead-drawer-footer">
           <button type="button" id="leadSaveButton" class="lead-save-button">Salvar alterações</button>
           <small id="leadDrawerStatus" class="lead-drawer-status"></small>
-        </div>        </div>
+        </div>
       </aside>
     </div>
   </div>`
@@ -1856,7 +1859,7 @@ export const registerQueueRoutes = (app: Express) => {
         const option = document.createElement("option");
         option.value = username;
         option.textContent = displayName;
-        if (username.toLowerCase() === currentAssigned) option.selected = true;
+        if (username.toLowerCase() === currentAssigned) option.textContent = displayName + " (atual)";
         leadAssignSelect.appendChild(option);
       });
     }
@@ -1920,7 +1923,8 @@ export const registerQueueRoutes = (app: Express) => {
       applyLeadContactToDrawer(updated);
 
       const assignTo = leadAssignSelect ? String(leadAssignSelect.value || "").trim() : "";
-      if (assignTo) {
+      const currentAssigned = String(leadDrawerContact?.assignedAgentId || "").trim().toLowerCase();
+      if (assignTo && assignTo.toLowerCase() !== currentAssigned) {
         const attendant = leadAttendants.find((item) => String(item.username || "").trim() === assignTo);
         const assignResponse = await fetch("/api/chat/queue/" + contactId + "/assign", {
           method: "PATCH",
@@ -1942,6 +1946,7 @@ export const registerQueueRoutes = (app: Express) => {
           return;
         }
         applyLeadContactToDrawer(await assignResponse.json());
+        if (leadAssignSelect) leadAssignSelect.value = "";
       }
       setLeadDrawerStatus("Dados do lead salvos.");
     }

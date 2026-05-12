@@ -160,23 +160,29 @@ export class QueueRepository {
     const contact = waitingQueue.get(contactId);
     if (!contact || contact.tenantId !== tenantId) return null;
 
+    const nextAgentId = String(agentId ?? "").trim();
+    const previousAgentId = String(contact.assignedAgentId ?? "").trim();
+    const agentChanged = nextAgentId.toLowerCase() !== previousAgentId.toLowerCase();
+
     const updated: QueueContact = {
       ...contact,
       status: "in_service",
-      assignedAgentId: agentId,
+      assignedAgentId: nextAgentId,
       assignedAgentName: String(agentName ?? "").trim() || contact.assignedAgentName,
       updatedAt: new Date().toISOString(),
     };
     waitingQueue.set(contactId, updated);
-    const history = liveMessages.get(contactId) ?? [];
-    history.push({
-      id: `${contactId}-assigned-${Date.now()}`,
-      contactId,
-      sender: "system",
-      content: `Atendimento assumido por ${String(agentName ?? "").trim() || agentId}.`,
-      createdAt: new Date().toISOString(),
-    });
-    liveMessages.set(contactId, history);
+    if (agentChanged) {
+      const history = liveMessages.get(contactId) ?? [];
+      history.push({
+        id: `${contactId}-assigned-${Date.now()}`,
+        contactId,
+        sender: "system",
+        content: `Atendimento assumido por ${String(agentName ?? "").trim() || nextAgentId}.`,
+        createdAt: new Date().toISOString(),
+      });
+      liveMessages.set(contactId, history);
+    }
     saveQueueState(waitingQueue, liveMessages);
     return updated;
   }

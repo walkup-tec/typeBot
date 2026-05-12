@@ -370,7 +370,9 @@ export function LeadDrawerPanel({
               </div>
             </AccordionSection>
           </div>
+        </div>
 
+        <div className="lead-drawer-footer">
           <button type="button" className="lead-save-button" onClick={onSave}>
             Salvar alterações
           </button>

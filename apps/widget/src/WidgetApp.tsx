@@ -416,7 +416,8 @@ export function WidgetApp() {
       const updated = (await response.json()) as QueueContactProfile;
       applyLeadContactToForm(updated);
       const assignTo = leadAssignTo.trim();
-      if (assignTo) {
+      const currentAssigned = leadAssignedAgentId.trim().toLowerCase();
+      if (assignTo && assignTo.toLowerCase() !== currentAssigned) {
         const attendant = leadAttendants.find((row) => row.username === assignTo);
         const assignResponse = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/assign`, {
           method: "PATCH",
@@ -437,6 +438,7 @@ export function WidgetApp() {
           return;
         }
         applyLeadContactToForm((await assignResponse.json()) as QueueContactProfile);
+        setLeadAssignTo("");
       }
       setLeadDrawerStatus("Dados do lead salvos.");
     } catch {
