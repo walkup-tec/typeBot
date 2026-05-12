@@ -2827,3 +2827,13 @@
 
 - `painel-bundle-desatualizado`
 - `deploy-painel-typebot-crm-admin`
+
+## 2026-05-12 - Login/reset walkup 401/404 em produção
+
+- API com Postgres: `walkup@walkuptec.com.br` não cadastrado → login 401 e reset 404.
+- Recuperação: `API_ENSURE_SYSTEM_MASTER` no arranque; `API_ALLOW_SYSTEM_MASTER_RESET_PROVISION` no reset (documentado em `doc/EASYPANEL-AMBIENTE.env.example`).
+
+### Palavras-chave para pesquisa futura
+
+- `ensure-system-master-auth`
+- `walkup-master-postgres-404`
