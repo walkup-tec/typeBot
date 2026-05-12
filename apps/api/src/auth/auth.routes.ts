@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import { z } from "zod";
 import { authEmailsEquivalent, extractEmailsFromLooseText, normalizeAuthIdentifier } from "../lib/auth-email";
+import { resolveAttendantDisplayName } from "../lib/agent-session-meta";
 import { attendantRepository, tenantRepository } from "../lib/repositories";
 import { hashAttendantPassword, verifyAttendantPassword } from "../attendants/attendant.service";
 import { mailService } from "../mail/mail.service";
@@ -162,7 +163,10 @@ export const registerAuthRoutes = (app: Express) => {
           tenantId: attendant.tenantId,
           username: attendant.username,
           email: attendant.email ?? tenant.ownerEmail,
-          displayName: attendant.displayName,
+          displayName: resolveAttendantDisplayName(
+            { username: attendant.username, displayName: attendant.displayName },
+            { sessionAgentId: attendant.username, sessionAgentName: attendant.displayName },
+          ),
           role: attendant.role,
         },
         tenant: {

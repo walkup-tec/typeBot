@@ -106,6 +106,10 @@ export class QueueRepository {
     return [...waitingQueue.values()].filter((item) => item.tenantId === tenantId);
   }
 
+  listAll() {
+    return [...waitingQueue.values()];
+  }
+
   hydrateAssignedAgentNames(tenantId: string, resolveName: (agentId: string) => string | undefined) {
     let changed = false;
     for (const [contactId, contact] of waitingQueue.entries()) {

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveLeadAgentNotes, withNormalizedQueueContact } from "../lib/lead-agent-notes";
+import { resolveAttendantDisplayName } from "../lib/agent-session-meta";
 import { mergeLeadCpfIntoContext } from "../lib/lead-cpf";
 import { pruneLeadContext } from "../lib/lead-context";
 import { QueueRepository } from "./queue.repository";
@@ -95,6 +96,13 @@ export class QueueService {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
+  listAll() {
+    return this.queueRepository
+      .listAll()
+      .map((contact) => withNormalizedQueueContact(contact))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
   backfillAssignedAgentNames(tenantId: string, resolveName: (agentId: string) => string | undefined) {
     this.queueRepository.hydrateAssignedAgentNames(tenantId, resolveName);
   }
@@ -110,7 +118,16 @@ export class QueueService {
   }
 
   assign(tenantId: string, contactId: string, input: z.infer<typeof assignSchema>) {
-    const assigned = this.queueRepository.assign(tenantId, contactId, input.agentId, input.agentName);
+    const assignedAgentName = resolveAttendantDisplayName(
+      { username: input.agentId, displayName: input.agentName },
+      { assignedAgentId: input.agentId, assignedAgentName: input.agentName },
+    );
+    const assigned = this.queueRepository.assign(
+      tenantId,
+      contactId,
+      input.agentId,
+      assignedAgentName || input.agentName,
+    );
     return assigned ? withNormalizedQueueContact(assigned) : null;
   }
 

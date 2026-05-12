@@ -6,10 +6,12 @@ import {
   resolveLeadCpf,
   resolveLeadWhatsapp,
 } from "./leadContactData";
+import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
 export type ClientDirectoryContact = {
   contactId: string;
   tenantId: string;
+  tenantName?: string;
   contactName: string;
   sourceFlowLabel: string;
   leadContext?: Record<string, string | number | boolean>;
@@ -22,6 +24,7 @@ export type ClientDirectoryContact = {
 export type ClientDirectoryRow = {
   contactId: string;
   contactName: string;
+  tenantName: string;
   whatsapp: string;
   cpf: string;
   sourceFlowLabel: string;
@@ -113,12 +116,23 @@ export const buildClientDirectoryRow = (contact: ClientDirectoryContact): Client
     fieldValues[key] = text;
   }
 
-  const assignedAgentName =
-    String(contact.assignedAgentName ?? "").trim() || String(contact.assignedAgentId ?? "").trim();
+  const assignedAgentName = contact.assignedAgentId || contact.assignedAgentName
+    ? resolveAttendantDisplayName(
+        {
+          username: String(contact.assignedAgentId ?? contact.assignedAgentName ?? "").trim(),
+          displayName: String(contact.assignedAgentName ?? "").trim(),
+        },
+        {
+          assignedAgentId: contact.assignedAgentId,
+          assignedAgentName: contact.assignedAgentName,
+        },
+      )
+    : "";
 
   return {
     contactId: contact.contactId,
     contactName,
+    tenantName: String(contact.tenantName ?? "").trim(),
     whatsapp,
     cpf,
     sourceFlowLabel: String(contact.sourceFlowLabel ?? "").trim() || "Fluxo sem identificação",
@@ -146,6 +160,8 @@ export const matchesClientDirectorySearch = (row: ClientDirectoryRow, query: str
   const queryDigits = normalizeSearchDigits(normalizedQuery);
 
   if (row.contactName.toLowerCase().includes(loweredQuery)) return true;
+  if (row.tenantName.toLowerCase().includes(loweredQuery)) return true;
+  if (row.assignedAgentName.toLowerCase().includes(loweredQuery)) return true;
 
   if (row.whatsapp) {
     if (row.whatsapp.toLowerCase().includes(loweredQuery)) return true;

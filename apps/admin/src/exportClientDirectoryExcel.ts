@@ -7,20 +7,26 @@ const formatClientDateForExport = (value: string): string => {
 };
 
 const buildClientDirectoryExportHeader = (rows: ClientDirectoryRow[]): string[] => {
+  const showTenantColumn = rows.some((row) => row.tenantName.trim().length > 0);
   const showCpfColumn = rows.some((row) => row.cpf.trim().length > 0);
   const dynamicColumns = collectClientDirectoryColumnKeys(rows);
-  const header = ["Nome", "WhatsApp"];
+  const header = ["Nome"];
+  if (showTenantColumn) header.push("Assinante");
+  header.push("WhatsApp");
   if (showCpfColumn) header.push("CPF");
   header.push("Fluxo/Produto", "Atendente", "Atualizado em", ...dynamicColumns);
   return header;
 };
 
 const buildClientDirectoryExportRows = (rows: ClientDirectoryRow[], headers: string[]): string[][] => {
+  const showTenantColumn = headers.includes("Assinante");
   const showCpfColumn = headers.includes("CPF");
-  const dynamicColumns = headers.slice(showCpfColumn ? 6 : 5);
+  const dynamicColumns = headers.slice((showTenantColumn ? 1 : 0) + (showCpfColumn ? 1 : 0) + 5);
 
   return rows.map((row) => {
-    const values = [row.contactName || "", row.whatsapp || ""];
+    const values = [row.contactName || ""];
+    if (showTenantColumn) values.push(row.tenantName || "");
+    values.push(row.whatsapp || "");
     if (showCpfColumn) values.push(row.cpf || "");
     values.push(
       row.sourceFlowLabel || "",

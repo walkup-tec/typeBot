@@ -9,6 +9,7 @@ import {
   resolveLeadWhatsapp,
   type LeadContactDetail,
 } from "./leadContactData";
+import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
 type LeadDetailSection = "assign" | "variables" | "notes" | "attachments";
 
@@ -96,10 +97,18 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
     () => getLeadContextEntries(contact?.leadContext).filter(([key]) => !isLeadCpfContextKey(key)),
     [contact?.leadContext],
   );
-  const assignedLabel =
-    String(contact?.assignedAgentName ?? "").trim() ||
-    String(contact?.assignedAgentId ?? "").trim() ||
-    "Não atribuído";
+  const assignedLabel = useMemo(() => {
+    const assignedAgentId = String(contact?.assignedAgentId ?? "").trim();
+    const assignedAgentName = String(contact?.assignedAgentName ?? "").trim();
+    if (!assignedAgentId && !assignedAgentName) return "Não atribuído";
+    return resolveAttendantDisplayName(
+      {
+        username: assignedAgentId || assignedAgentName,
+        displayName: assignedAgentName,
+      },
+      { assignedAgentId, assignedAgentName },
+    );
+  }, [contact?.assignedAgentId, contact?.assignedAgentName]);
   const notes = Array.isArray(contact?.agentNotesHistory) ? contact.agentNotesHistory : [];
   const attachments = Array.isArray(contact?.attachments) ? contact.attachments : [];
 

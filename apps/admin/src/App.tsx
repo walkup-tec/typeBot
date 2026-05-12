@@ -39,6 +39,7 @@ type Tenant = {
 type QueueContact = {
   contactId: string;
   tenantId: string;
+  tenantName?: string;
   contactName: string;
   source: "typebot" | "widget";
   sourceFlowLabel: string;
@@ -119,6 +120,31 @@ type AuthSession = {
     ownerEmail: string;
   };
   masterProfile: MasterProfile;
+};
+
+const resolveSessionUserDisplayName = (user?: AuthSession["user"] | null): string => {
+  if (!user) return "";
+  return resolveAttendantDisplayName(
+    { username: user.username, displayName: user.displayName },
+    { sessionAgentId: user.username, sessionAgentName: user.displayName },
+  );
+};
+
+const resolveQueueItemAssignedAgentName = (
+  item: Pick<QueueContact, "assignedAgentId" | "assignedAgentName">,
+  attendantRows: AttendantRow[],
+): string => {
+  const assignedAgentId = String(item.assignedAgentId ?? "").trim();
+  if (!assignedAgentId) return "";
+
+  const attendant = attendantRows.find(
+    (row) => String(row.username ?? "").trim().toLowerCase() === assignedAgentId.toLowerCase(),
+  );
+
+  return resolveAttendantDisplayName(
+    attendant ?? { username: assignedAgentId, displayName: item.assignedAgentName },
+    { assignedAgentId, assignedAgentName: item.assignedAgentName },
+  );
 };
 
 /**
@@ -370,6 +396,7 @@ export function App() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>("master");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [queueItems, setQueueItems] = useState<QueueContact[]>([]);
+  const [masterClientContacts, setMasterClientContacts] = useState<QueueContact[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>("");
   const [newTenantName, setNewTenantName] = useState("");
   const [newTenantEmail, setNewTenantEmail] = useState("");
@@ -452,7 +479,9 @@ export function App() {
   const allowedScreens = useMemo<ScreenId[]>(() => {
     const role = authSession?.user?.role;
     if (role === "attendant") return ["liveQueue", "clientList"];
-    return masterProfile === "system_master" ? ["masterLibrary", "subscribers"] : ["master", "liveQueue", "clientList"];
+    return masterProfile === "system_master"
+      ? ["masterLibrary", "subscribers", "clientList"]
+      : ["master", "liveQueue", "clientList"];
   }, [masterProfile, authSession]);
   const filteredTenants = useMemo(
     () =>
@@ -661,24 +690,20 @@ export function App() {
       headers: { "x-tenant-id": tenantId },
     });
     const data = (await response.json()) as QueueContact[];
-    const attendantByUsername = new Map(
-      attendants.map((row) => [String(row.username ?? "").trim().toLowerCase(), row]),
-    );
-    const normalized = data.map((item) => {
-      const assignedAgentId = String(item.assignedAgentId ?? "").trim();
-      const attendant = assignedAgentId ? attendantByUsername.get(assignedAgentId.toLowerCase()) : undefined;
-      const assignedAgentName = assignedAgentId
-        ? resolveAttendantDisplayName(
-            attendant ?? { username: assignedAgentId, displayName: item.assignedAgentName },
-            { assignedAgentId, assignedAgentName: item.assignedAgentName },
-          )
-        : "";
-      return {
-        ...item,
-        assignedAgentName,
-      };
-    });
+    const normalized = data.map((item) => ({
+      ...item,
+      assignedAgentName: resolveQueueItemAssignedAgentName(item, attendants),
+    }));
     setQueueItems(normalized);
+  }
+
+  async function loadMasterClientDirectory() {
+    const response = await fetch(`${apiBase}/api/master/queue/contacts`, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("Falha ao carregar lista global de clientes");
+    }
+    const data = (await response.json()) as QueueContact[];
+    setMasterClientContacts(data);
   }
 
   const flowListSignature = (flows: SavedFlow[]) =>
@@ -936,13 +961,22 @@ export function App() {
   }, [selectedTenant, isStep1Completed, isStep2Completed, isStep3Completed]);
 
   useEffect(() => {
-    if (!selectedTenant) return;
+    if (!selectedTenant || masterProfile === "system_master") return;
     void loadQueue(selectedTenant).catch(() => undefined);
     const timer = window.setInterval(() => {
       loadQueue(selectedTenant).catch(() => undefined);
     }, QUEUE_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [selectedTenant, attendants]);
+  }, [selectedTenant, attendants, masterProfile]);
+
+  useEffect(() => {
+    if (!authSession || masterProfile !== "system_master" || activeScreen !== "clientList") return;
+    void loadMasterClientDirectory().catch(() => setStatusMessage("Falha ao carregar lista global de clientes"));
+    const timer = window.setInterval(() => {
+      loadMasterClientDirectory().catch(() => undefined);
+    }, QUEUE_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [authSession, masterProfile, activeScreen]);
 
   useEffect(() => {
     if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== 3) return;
@@ -1130,7 +1164,8 @@ export function App() {
     const masterUsername = authSession?.user?.username?.trim();
     const resolvedAgentId =
       useMasterOnly && masterUsername ? masterUsername : agentId;
-    const loggedAgentName = authSession?.user?.displayName?.trim() || resolvedAgentId;
+    const loggedAgentName =
+      resolveSessionUserDisplayName(authSession?.user) || resolvedAgentId;
     const response = await fetch(`${apiBase}/api/chat/queue/${contactId}/assign`, {
       method: "PATCH",
       headers: {
@@ -1160,7 +1195,8 @@ export function App() {
   }
 
   function openLeadDetailByContactId(contactId: string) {
-    const item = queueItems.find((row) => row.contactId === contactId);
+    const source = masterProfile === "system_master" ? masterClientContacts : queueItems;
+    const item = source.find((row) => row.contactId === contactId);
     if (!item) return;
     openLeadDetailModal(item);
   }
@@ -1633,7 +1669,7 @@ export function App() {
     } catch {
       // ignore storage write errors
     }
-    setStatusMessage(`Bem-vindo, ${nextSession.user.displayName}.`);
+    setStatusMessage(`Bem-vindo, ${resolveSessionUserDisplayName(nextSession.user)}.`);
   }
 
   async function resetUserPassword() {
@@ -1868,7 +1904,7 @@ export function App() {
               </span>
             </button>
           ) : null}
-          {masterProfile === "subscriber_master" ? (
+          {allowedScreens.includes("clientList") ? (
             <button
               className={`menu-btn ${activeScreen === "clientList" ? "active" : ""}`}
               onClick={() => setActiveScreen("clientList")}
@@ -1931,7 +1967,7 @@ export function App() {
             </button>
             {isUserMenuOpen ? (
               <div className="user-menu-panel">
-                <strong>{authSession.user.displayName}</strong>
+                <strong>{resolveSessionUserDisplayName(authSession.user)}</strong>
                 <span>{authSession.user.email}</span>
                 <button
                   type="button"
@@ -2286,7 +2322,12 @@ export function App() {
                       <div key={row.id} className="saved-flows-row attendants-row">
                         <span>{row.username}</span>
                           <span>{row.email?.trim() || "—"}</span>
-                        <span>{row.displayName}</span>
+                        <span>
+                          {resolveAttendantDisplayName(
+                            { username: row.username, displayName: row.displayName },
+                            { sessionAgentId: row.username, sessionAgentName: row.displayName },
+                          )}
+                        </span>
                         <span>
                           {row.role === "master" ? "Master" : row.role === "manager" ? "Gerente" : "Atendente"}
                         </span>
@@ -2703,7 +2744,11 @@ export function App() {
                 <div className="table-row queue-table-row" key={item.contactId}>
                   <span>{item.contactName}</span>
                   <span>{item.sourceFlowLabel}</span>
-                  <span>{item.status === "in_service" ? item.assignedAgentName || "-" : "-"}</span>
+                  <span>
+                    {item.status === "in_service"
+                      ? resolveQueueItemAssignedAgentName(item, attendants) || "-"
+                      : "-"}
+                  </span>
                   <span>{new Date(item.updatedAt).toLocaleString("pt-BR")}</span>
                   <span className="queue-actions queue-table-col-actions">
                     <button
@@ -2741,7 +2786,10 @@ export function App() {
         ) : null}
 
         {activeScreen === "clientList" ? (
-          <ClientsListScreen contacts={queueItems} onOpenContact={openLeadDetailByContactId} />
+          <ClientsListScreen
+            contacts={masterProfile === "system_master" ? masterClientContacts : queueItems}
+            onOpenContact={openLeadDetailByContactId}
+          />
         ) : null}
 
         {statusMessage ? (

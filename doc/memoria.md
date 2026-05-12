@@ -2837,3 +2837,27 @@
 
 - `ensure-system-master-auth`
 - `walkup-master-postgres-404`
+
+## 2026-05-12 - Nome exibido do usuário Drax (Drax Sistemas)
+
+- Sintoma: `draxsistemas@gmail.com` aparecia como `draxsistemas` / `darsistemas` quando `displayName` vinha vazio ou só o prefixo do e-mail.
+- Correção: mapa canônico `draxsistemas@gmail.com` / `draxsistemas` / `darsistemas` → **Drax Sistemas** em `resolveAttendantDisplayName` (API, painel, widget) e no script inline do handoff.
+- Reforço fila: `GET /api/chat/queue` e detalhe do contato normalizam `assignedAgentName`; atribuição grava nome canônico; coluna Atendente no painel resolve na renderização.
+- Telas: login/boas-vindas, menu do usuário, fila, lista de clientes, modal do lead, atendentes, widget e resposta de login da API.
+
+### Palavras-chave para pesquisa futura
+
+- `known-attendant-display-name`
+- `drax-sistemas-display-name`
+- `resolve-queue-contact-assigned-agent-name`
+
+## 2026-05-12 - Lista global de clientes para Master do Sistema
+
+- Master do Sistema passa a ver **Lista de Clientes** no menu, agregando leads de todos os assinantes/atendentes.
+- API: `GET /api/master/queue/contacts` retorna contatos da fila com `tenantName` e `assignedAgentName` normalizado.
+- Painel: coluna **Assinante**, busca/export incluem assinante e atendente; modal do lead usa `tenantId` do contato.
+
+### Palavras-chave para pesquisa futura
+
+- `master-queue-contacts`
+- `lista-clientes-system-master`

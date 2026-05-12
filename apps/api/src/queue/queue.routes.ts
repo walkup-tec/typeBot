@@ -6,6 +6,7 @@ import { attendantRepository, flowRepository, queueRepository, tenantRepository 
 import {
   formatAgentSessionMeta,
   resolveAttendantDisplayName,
+  resolveQueueContactAssignedAgentName,
   resolveServiceStartedAt,
 } from "../lib/agent-session-meta";
 import { pruneLeadContext } from "../lib/lead-context";
@@ -1946,6 +1947,29 @@ export const registerQueueRoutes = (app: Express) => {
       syncLeadToolbarIndicators();
     }
 
+    const knownAttendantDisplayNames = {
+      "draxsistemas@gmail.com": "Drax Sistemas",
+      draxsistemas: "Drax Sistemas",
+      darsistemas: "Drax Sistemas",
+    };
+
+    function resolveKnownAttendantDisplayName(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      if (!normalized) return "";
+      if (knownAttendantDisplayNames[normalized]) return knownAttendantDisplayNames[normalized];
+      if (normalized.includes("@")) {
+        const localPart = normalized.split("@")[0] || "";
+        if (knownAttendantDisplayNames[localPart]) return knownAttendantDisplayNames[localPart];
+      }
+      return "";
+    }
+
+    function finalizeAttendantLabel(value) {
+      const normalized = String(value || "").trim();
+      if (!normalized) return "";
+      return resolveKnownAttendantDisplayName(normalized) || normalized;
+    }
+
     function looksLikeEmail(value) {
       return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(value || "").trim());
     }
@@ -1959,18 +1983,20 @@ export const registerQueueRoutes = (app: Express) => {
       const assignedAgentName = String(source.assignedAgentName || "").trim();
       const sessionId = String(source.sessionAgentId || "").trim().toLowerCase();
       const sessionName = String(source.sessionAgentName || "").trim();
-      if (displayName && !looksLikeEmail(displayName)) return displayName;
+      if (displayName && !looksLikeEmail(displayName)) return finalizeAttendantLabel(displayName);
       if (usernameKey && usernameKey === assignedAgentId && assignedAgentName && !looksLikeEmail(assignedAgentName)) {
-        return assignedAgentName;
+        return finalizeAttendantLabel(assignedAgentName);
       }
       if (usernameKey && usernameKey === sessionId && sessionName && !looksLikeEmail(sessionName)) {
-        return sessionName;
+        return finalizeAttendantLabel(sessionName);
       }
+      const knownFromUsername = resolveKnownAttendantDisplayName(username);
+      if (knownFromUsername) return knownFromUsername;
       if (looksLikeEmail(username)) {
         const prefix = username.split("@")[0];
-        if (prefix) return prefix.trim();
+        if (prefix) return finalizeAttendantLabel(prefix.trim());
       }
-      return username;
+      return finalizeAttendantLabel(username);
     }
 
     async function loadLeadAttendants() {
@@ -2400,8 +2426,46 @@ export const registerQueueRoutes = (app: Express) => {
         attendants.map((attendant) => [attendant.username.trim().toLowerCase(), attendant.displayName]),
       );
       queueService.backfillAssignedAgentNames(tenantId, (agentId) => attendantByUsername.get(agentId.trim().toLowerCase()));
+      const queue = queueService.list(tenantId).map((contact) => ({
+        ...contact,
+        assignedAgentName: resolveQueueContactAssignedAgentName(contact, attendants),
+      }));
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-      return res.status(200).json(queueService.list(tenantId));
+      return res.status(200).json(queue);
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
+  });
+
+  app.get("/api/master/queue/contacts", (_req, res) => {
+    try {
+      const tenants = tenantRepository.list();
+      const tenantNames = new Map(tenants.map((tenant) => [tenant.id, tenant.name]));
+      const attendantsByTenantId = new Map(
+        tenants.map((tenant) => [tenant.id, attendantRepository.listByTenant(tenant.id)]),
+      );
+
+      for (const tenant of tenants) {
+        const attendants = attendantsByTenantId.get(tenant.id) ?? [];
+        const attendantByUsername = new Map(
+          attendants.map((attendant) => [attendant.username.trim().toLowerCase(), attendant.displayName]),
+        );
+        queueService.backfillAssignedAgentNames(tenant.id, (agentId) =>
+          attendantByUsername.get(agentId.trim().toLowerCase()),
+        );
+      }
+
+      const contacts = queueService.listAll().map((contact) => ({
+        ...contact,
+        tenantName: tenantNames.get(contact.tenantId) ?? contact.tenantId,
+        assignedAgentName: resolveQueueContactAssignedAgentName(
+          contact,
+          attendantsByTenantId.get(contact.tenantId) ?? [],
+        ),
+      }));
+
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      return res.status(200).json(contacts);
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
     }
@@ -2435,9 +2499,14 @@ export const registerQueueRoutes = (app: Express) => {
       const tenantId = resolveTenantIdForContact(req, req.params.contactId);
       const item = queueService.getContact(tenantId, req.params.contactId);
       if (!item) return res.status(404).json({ message: "Contact not found for tenant" });
+      const attendants = attendantRepository.listByTenant(tenantId);
+      const normalized = {
+        ...item,
+        assignedAgentName: resolveQueueContactAssignedAgentName(item, attendants),
+      };
       res.setHeader("x-resolved-tenant-id", tenantId);
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-      return res.status(200).json(item);
+      return res.status(200).json(normalized);
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
     }

@@ -48,13 +48,16 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
 
   const dynamicColumns = useMemo(() => collectClientDirectoryColumnKeys(filteredRows), [filteredRows]);
   const showCpfColumn = useMemo(() => rows.some((row) => row.cpf.trim().length > 0), [rows]);
+  const showTenantColumn = useMemo(() => rows.some((row) => row.tenantName.trim().length > 0), [rows]);
 
   const tableColumns = useMemo(() => {
-    const columns = ["Nome", "WhatsApp"];
+    const columns = ["Nome"];
+    if (showTenantColumn) columns.push("Assinante");
+    columns.push("WhatsApp");
     if (showCpfColumn) columns.push("CPF");
     columns.push("Fluxo/Produto", "Atendente", "Atualizado em", ...dynamicColumns, "Ações");
     return columns;
-  }, [dynamicColumns, showCpfColumn]);
+  }, [dynamicColumns, showCpfColumn, showTenantColumn]);
 
   const hasActiveFilters = searchQuery.trim().length > 0 || flowFilter !== "all" || whatsappFilter !== "all";
 
@@ -84,7 +87,11 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
         <input
           className="clients-list-search"
           type="search"
-          placeholder="Pesquisar por Nome, WhatsApp ou CPF"
+          placeholder={
+            showTenantColumn
+              ? "Pesquisar por Nome, Assinante, Atendente, WhatsApp ou CPF"
+              : "Pesquisar por Nome, WhatsApp ou CPF"
+          }
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           aria-label="Pesquisar clientes"
@@ -152,6 +159,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
             {filteredRows.map((row) => (
               <tr key={row.contactId}>
                 <td>{row.contactName || "-"}</td>
+                {showTenantColumn ? <td>{row.tenantName || "-"}</td> : null}
                 <td>{row.whatsapp || "-"}</td>
                 {showCpfColumn ? <td>{row.cpf || "-"}</td> : null}
                 <td>{row.sourceFlowLabel || "-"}</td>
