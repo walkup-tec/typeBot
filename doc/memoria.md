@@ -1,3 +1,8 @@
+## 2026-05-12 - Tabela da lista de clientes mais suave
+
+- Linhas sem contorno, alternancia leve de cor, fonte menor e espacamento reduzido.
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Lista de clientes: CPF, nome duplicado e atendente
 
 - CPF mascarado na coluna dedicada quando houver dado no lead.

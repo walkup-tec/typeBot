@@ -2083,6 +2083,40 @@ button:disabled {
 
 .clients-table {
   min-width: max(100%, 960px);
+  gap: 2px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.clients-table .table-row.clients-table-row {
+  border: none !important;
+  border-radius: 6px;
+  padding: 6px 10px;
+  gap: 8px;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.clients-table .table-row.clients-table-row:not(.table-header):nth-child(even) {
+  background: rgba(15, 23, 42, 0.24) !important;
+}
+
+.clients-table .table-row.clients-table-row:not(.table-header):nth-child(odd) {
+  background: rgba(15, 23, 42, 0.1) !important;
+}
+
+.clients-table .table-row.clients-table-row:not(.table-header):hover {
+  background: rgba(30, 41, 59, 0.38) !important;
+}
+
+.clients-table .table-header.clients-table-row {
+  background: rgba(15, 23, 42, 0.2) !important;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
 }
 
 .clients-table-row {
@@ -2093,11 +2127,18 @@ button:disabled {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: inherit;
 }
 
 .clients-table-actions {
   display: flex;
   align-items: center;
+}
+
+.clients-table-actions .ghost-btn {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
 }
 
 .add-icon {
