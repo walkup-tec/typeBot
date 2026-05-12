@@ -1,3 +1,9 @@
+## 2026-05-12 - Painel admin sem estilos apos redeploy
+
+- Causa: `LeadDetailModal` importava `widget.css` com regras globais de `button`/`input`/`body` e quebrava o layout do painel.
+- Ajuste: estilos do modal de detalhe do lead ficam escopados em `apps/admin/src/styles.css`.
+- Pendencia: redeploy do admin com build limpo e hard refresh.
+
 ## 2026-05-12 - Modal da fila com card de detalhamento do lead
 
 - Fila ao vivo: icone do lead abre modal com o mesmo conteudo do card de detalhamento (contato, WhatsApp, atribuicao, Typebot, observacoes e anexos).

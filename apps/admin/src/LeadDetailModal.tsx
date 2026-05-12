@@ -5,7 +5,6 @@ import {
   resolveLeadWhatsapp,
   type LeadContactDetail,
 } from "./leadContactData";
-import "../../widget/src/widget.css";
 
 type LeadDetailSection = "contact" | "assign" | "variables" | "notes" | "attachments";
 
