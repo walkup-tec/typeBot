@@ -1,3 +1,10 @@
+## 2026-05-12 - Lista de clientes: CPF, nome duplicado e atendente
+
+- CPF mascarado na coluna dedicada quando houver dado no lead.
+- `Nome` e `Nome_Contato` iguais nao duplicam colunas extras; o nome principal fica na coluna Nome.
+- Coluna Atendente usa nome humano (displayName) em vez de e-mail.
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - CPF na lista de clientes do admin
 
 - Coluna CPF exibida apos WhatsApp quando algum lead da lista tiver CPF em `leadContext`.

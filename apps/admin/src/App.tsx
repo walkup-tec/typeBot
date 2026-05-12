@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientsListScreen } from "./ClientsListScreen";
 import { LeadDetailModal } from "./LeadDetailModal";
+import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
 type TenantDefaultChatTheme = {
   templateName?: string;
@@ -653,15 +654,17 @@ export function App() {
     });
     const data = (await response.json()) as QueueContact[];
     const attendantByUsername = new Map(
-      attendants.map((row) => [String(row.username ?? "").trim().toLowerCase(), row.displayName]),
+      attendants.map((row) => [String(row.username ?? "").trim().toLowerCase(), row]),
     );
     const normalized = data.map((item) => {
       const assignedAgentId = String(item.assignedAgentId ?? "").trim();
-      const assignedAgentName =
-        String(item.assignedAgentName ?? "").trim() ||
-        (assignedAgentId && attendantByUsername.has(assignedAgentId.toLowerCase())
-          ? attendantByUsername.get(assignedAgentId.toLowerCase())
-          : undefined);
+      const attendant = assignedAgentId ? attendantByUsername.get(assignedAgentId.toLowerCase()) : undefined;
+      const assignedAgentName = assignedAgentId
+        ? resolveAttendantDisplayName(
+            attendant ?? { username: assignedAgentId, displayName: item.assignedAgentName },
+            { assignedAgentId, assignedAgentName: item.assignedAgentName },
+          )
+        : "";
       return {
         ...item,
         assignedAgentName,
@@ -2654,7 +2657,7 @@ export function App() {
                 <div className="table-row queue-table-row" key={item.contactId}>
                   <span>{item.contactName}</span>
                   <span>{item.sourceFlowLabel}</span>
-                  <span>{item.status === "in_service" ? item.assignedAgentName ?? item.assignedAgentId ?? "-" : "-"}</span>
+                  <span>{item.status === "in_service" ? item.assignedAgentName || "-" : "-"}</span>
                   <span>{new Date(item.updatedAt).toLocaleString("pt-BR")}</span>
                   <span className="queue-actions">
                     <button

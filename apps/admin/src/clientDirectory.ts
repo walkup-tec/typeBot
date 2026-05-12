@@ -40,7 +40,7 @@ const WHATSAPP_CONTEXT_KEYS = new Set([
   "phone",
   "fone",
 ]);
-const RESERVED_CONTEXT_KEYS = new Set([...WHATSAPP_CONTEXT_KEYS, "nome", "name"]);
+const RESERVED_CONTEXT_KEYS = new Set([...WHATSAPP_CONTEXT_KEYS, "nome", "name", "nome_contato", "nome completo", "nome_completo"]);
 
 export const normalizeSearchDigits = (value: string): string => value.replace(/\D/g, "");
 
@@ -57,15 +57,60 @@ const isReservedContextKey = (key: string): boolean => {
   return isLeadCpfContextKey(key);
 };
 
+const normalizeComparableValue = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const pickLeadContextValue = (
+  leadContext: ClientDirectoryContact["leadContext"],
+  matchesKey: (key: string) => boolean,
+): string => {
+  for (const [key, value] of getLeadContextEntries(leadContext)) {
+    if (!matchesKey(key)) continue;
+    return String(value).trim();
+  }
+  return "";
+};
+
+const shouldSkipDuplicateContactNameField = (
+  key: string,
+  value: string,
+  contactName: string,
+  nomeValue: string,
+): boolean => {
+  const normalizedKey = normalizeKey(key);
+  const normalizedValue = normalizeComparableValue(value);
+  if (!normalizedValue) return false;
+
+  const normalizedContactName = normalizeComparableValue(contactName);
+  if (normalizedKey === "nome_contato") {
+    if (normalizedValue === normalizedContactName) return true;
+    if (nomeValue && normalizedValue === normalizeComparableValue(nomeValue)) return true;
+  }
+
+  if ((normalizedKey === "nome" || normalizedKey === "name") && normalizedValue === normalizedContactName) {
+    return true;
+  }
+
+  return false;
+};
+
 export const buildClientDirectoryRow = (contact: ClientDirectoryContact): ClientDirectoryRow => {
+  const contactName = resolveLeadContactName(contact.contactName, contact.leadContext);
   const whatsapp = resolveLeadWhatsapp(contact.leadWhatsapp, contact.leadContext);
   const rawCpf = resolveLeadCpf(contact.leadContext);
   const cpf = rawCpf ? formatBrazilianCpf(rawCpf) || rawCpf : "";
+  const nomeValue = pickLeadContextValue(contact.leadContext, (key) => normalizeKey(key) === "nome");
   const fieldValues: Record<string, string> = {};
 
   for (const [key, value] of getLeadContextEntries(contact.leadContext)) {
     if (isReservedContextKey(key)) continue;
-    fieldValues[key] = String(value);
+    const text = String(value).trim();
+    if (shouldSkipDuplicateContactNameField(key, text, contactName, nomeValue)) continue;
+    fieldValues[key] = text;
   }
 
   const assignedAgentName =
@@ -73,7 +118,7 @@ export const buildClientDirectoryRow = (contact: ClientDirectoryContact): Client
 
   return {
     contactId: contact.contactId,
-    contactName: resolveLeadContactName(contact.contactName, contact.leadContext),
+    contactName,
     whatsapp,
     cpf,
     sourceFlowLabel: String(contact.sourceFlowLabel ?? "").trim() || "Fluxo sem identificação",
