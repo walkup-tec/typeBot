@@ -47,11 +47,14 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   );
 
   const dynamicColumns = useMemo(() => collectClientDirectoryColumnKeys(filteredRows), [filteredRows]);
+  const showCpfColumn = useMemo(() => rows.some((row) => row.cpf.trim().length > 0), [rows]);
 
-  const tableColumns = useMemo(
-    () => ["Nome", "WhatsApp", "Fluxo/Produto", "Atendente", "Atualizado em", ...dynamicColumns, "Ações"],
-    [dynamicColumns],
-  );
+  const tableColumns = useMemo(() => {
+    const columns = ["Nome", "WhatsApp"];
+    if (showCpfColumn) columns.push("CPF");
+    columns.push("Fluxo/Produto", "Atendente", "Atualizado em", ...dynamicColumns, "Ações");
+    return columns;
+  }, [dynamicColumns, showCpfColumn]);
 
   const tableGridStyle = useMemo(
     () => ({
@@ -72,7 +75,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
         <input
           className="clients-list-search"
           type="search"
-          placeholder="Pesquisar por Nome ou WhatsApp"
+          placeholder="Pesquisar por Nome, WhatsApp ou CPF"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           aria-label="Pesquisar clientes"
@@ -133,6 +136,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
             <div key={row.contactId} className="table-row clients-table-row" style={tableGridStyle}>
               <span>{row.contactName || "-"}</span>
               <span>{row.whatsapp || "-"}</span>
+              {showCpfColumn ? <span>{row.cpf || "-"}</span> : null}
               <span>{row.sourceFlowLabel || "-"}</span>
               <span>{row.assignedAgentName || "-"}</span>
               <span>{formatClientDate(row.updatedAt)}</span>

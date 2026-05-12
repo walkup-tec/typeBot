@@ -1,7 +1,9 @@
 import {
+  formatBrazilianCpf,
   getLeadContextEntries,
   isLeadCpfContextKey,
   resolveLeadContactName,
+  resolveLeadCpf,
   resolveLeadWhatsapp,
 } from "./leadContactData";
 
@@ -21,6 +23,7 @@ export type ClientDirectoryRow = {
   contactId: string;
   contactName: string;
   whatsapp: string;
+  cpf: string;
   sourceFlowLabel: string;
   assignedAgentName: string;
   updatedAt: string;
@@ -56,6 +59,8 @@ const isReservedContextKey = (key: string): boolean => {
 
 export const buildClientDirectoryRow = (contact: ClientDirectoryContact): ClientDirectoryRow => {
   const whatsapp = resolveLeadWhatsapp(contact.leadWhatsapp, contact.leadContext);
+  const rawCpf = resolveLeadCpf(contact.leadContext);
+  const cpf = rawCpf ? formatBrazilianCpf(rawCpf) || rawCpf : "";
   const fieldValues: Record<string, string> = {};
 
   for (const [key, value] of getLeadContextEntries(contact.leadContext)) {
@@ -70,6 +75,7 @@ export const buildClientDirectoryRow = (contact: ClientDirectoryContact): Client
     contactId: contact.contactId,
     contactName: resolveLeadContactName(contact.contactName, contact.leadContext),
     whatsapp,
+    cpf,
     sourceFlowLabel: String(contact.sourceFlowLabel ?? "").trim() || "Fluxo sem identificação",
     assignedAgentName,
     updatedAt: contact.updatedAt,
@@ -99,6 +105,11 @@ export const matchesClientDirectorySearch = (row: ClientDirectoryRow, query: str
   if (row.whatsapp) {
     if (row.whatsapp.toLowerCase().includes(loweredQuery)) return true;
     if (queryDigits && normalizeSearchDigits(row.whatsapp).includes(queryDigits)) return true;
+  }
+
+  if (row.cpf) {
+    if (row.cpf.toLowerCase().includes(loweredQuery)) return true;
+    if (queryDigits && normalizeSearchDigits(row.cpf).includes(queryDigits)) return true;
   }
 
   for (const value of Object.values(row.fieldValues)) {

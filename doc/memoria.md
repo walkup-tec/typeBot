@@ -1,3 +1,9 @@
+## 2026-05-12 - CPF na lista de clientes do admin
+
+- Coluna CPF exibida apos WhatsApp quando algum lead da lista tiver CPF em `leadContext`.
+- Valor mascarado e busca por nome, WhatsApp ou CPF.
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Lista de clientes e menu lateral no admin
 
 - Filtros e pesquisa da lista de clientes ficam na area visivel; WhatsApp passou a select compacto.
