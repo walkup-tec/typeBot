@@ -112,10 +112,6 @@ body {
   transform: translateX(0);
 }
 
-.widget-shell.lead-drawer-open {
-  margin-right: min(380px, 92vw);
-}
-
 .lead-drawer-head {
   display: flex;
   align-items: center;

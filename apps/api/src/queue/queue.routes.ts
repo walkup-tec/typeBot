@@ -630,7 +630,6 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-drawer-overlay.open { display:block; }
     body.agent-screen .lead-drawer-panel { position:fixed; top:0; right:0; width:min(380px,92vw); height:100dvh; background:#111827; border-left:1px solid #1f2937; box-shadow:-18px 0 40px rgba(2,6,23,.45); overflow:auto; transform:translateX(100%); transition:transform .2s ease; z-index:90; padding:16px; box-sizing:border-box; pointer-events:auto; }
     body.agent-screen .lead-drawer-overlay.open .lead-drawer-panel { transform:translateX(0); }
-    body.agent-screen.lead-drawer-open .agent-widget { margin-right:min(380px,92vw); }
     body.agent-screen .lead-drawer-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
     body.agent-screen .lead-drawer-head strong { font-size:16px; color:#f8fafc; }
     body.agent-screen .lead-drawer-close { width:34px; height:34px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-size:22px; line-height:1; cursor:pointer; }
@@ -1677,7 +1676,6 @@ export const registerQueueRoutes = (app: Express) => {
       if (!leadDrawerOverlay) return;
       leadDrawerOverlay.classList.add("open");
       leadDrawerOverlay.setAttribute("aria-hidden", "false");
-      document.body.classList.add("lead-drawer-open");
       if (section) setLeadAccordionOpen(section, true);
       void refreshLeadDrawer();
     }
@@ -1686,7 +1684,6 @@ export const registerQueueRoutes = (app: Express) => {
       if (!leadDrawerOverlay) return;
       leadDrawerOverlay.classList.remove("open");
       leadDrawerOverlay.setAttribute("aria-hidden", "true");
-      document.body.classList.remove("lead-drawer-open");
       setLeadDrawerStatus("");
     }
 

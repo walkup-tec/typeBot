@@ -1,3 +1,22 @@
+## 2026-05-12 - Chat centralizado com card do lead na margem direita
+
+- Sintoma: ao abrir o card do lead, o chat deslocava para a direita.
+- Ajuste: removida margem extra no chat com drawer aberto; painel lateral segue fixo na direita e o chat permanece centralizado (widget + handoff-view).
+- Pendencia: redeploy API e widget.
+
+## 2026-05-12 - Icones de anexos e observacoes no cabecalho do chat
+
+- Cabecalho do atendente: icones de anexos e observacoes ao lado do contato; cor destaque quando ha registro.
+- Clique abre o card lateral na secao correspondente (widget + handoff-view).
+- Pendencia: redeploy API e widget.
+
+## 2026-05-12 - Painel do lead ao lado do chat (sem bloquear digitacao)
+
+- Sintoma: overlay do card do lead cobria o chat; atendente precisava fechar o painel para responder.
+- Ajuste: overlay transparente com `pointer-events: none`; painel lateral mantem interacao; chat permanece centralizado (sem margem extra ao abrir o drawer).
+- Commit: `5017379`.
+- Pendencia: redeploy API e widget; validar digitacao no chat com card aberto.
+
 ## 2026-05-12 - Anexos por ultimo e icones ativos no painel lead
 
 - Anexos ficam por ultimo no acordeao.
