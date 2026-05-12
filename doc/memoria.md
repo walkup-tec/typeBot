@@ -1,3 +1,9 @@
+## 2026-05-12 - Anexos por ultimo e icones ativos no painel lead
+
+- Anexos ficam por ultimo no acordeao.
+- Icones de anexos e observacoes mudam de cor quando ha conteudo.
+- Pendencia: redeploy API e widget.
+
 ## 2026-05-12 - Rodape do atendimento com inicio e nome
 
 - Rodape do painel do atendente: data/hora do inicio do atendimento e nome do usuario logado (sem UUID da sessao nem e-mail).

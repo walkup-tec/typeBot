@@ -113,6 +113,8 @@ export function LeadDrawerPanel({
     [leadWhatsappDraft, contextFromVariables],
   );
   const whatsappPreview = displayedWhatsapp || "Indisponível";
+  const hasAttachments = leadAttachments.length > 0;
+  const hasNotes = leadNotesDraft.trim().length > 0;
 
   const toggleSection = (section: LeadDrawerSection) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
@@ -206,7 +208,7 @@ export function LeadDrawerPanel({
             </button>
             <button
               type="button"
-              className="lead-toolbar-button"
+              className={`lead-toolbar-button${hasAttachments ? " lead-toolbar-button--active" : ""}`}
               aria-label="Anexos"
               title="Anexos"
               onClick={() => toggleSection("attachments")}
@@ -217,7 +219,7 @@ export function LeadDrawerPanel({
             </button>
             <button
               type="button"
-              className="lead-toolbar-button"
+              className={`lead-toolbar-button${hasNotes ? " lead-toolbar-button--active" : ""}`}
               aria-label="Observações"
               title="Observações"
               onClick={() => toggleSection("notes")}
@@ -264,38 +266,6 @@ export function LeadDrawerPanel({
             </AccordionSection>
 
             <AccordionSection
-              section="attachments"
-              label="Anexos"
-              open={openSections.attachments}
-              onToggle={toggleSection}
-            >
-              <label className="lead-field">
-                <span>Imagens e documentos</span>
-                <input
-                  ref={leadFilesInputRef}
-                  type="file"
-                  accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
-                  multiple
-                  onChange={onFilesSelected}
-                />
-              </label>
-              <div className="lead-attachments-list">
-                {leadAttachments.map((item) => (
-                  <div className="lead-attachment-item" key={item.id}>
-                    <strong>{item.fileName}</strong>
-                    {item.mimeType.startsWith("image/") || item.content.startsWith(imageDataUrlPrefix) ? (
-                      <img className="live-message-image" src={item.content} alt={item.fileName} />
-                    ) : (
-                      <a href={item.content} download={item.fileName}>
-                        Baixar
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </AccordionSection>
-
-            <AccordionSection
               section="variables"
               label="Informações do Typebot"
               open={openSections.variables}
@@ -327,6 +297,38 @@ export function LeadDrawerPanel({
                 <span>Registro interno</span>
                 <textarea rows={5} value={leadNotesDraft} onChange={(event) => onLeadNotesDraftChange(event.target.value)} />
               </label>
+            </AccordionSection>
+
+            <AccordionSection
+              section="attachments"
+              label="Anexos"
+              open={openSections.attachments}
+              onToggle={toggleSection}
+            >
+              <label className="lead-field">
+                <span>Imagens e documentos</span>
+                <input
+                  ref={leadFilesInputRef}
+                  type="file"
+                  accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                  multiple
+                  onChange={onFilesSelected}
+                />
+              </label>
+              <div className="lead-attachments-list">
+                {leadAttachments.map((item) => (
+                  <div className="lead-attachment-item" key={item.id}>
+                    <strong>{item.fileName}</strong>
+                    {item.mimeType.startsWith("image/") || item.content.startsWith(imageDataUrlPrefix) ? (
+                      <img className="live-message-image" src={item.content} alt={item.fileName} />
+                    ) : (
+                      <a href={item.content} download={item.fileName}>
+                        Baixar
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
             </AccordionSection>
           </div>
 

@@ -296,6 +296,12 @@ body {
   gap: 8px;
 }
 
+.lead-toolbar-button--active {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.16);
+  color: #5eead4;
+}
+
 .lead-accordion {
   display: grid;
   gap: 8px;

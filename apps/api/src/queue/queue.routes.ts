@@ -639,6 +639,7 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-fact-list { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
     body.agent-screen .lead-fact-list li { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid #1f2937; border-radius:10px; background:#0f172a; }
     body.agent-screen .lead-fact-icon, body.agent-screen .lead-fact-copy, body.agent-screen .lead-toolbar-button { width:34px; height:34px; border-radius:10px; border:1px solid #334155; background:#111827; color:#cbd5e1; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer; }
+    body.agent-screen .lead-toolbar-button--active { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
     body.agent-screen .lead-fact-icon svg, body.agent-screen .lead-fact-copy svg, body.agent-screen .lead-toolbar-button svg { width:16px; height:16px; fill:currentColor; }
     body.agent-screen .lead-fact-text { display:grid; gap:2px; min-width:0; }
     body.agent-screen .lead-fact-text small { color:#64748b; font-size:11px; }
@@ -1122,13 +1123,6 @@ export const registerQueueRoutes = (app: Express) => {
                 <label class="lead-field"><span>Atribuir para outro atendente</span><select id="leadAssignSelect"><option value="">Manter atendente atual</option></select></label>
               </div>
             </section>
-            <section class="lead-accordion-item" data-lead-section="attachments">
-              <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Anexos</span><span class="lead-accordion-icon">+</span></button>
-              <div class="lead-accordion-panel">
-                <label class="lead-field"><span>Imagens e documentos</span><input id="leadFilesInput" type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" multiple /></label>
-                <div id="leadAttachmentsList" class="lead-attachments-list"></div>
-              </div>
-            </section>
             <section class="lead-accordion-item" data-lead-section="variables">
               <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Informações do Typebot</span><span class="lead-accordion-icon">+</span></button>
               <div class="lead-accordion-panel"><div id="leadVariablesList" class="lead-variables-list"></div></div>
@@ -1137,6 +1131,13 @@ export const registerQueueRoutes = (app: Express) => {
               <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Observações do atendimento</span><span class="lead-accordion-icon">+</span></button>
               <div class="lead-accordion-panel">
                 <label class="lead-field"><span>Registro interno</span><textarea id="leadNotesInput" rows="5"></textarea></label>
+              </div>
+            </section>
+            <section class="lead-accordion-item" data-lead-section="attachments">
+              <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Anexos</span><span class="lead-accordion-icon">+</span></button>
+              <div class="lead-accordion-panel">
+                <label class="lead-field"><span>Imagens e documentos</span><input id="leadFilesInput" type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" multiple /></label>
+                <div id="leadAttachmentsList" class="lead-attachments-list"></div>
               </div>
             </section>
           </div>
@@ -1697,6 +1698,7 @@ export const registerQueueRoutes = (app: Express) => {
       const items = Array.isArray(attachments) ? attachments : [];
       if (items.length === 0) {
         leadAttachmentsList.innerHTML = "";
+        syncLeadToolbarIndicators();
         return;
       }
       leadAttachmentsList.innerHTML = items
@@ -1726,6 +1728,19 @@ export const registerQueueRoutes = (app: Express) => {
           );
         })
         .join("");
+      syncLeadToolbarIndicators();
+    }
+
+    function syncLeadToolbarIndicators() {
+      const attachmentsButton = document.querySelector('[data-open-section="attachments"]');
+      const notesButton = document.querySelector('[data-open-section="notes"]');
+      const hasAttachments =
+        Array.isArray(leadDrawerContact?.attachments) && leadDrawerContact.attachments.length > 0;
+      const hasNotes = leadNotesInput
+        ? String(leadNotesInput.value || "").trim().length > 0
+        : String(leadDrawerContact?.agentNotes || "").trim().length > 0;
+      if (attachmentsButton) attachmentsButton.classList.toggle("lead-toolbar-button--active", hasAttachments);
+      if (notesButton) notesButton.classList.toggle("lead-toolbar-button--active", hasNotes);
     }
 
     function applyLeadContactToDrawer(contact) {
@@ -1739,6 +1754,7 @@ export const registerQueueRoutes = (app: Express) => {
       syncLeadProfilePreview();
       renderLeadVariables(contact?.leadContext || {});
       renderLeadAttachments(contact?.attachments || []);
+      syncLeadToolbarIndicators();
     }
 
     function looksLikeEmail(value) {
@@ -1892,6 +1908,9 @@ export const registerQueueRoutes = (app: Express) => {
     }
     if (isAgentMode && leadWhatsappInput) {
       leadWhatsappInput.addEventListener("input", syncLeadProfilePreview);
+    }
+    if (isAgentMode && leadNotesInput) {
+      leadNotesInput.addEventListener("input", syncLeadToolbarIndicators);
     }
     if (isAgentMode && leadWhatsappCopy) {
       leadWhatsappCopy.addEventListener("click", async () => {
