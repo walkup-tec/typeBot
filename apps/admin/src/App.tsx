@@ -1753,28 +1753,28 @@ export function App() {
     <div className={`layout${isSidebarCollapsed ? " layout--sidebar-collapsed" : ""}`}>
       <aside className={`sidebar${isSidebarCollapsed ? " sidebar--collapsed" : ""}`}>
         <div className="sidebar-top">
-          <div className="brand-block">
+          <div className="brand-head">
             <img src="/drax-logo-footer.png" alt="DRAX" className="brand-logo" />
-            <p>Type Bot e Chat de atendimento</p>
+            <button
+              type="button"
+              className="sidebar-toggle"
+              onClick={() => setIsSidebarCollapsed((current) => !current)}
+              aria-label={isSidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+              title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            >
+              <svg className="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d={isSidebarCollapsed ? "M9 6l6 6-6 6" : "M15 6l-6 6 6 6"}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </div>
-          <button
-            type="button"
-            className="sidebar-toggle"
-            onClick={() => setIsSidebarCollapsed((current) => !current)}
-            aria-label={isSidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
-            title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-          >
-            <svg className="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path
-                d={isSidebarCollapsed ? "M9 6l6 6-6 6" : "M15 6l-6 6 6 6"}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
+          <p className="brand-tagline">Type Bot e Chat de atendimento</p>
         </div>
         <nav className="menu-nav" aria-label="Menu principal">
           {masterProfile === "subscriber_master" && authSession?.user?.role !== "attendant" ? (

@@ -189,9 +189,26 @@ body {
 
 .sidebar-top {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.brand-head {
+  display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  width: 100%;
+}
+
+.brand-tagline {
+  margin: 0;
+  width: 100%;
+  color: #d5deee;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .brand-logo {
@@ -2704,20 +2721,17 @@ button.danger-btn:not(.ghost-btn):hover {
     box-sizing: border-box;
   }
 
-  .sidebar--collapsed .brand-block p,
+  .sidebar--collapsed .brand-tagline,
   .sidebar--collapsed .menu-btn-label {
     display: none;
   }
 
   .sidebar--collapsed .sidebar-top {
-    flex-direction: column;
     align-items: center;
   }
 
-  .sidebar--collapsed .brand-block {
-    width: 100%;
-    align-items: center;
-    justify-items: center;
+  .sidebar--collapsed .brand-head {
+    justify-content: center;
   }
 
   .sidebar--collapsed .brand-logo {

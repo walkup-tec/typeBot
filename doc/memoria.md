@@ -1,3 +1,8 @@
+## 2026-05-12 - Inscricao do menu lateral em linha unica
+
+- Texto "Type Bot e Chat de atendimento" ocupa toda a largura do menu em uma linha.
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Tabela da lista de clientes mais suave
 
 - Linhas sem contorno, alternancia leve de cor, fonte menor e espacamento reduzido.
