@@ -1,4 +1,4 @@
-import { ChangeEvent, ReactNode, RefObject, useMemo, useState } from "react";
+import { ChangeEvent, ReactNode, RefObject, useEffect, useMemo, useState } from "react";
 import { resolveLeadWhatsapp } from "./resolveLeadWhatsapp";
 
 export type LeadAttachment = {
@@ -14,11 +14,12 @@ export type AttendantOption = {
   displayName: string;
 };
 
-type LeadDrawerSection = "contact" | "assign" | "attachments" | "variables" | "notes";
+export type LeadDrawerSection = "contact" | "assign" | "attachments" | "variables" | "notes";
 
 type LeadDrawerPanelProps = {
   open: boolean;
   onClose: () => void;
+  focusSection?: LeadDrawerSection | null;
   leadNameDraft: string;
   onLeadNameDraftChange: (value: string) => void;
   leadWhatsappDraft: string;
@@ -79,6 +80,7 @@ const AccordionSection = ({
 export function LeadDrawerPanel({
   open,
   onClose,
+  focusSection = null,
   leadNameDraft,
   onLeadNameDraftChange,
   leadWhatsappDraft,
@@ -115,6 +117,11 @@ export function LeadDrawerPanel({
   const whatsappPreview = displayedWhatsapp || "Indisponível";
   const hasAttachments = leadAttachments.length > 0;
   const hasNotes = leadNotesDraft.trim().length > 0;
+
+  useEffect(() => {
+    if (!open || !focusSection) return;
+    setOpenSections((current) => ({ ...current, [focusSection]: true }));
+  }, [open, focusSection]);
 
   const toggleSection = (section: LeadDrawerSection) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));

@@ -43,6 +43,13 @@ body {
   word-break: break-word;
 }
 
+.lead-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .lead-info-button {
   width: 38px;
   height: 38px;
@@ -62,6 +69,12 @@ body {
   width: 18px;
   height: 18px;
   fill: currentColor;
+}
+
+.lead-info-button--active {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.16);
+  color: #5eead4;
 }
 
 .lead-drawer-overlay {
@@ -417,6 +430,12 @@ button.lead-info-button {
   flex-shrink: 0;
   border-radius: 999px;
   color: #cbd5e1;
+}
+
+button.lead-info-button--active {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.16);
+  color: #5eead4;
 }
 
 button.lead-save-button {

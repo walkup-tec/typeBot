@@ -1,5 +1,5 @@
 import { CSSProperties, ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { LeadDrawerPanel, type AttendantOption, type LeadAttachment } from "./LeadDrawerPanel";
+import { LeadDrawerPanel, type AttendantOption, type LeadAttachment, type LeadDrawerSection } from "./LeadDrawerPanel";
 import { formatAgentSessionMeta, resolveServiceStartedAt } from "./agentSessionMeta";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
@@ -128,6 +128,7 @@ export function WidgetApp() {
     () => sessionContactNameFromQuery.trim() || "Visitante",
   );
   const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
+  const [leadDrawerFocusSection, setLeadDrawerFocusSection] = useState<LeadDrawerSection | null>(null);
   const [leadNameDraft, setLeadNameDraft] = useState("");
   const [leadWhatsappDraft, setLeadWhatsappDraft] = useState("");
   const [leadNotesDraft, setLeadNotesDraft] = useState("");
@@ -684,6 +685,19 @@ export function WidgetApp() {
     }
   }
 
+  const hasLeadAttachments = leadAttachments.length > 0;
+  const hasLeadNotes = leadNotesDraft.trim().length > 0;
+
+  const openLeadDrawer = (section?: LeadDrawerSection) => {
+    setLeadDrawerFocusSection(section ?? null);
+    setLeadDrawerOpen(true);
+  };
+
+  const closeLeadDrawer = () => {
+    setLeadDrawerOpen(false);
+    setLeadDrawerFocusSection(null);
+  };
+
   if (isVisitorBootstrapMode && !bootstrappedContactId) {
     return (
       <div className="widget-shell">
@@ -706,17 +720,41 @@ export function WidgetApp() {
             <strong>{leadDisplayName}</strong>
             <span>Você está conversando com o visitante em tempo real</span>
           </div>
-          <button
-            type="button"
-            className="lead-info-button"
-            title="Dados do lead"
-            aria-label="Abrir dados do lead"
-            onClick={() => setLeadDrawerOpen(true)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
-            </svg>
-          </button>
+          <div className="lead-header-actions">
+            <button
+              type="button"
+              className={`lead-info-button${hasLeadAttachments ? " lead-info-button--active" : ""}`}
+              title="Anexos do lead"
+              aria-label="Abrir anexos do lead"
+              onClick={() => openLeadDrawer("attachments")}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M16.5 6.5v9a4.5 4.5 0 0 1-9 0v-10a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V7h-1.5v8.5a3 3 0 0 0 6 0v-10a4.5 4.5 0 0 0-9 0v10a6 6 0 0 0 12 0V6.5h-1.5Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={`lead-info-button${hasLeadNotes ? " lead-info-button--active" : ""}`}
+              title="Observações do lead"
+              aria-label="Abrir observações do lead"
+              onClick={() => openLeadDrawer("notes")}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 2.5L18.5 9H14V4.5ZM8 13h8v1.5H8V13Zm0 3.5h8V18H8v-1.5Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="lead-info-button"
+              title="Dados do lead"
+              aria-label="Abrir dados do lead"
+              onClick={() => openLeadDrawer()}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="widget-chat agent-chat">
@@ -798,7 +836,8 @@ export function WidgetApp() {
 
         <LeadDrawerPanel
           open={leadDrawerOpen}
-          onClose={() => setLeadDrawerOpen(false)}
+          onClose={closeLeadDrawer}
+          focusSection={leadDrawerFocusSection}
           leadNameDraft={leadNameDraft}
           onLeadNameDraftChange={setLeadNameDraft}
           leadWhatsappDraft={leadWhatsappDraft}

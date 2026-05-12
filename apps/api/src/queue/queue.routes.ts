@@ -621,8 +621,10 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .widget-header { display:flex; flex-direction:row; align-items:flex-start; justify-content:space-between; gap:10px; }
     body.agent-screen .lead-header-main { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }
     body.agent-screen .lead-header-main strong { font-size:18px; line-height:1.25; word-break:break-word; }
+    body.agent-screen .lead-header-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; }
     body.agent-screen .widget-header span { color:#94a3b8; font-size:14px; }
     body.agent-screen .lead-info-button { width:38px; height:38px; min-width:38px; flex-shrink:0; border-radius:999px; border:1px solid #334155; background:#0f172a; color:#cbd5e1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
+    body.agent-screen .lead-info-button--active { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
     body.agent-screen .lead-info-button svg { width:18px; height:18px; fill:currentColor; }
     body.agent-screen .lead-drawer-overlay { position:fixed; inset:0; background:transparent; z-index:80; display:none; pointer-events:none; }
     body.agent-screen .lead-drawer-overlay.open { display:block; }
@@ -1059,9 +1061,17 @@ export const registerQueueRoutes = (app: Express) => {
         <strong id="leadTitle">${escapedName}</strong>
         <span>Você está conversando com o visitante em tempo real</span>
       </div>
-      <button type="button" id="leadInfoButton" class="lead-info-button" title="Dados do lead" aria-label="Abrir dados do lead">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
-      </button>
+      <div class="lead-header-actions">
+        <button type="button" id="leadAttachmentsHeaderButton" class="lead-info-button" title="Anexos do lead" aria-label="Abrir anexos do lead">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5v9a4.5 4.5 0 0 1-9 0v-10a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V7h-1.5v8.5a3 3 0 0 0 6 0v-10a4.5 4.5 0 0 0-9 0v10a6 6 0 0 0 12 0V6.5h-1.5Z"/></svg>
+        </button>
+        <button type="button" id="leadNotesHeaderButton" class="lead-info-button" title="Observações do lead" aria-label="Abrir observações do lead">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 2.5L18.5 9H14V4.5ZM8 13h8v1.5H8V13Zm0 3.5h8V18H8v-1.5Z"/></svg>
+        </button>
+        <button type="button" id="leadInfoButton" class="lead-info-button" title="Dados do lead" aria-label="Abrir dados do lead">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+        </button>
+      </div>
     </div>
     <div id="chat" class="widget-chat agent-chat"></div>
     <form id="form" class="widget-input">
@@ -1520,6 +1530,8 @@ export const registerQueueRoutes = (app: Express) => {
     let leadAttendants = [];
     const leadTitle = document.getElementById("leadTitle");
     const leadInfoButton = document.getElementById("leadInfoButton");
+    const leadAttachmentsHeaderButton = document.getElementById("leadAttachmentsHeaderButton");
+    const leadNotesHeaderButton = document.getElementById("leadNotesHeaderButton");
     const leadDrawerOverlay = document.getElementById("leadDrawerOverlay");
     const leadDrawerClose = document.getElementById("leadDrawerClose");
     const leadNameInput = document.getElementById("leadNameInput");
@@ -1661,11 +1673,12 @@ export const registerQueueRoutes = (app: Express) => {
       leadDrawerStatus.textContent = String(text || "");
     }
 
-    function openLeadDrawer() {
+    function openLeadDrawer(section) {
       if (!leadDrawerOverlay) return;
       leadDrawerOverlay.classList.add("open");
       leadDrawerOverlay.setAttribute("aria-hidden", "false");
       document.body.classList.add("lead-drawer-open");
+      if (section) setLeadAccordionOpen(section, true);
       void refreshLeadDrawer();
     }
 
@@ -1744,6 +1757,12 @@ export const registerQueueRoutes = (app: Express) => {
         : String(leadDrawerContact?.agentNotes || "").trim().length > 0;
       if (attachmentsButton) attachmentsButton.classList.toggle("lead-toolbar-button--active", hasAttachments);
       if (notesButton) notesButton.classList.toggle("lead-toolbar-button--active", hasNotes);
+      if (leadAttachmentsHeaderButton) {
+        leadAttachmentsHeaderButton.classList.toggle("lead-info-button--active", hasAttachments);
+      }
+      if (leadNotesHeaderButton) {
+        leadNotesHeaderButton.classList.toggle("lead-info-button--active", hasNotes);
+      }
     }
 
     function applyLeadContactToDrawer(contact) {
@@ -1931,7 +1950,13 @@ export const registerQueueRoutes = (app: Express) => {
       });
     }
     if (isAgentMode && leadInfoButton) {
-      leadInfoButton.addEventListener("click", openLeadDrawer);
+      leadInfoButton.addEventListener("click", () => openLeadDrawer());
+    }
+    if (isAgentMode && leadAttachmentsHeaderButton) {
+      leadAttachmentsHeaderButton.addEventListener("click", () => openLeadDrawer("attachments"));
+    }
+    if (isAgentMode && leadNotesHeaderButton) {
+      leadNotesHeaderButton.addEventListener("click", () => openLeadDrawer("notes"));
     }
     if (isAgentMode && leadDrawerClose) {
       leadDrawerClose.addEventListener("click", closeLeadDrawer);
