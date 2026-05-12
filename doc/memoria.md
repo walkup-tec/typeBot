@@ -2744,3 +2744,86 @@
 
 - `resolve-lead-contact-name`
 - `nome-contato-nome-completo-fallback`
+
+## 2026-05-12 - Diagnóstico login painel (ligação à API)
+
+- Sintoma em `painel.chattypebot.com`: toast **Sem ligação à API** ao enviar login; rodapé já mostrava `https://soma-api-typebot-crm.achpyp.easypanel.host` (URL correta no bundle).
+- Testes externos (PowerShell/Node): `GET /health` **200**; CORS com `Origin: https://painel.chattypebot.com` OK; `POST /api/auth/login` responde (401 com senha errada para `draxsistemas@gmail.com`).
+- Conclusão: falha no `catch` do `fetch` (rede/TLS/browser), não credencial nem `VITE_API_BASE_URL` ausente no build.
+- Admin: sonda `/health` na tela de login, estado visual no rodapé da API e mensagem de erro com detalhe do `Error.message`.
+
+### Palavras-chave para pesquisa futura
+
+- `login-sem-ligacao-api`
+- `auth-api-endpoint-hint-health-probe`
+
+## 2026-05-12 - Coluna Ações centralizada (lista de clientes)
+
+- Cabeçalho **Ações** e ícones da última coluna da tabela de clientes alinhados ao centro da célula (`clients-table-row > span:last-child`).
+- Fila de atendimento: mesma centralização na coluna de ações (`queue-table-row`).
+
+### Palavras-chave para pesquisa futura
+
+- `clients-table-actions-center`
+- `queue-actions-center`
+
+## 2026-05-12 - Reforço centralização coluna Ações
+
+- Coluna **Ações** com largura fixa (76px) e classe `clients-table-col-actions` no cabeçalho e nas células da lista de clientes.
+- Fila: classe `queue-table-col-actions` e última coluna fixa (76px) no breakpoint largo.
+
+### Palavras-chave para pesquisa futura
+
+- `clients-table-col-actions`
+- `queue-table-col-actions`
+
+## 2026-05-12 - Centralização do ícone na coluna Ações (grelha)
+
+- Template de colunas da lista de clientes via `--clients-table-cols` no contentor da tabela.
+- Botão de detalhe como filho direto da grelha com `justify-self: center` na coluna de ações.
+
+### Palavras-chave para pesquisa futura
+
+- `clients-table-cols-css-var`
+- `clients-table-action-grid-item`
+
+## 2026-05-12 - Lista de clientes em tabela HTML (Ações centralizada)
+
+- Lista de clientes deixou de usar grelha CSS em `div`; passou a `<table>` com coluna **Ações** fixa (76px) e `text-align: center`.
+- Produção em `painel.chattypebot.com` ainda servia bundle antigo (`index-CdLZziWW.css`) sem os ajustes recentes — redeploy do painel necessário.
+
+### Palavras-chave para pesquisa futura
+
+- `clients-table-html-actions-center`
+- `painel-bundle-antigo-actions-column`
+
+## 2026-05-12 - Exportar lista de clientes para Excel
+
+- Botão **Exportar Excel** na Lista de Clientes; exporta `filteredRows` (filtros ativos) ou lista completa.
+- Arquivo `.xlsx` com colunas da tabela (sem Ações); nome `clientes-AAAA-MM-DD.xlsx` ou `-filtrado` com filtros.
+- Dependência `xlsx` no admin; import dinâmico no clique.
+
+### Palavras-chave para pesquisa futura
+
+- `export-client-directory-excel`
+- `clients-list-export-btn`
+
+## 2026-05-12 - Nome único no export Excel da lista de clientes
+
+- Cada download usa UUID no nome: `clientes-AAAA-MM-DD-{id}.xlsx` (ou `-filtrado`).
+
+### Palavras-chave para pesquisa futura
+
+- `clientes-export-uuid-filename`
+
+## 2026-05-12 - Diagnóstico painel sem exportar Excel nem centralizar Ações
+
+- `painel.chattypebot.com` servia `index-CdLZziWW.css` / `index-BuzWbGuk.js` (commit `140f34a`); sem `Exportar Excel`, `clients-table-col-actions` nem chunk `xlsx`.
+- Causa: alterações do admin só no working tree; Easypanel rebuilda a partir do Git.
+- Correção: commit/push `0aad114` (tabela HTML, coluna Ações 76px, export Excel).
+- Próximo passo: redeploy **painel-typebot-crm** (não só API); validar novo hash de assets no HTML.
+
+### Palavras-chave para pesquisa futura
+
+- `painel-bundle-desatualizado`
+- `deploy-painel-typebot-crm-admin`

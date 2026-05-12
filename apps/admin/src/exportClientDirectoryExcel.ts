@@ -34,6 +34,16 @@ const buildClientDirectoryExportRows = (rows: ClientDirectoryRow[], headers: str
   });
 };
 
+const createClientDirectoryExportFileName = (usesFilters?: boolean): string => {
+  const datePart = new Date().toISOString().slice(0, 10);
+  const uniqueId =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const filterPart = usesFilters ? "-filtrado" : "";
+  return `clientes-${datePart}-${uniqueId}${filterPart}.xlsx`;
+};
+
 export const downloadClientDirectoryExcel = async (
   rows: ClientDirectoryRow[],
   options?: { usesFilters?: boolean },
@@ -47,7 +57,5 @@ export const downloadClientDirectoryExcel = async (
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
 
-  const datePart = new Date().toISOString().slice(0, 10);
-  const suffix = options?.usesFilters ? "-filtrado" : "";
-  XLSX.writeFile(workbook, `clientes-${datePart}${suffix}.xlsx`);
+  XLSX.writeFile(workbook, createClientDirectoryExportFileName(options?.usesFilters));
 };
