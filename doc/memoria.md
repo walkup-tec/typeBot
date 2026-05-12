@@ -1,3 +1,38 @@
+## 2026-05-12 - Edicao inline de contato no topo do painel lead
+
+- Removida a secao inferior "Dados do contato"; Nome, WhatsApp e CPF editam no topo com input, lapis discreto e copiar ao lado.
+- Widget: `LeadInlineFactField.tsx`, `LeadDrawerPanel.tsx`, `WidgetApp.tsx` (`saveLeadContactFields` no blur; `saveLeadProfile` reutiliza o mesmo fluxo).
+- Handoff: HTML/CSS/JS em `queue.routes.ts` alinhados; listener antigo de copiar WhatsApp removido.
+- Validacao: `npm run build:api` OK.
+- Pendencia: commit/push, redeploy API/widget e teste manual (blur salva, copiar, CPF vazio).
+
+## 2026-05-12 - Deploy producao sem alteracoes visiveis
+
+- Causa: redeploy so do servico `api-typebot-crm` (`npm run build:api`); admin e widget sao servicos separados.
+- Commit no ar era `07629bf` (fix CSS admin), mas o painel nao sobe nesse servico.
+- CPF e demais ajustes estavam so no working tree local; commit `b130cb3` enviado ao GitHub.
+- Proximo passo: redeploy `api-typebot-crm`, `painel-typebot-crm` e `widget-typebot-crm`; hard refresh no browser.
+
+## 2026-05-12 - CPF fixo no detalhe do lead com edicao manual
+
+- CPF aparece abaixo do WhatsApp no card do lead; sem valor mostra "Não informado".
+- Atendente edita em Dados do contato; salva em `leadContext.CPF` via `PATCH /profile` (`leadCpf`).
+- Variavel `CPF` do Typebot preenche automaticamente; chave fica fora da listagem duplicada de variaveis.
+- Pendencia: redeploy API, widget e admin.
+
+## 2026-05-12 - CPF oculto ate existir no leadContext
+
+- Sem variavel CPF no Typebot/fila: UI nao exibe campo fixo nem coluna na lista de clientes.
+- Quando `leadContext` trouxer chave de CPF/documento, o card volta a mostrar o valor mascarado.
+- Pendencia: incluir CPF no fluxo Typebot e no webhook de handoff quando o produto exigir.
+
+## 2026-05-12 - Retomada de sessao
+
+- Contexto recuperado apos fechamento do Cursor; snapshot em `doc/LOG-2026-05-12__105956__recuperacao-retomada-typebot.md`.
+- Ultimo commit publicado: `07629bf`; working tree com CPF mascarado, fallback `nome_completo`, lista de clientes e demais ajustes do painel lead ainda locais.
+- `npm run build:api` OK nesta retomada.
+- Proximo passo sugerido: build admin/widget, commit/push e redeploy Easypanel.
+
 ## 2026-05-12 - Painel admin sem estilos apos redeploy
 
 - Causa: `LeadDetailModal` importava `widget.css` com regras globais de `button`/`input`/`body` e quebrava o layout do painel.
@@ -2628,3 +2663,34 @@
 
 - `avatar-hostavatar-url-publica`
 - `remove-dataurl-avatar-theme`
+
+## 2026-05-11 - Menu Lista de Clientes no admin
+
+- Nova tela `clientList` no admin para assinantes e atendentes: tabela dinâmica com contatos da fila do tenant, colunas fixas (Nome, WhatsApp, CPF, Fluxo/Produto, Atendente, Atualizado em) e colunas extras só para chaves não vazias do `leadContext`.
+- Busca por CPF, nome ou WhatsApp; filtros Fluxo/Produto e com/sem WhatsApp; ação Ver detalhes reutiliza `LeadDetailModal`.
+- Dados vêm de `GET /api/chat/queue` já carregado no painel (sem endpoint novo).
+
+### Palavras-chave para pesquisa futura
+
+- `lista-de-clientes`
+- `client-directory-admin`
+
+## 2026-05-12 - CPF mascarado no card de detalhes do lead
+
+- CPF resolvido do `leadContext` e exibido logo abaixo do WhatsApp no topo do card (admin `LeadDetailModal` e widget `LeadDrawerPanel`), com máscara `000.000.000-00`.
+- Chaves de CPF removidas da listagem de variáveis do Typebot para evitar duplicidade; lista de clientes reutiliza a mesma formatação.
+
+### Palavras-chave para pesquisa futura
+
+- `cpf-mascarado-lead-detail`
+- `resolve-lead-cpf`
+
+## 2026-05-12 - Nome do contato com fallback para nome_completo
+
+- Regra central: priorizar `Nome_Contato` no contexto do lead; se vazio, usar `nome_completo` (também `nome_competo` e `nome completo`).
+- Handoff, normalização da fila na API, admin e widget passam a aplicar a mesma resolução de nome.
+
+### Palavras-chave para pesquisa futura
+
+- `resolve-lead-contact-name`
+- `nome-contato-nome-completo-fallback`

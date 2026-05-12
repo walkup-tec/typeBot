@@ -623,15 +623,22 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-profile-meta strong { display:block; font-size:18px; line-height:1.2; color:#f8fafc; word-break:break-word; }
     body.agent-screen .lead-profile-sub { display:block; margin-top:4px; color:#94a3b8; font-size:12px; }
     body.agent-screen .lead-fact-list { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
-    body.agent-screen .lead-fact-list li { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid #1f2937; border-radius:10px; background:#0f172a; }
+    body.agent-screen .lead-fact-list li, body.agent-screen .lead-inline-fact-field { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:8px 10px; border:1px solid #1f2937; border-radius:10px; background:#0f172a; }
+    body.agent-screen .lead-inline-fact-field-main { display:grid; gap:4px; min-width:0; }
+    body.agent-screen .lead-inline-fact-field-main small { color:#64748b; font-size:11px; }
+    body.agent-screen .lead-inline-fact-input-wrap { position:relative; display:block; }
+    body.agent-screen .lead-inline-fact-input { width:100%; border:1px solid #1f2937; border-radius:8px; background:#111827; color:#e2e8f0; font:inherit; font-size:13px; line-height:1.35; padding:8px 34px 8px 10px; box-sizing:border-box; }
+    body.agent-screen .lead-inline-fact-input:focus { outline:none; border-color:#3b82f6; box-shadow:0 0 0 1px rgba(59,130,246,.35); }
+    body.agent-screen .lead-inline-fact-input:read-only { cursor:default; background:#0f172a; }
+    body.agent-screen .lead-inline-fact-input-wrap.is-editing .lead-inline-fact-input { background:#111827; cursor:text; }
+    body.agent-screen .lead-inline-fact-edit { position:absolute; top:50%; right:6px; width:24px; height:24px; margin:0; padding:0; border:0; border-radius:6px; background:transparent; color:#64748b; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transform:translateY(-50%); }
+    body.agent-screen .lead-inline-fact-edit svg { width:14px; height:14px; fill:currentColor; }
+    body.agent-screen .lead-inline-fact-edit:hover, body.agent-screen .lead-inline-fact-edit:focus-visible { color:#cbd5e1; background:rgba(148,163,184,.12); }
     body.agent-screen .lead-fact-icon, body.agent-screen .lead-fact-copy, body.agent-screen .lead-toolbar-button { width:34px; height:34px; border-radius:10px; border:1px solid #334155; background:#111827; color:#cbd5e1; display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer; }
     body.agent-screen .lead-toolbar-button--active { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
     body.agent-screen .lead-fact-icon svg, body.agent-screen .lead-fact-copy svg, body.agent-screen .lead-toolbar-button svg { width:16px; height:16px; fill:currentColor; }
-    body.agent-screen .lead-fact-text { display:grid; gap:2px; min-width:0; }
-    body.agent-screen .lead-fact-text small { color:#64748b; font-size:11px; }
-    body.agent-screen .lead-fact-text span { color:#e2e8f0; font-size:13px; word-break:break-word; }
     body.agent-screen .lead-fact-copy:disabled { opacity:.45; cursor:not-allowed; }
-    body.agent-screen .lead-toolbar { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    body.agent-screen .lead-toolbar { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
     body.agent-screen .lead-accordion { display:grid; gap:8px; }
     body.agent-screen .lead-accordion-item { border:1px solid #1f2937; border-radius:10px; background:#0f172a; overflow:hidden; }
     body.agent-screen .lead-accordion-trigger { width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 14px; border:0; background:transparent; color:#f8fafc; font:inherit; font-weight:600; text-align:left; cursor:pointer; }
@@ -1084,26 +1091,59 @@ export const registerQueueRoutes = (app: Express) => {
             </div>
           </div>
           <ul class="lead-fact-list">
-            <li>
+            <li class="lead-inline-fact-field">
               <span class="lead-fact-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.9 15.9 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .58 3.6 1 1 0 0 1-.24 1Z"/></svg>
+                <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
               </span>
-              <span class="lead-fact-text"><small>WhatsApp</small><span id="leadWhatsappPreview">Indisponível</span></span>
-              <button type="button" id="leadWhatsappCopy" class="lead-fact-copy" aria-label="Copiar WhatsApp" title="Copiar WhatsApp">
+              <label class="lead-inline-fact-field-main">
+                <small>Nome do lead</small>
+                <span class="lead-inline-fact-input-wrap">
+                  <input id="leadNameInput" class="lead-inline-fact-input" readonly />
+                  <button type="button" class="lead-inline-fact-edit" data-edit-for="leadNameInput" aria-label="Editar nome do lead" title="Editar nome do lead">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25Zm18-11.5a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.13 1.13 3.75 3.75 1.13-1.13Z"/></svg>
+                  </button>
+                </span>
+              </label>
+              <button type="button" class="lead-fact-copy" data-copy-for="leadNameInput" aria-label="Copiar nome" title="Copiar nome">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v16h13a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 18H8V7h11v16Z"/></svg>
               </button>
             </li>
-            <li>
+            <li class="lead-inline-fact-field">
+              <span class="lead-fact-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.9 15.9 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .58 3.6 1 1 0 0 1-.24 1Z"/></svg>
+              </span>
+              <label class="lead-inline-fact-field-main">
+                <small>WhatsApp</small>
+                <span class="lead-inline-fact-input-wrap">
+                  <input id="leadWhatsappInput" class="lead-inline-fact-input" inputmode="tel" readonly />
+                  <button type="button" class="lead-inline-fact-edit" data-edit-for="leadWhatsappInput" aria-label="Editar WhatsApp" title="Editar WhatsApp">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25Zm18-11.5a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.13 1.13 3.75 3.75 1.13-1.13Z"/></svg>
+                  </button>
+                </span>
+              </label>
+              <button type="button" class="lead-fact-copy" data-copy-for="leadWhatsappInput" aria-label="Copiar WhatsApp" title="Copiar WhatsApp">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v16h13a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 18H8V7h11v16Z"/></svg>
+              </button>
+            </li>
+            <li class="lead-inline-fact-field">
               <span class="lead-fact-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h16V6H4Zm3 4h10v1.5H7V10Zm0 3h7v1.5H7V13Z"/></svg>
               </span>
-              <span class="lead-fact-text"><small>CPF</small><span id="leadCpfPreview">Não informado</span></span>
+              <label class="lead-inline-fact-field-main">
+                <small>CPF</small>
+                <span class="lead-inline-fact-input-wrap">
+                  <input id="leadCpfInput" class="lead-inline-fact-input" inputmode="numeric" placeholder="000.000.000-00" readonly />
+                  <button type="button" class="lead-inline-fact-edit" data-edit-for="leadCpfInput" aria-label="Editar CPF" title="Editar CPF">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25Zm18-11.5a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.13 1.13 3.75 3.75 1.13-1.13Z"/></svg>
+                  </button>
+                </span>
+              </label>
+              <button type="button" class="lead-fact-copy" data-copy-for="leadCpfInput" aria-label="Copiar CPF" title="Copiar CPF">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v16h13a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 18H8V7h11v16Z"/></svg>
+              </button>
             </li>
           </ul>
           <div class="lead-toolbar">
-            <button type="button" class="lead-toolbar-button" data-open-section="contact" aria-label="Editar dados" title="Editar dados">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25Zm18-11.5a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.13 1.13 3.75 3.75 1.13-1.13Z"/></svg>
-            </button>
             <button type="button" class="lead-toolbar-button" data-open-section="assign" aria-label="Atribuir atendente" title="Atribuir atendente">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3Zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.3 0-7 1.2-7 3.5V18h8v-2.5C9 15.2 8.3 14.4 8 14Zm8 0c-.3 0-1.2.4-2 2.5V18h7v-2.5C21 14.2 16.3 13 14 13Z"/></svg>
             </button>
@@ -1115,14 +1155,6 @@ export const registerQueueRoutes = (app: Express) => {
             </button>
           </div>
           <div class="lead-accordion">
-            <section class="lead-accordion-item" data-lead-section="contact">
-              <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Dados do contato</span><span class="lead-accordion-icon">+</span></button>
-              <div class="lead-accordion-panel">
-                <label class="lead-field"><span>Nome do lead</span><input id="leadNameInput" /></label>
-                <label class="lead-field"><span>WhatsApp</span><input id="leadWhatsappInput" inputmode="tel" /></label>
-                <label class="lead-field"><span>CPF</span><input id="leadCpfInput" inputmode="numeric" placeholder="000.000.000-00" /></label>
-              </div>
-            </section>
             <section class="lead-accordion-item" data-lead-section="assign">
               <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Atribuição</span><span class="lead-accordion-icon">+</span></button>
               <div class="lead-accordion-panel">
@@ -1547,10 +1579,8 @@ export const registerQueueRoutes = (app: Express) => {
     const leadDrawerStatus = document.getElementById("leadDrawerStatus");
     const leadProfileAvatar = document.getElementById("leadProfileAvatar");
     const leadProfileName = document.getElementById("leadProfileName");
-    const leadWhatsappPreview = document.getElementById("leadWhatsappPreview");
-    const leadWhatsappCopy = document.getElementById("leadWhatsappCopy");
-    const leadCpfPreview = document.getElementById("leadCpfPreview");
     const sessionMeta = document.getElementById("sessionMeta");
+    const leadInlineFieldState = new Map();
 
     function formatSessionMetaLabel(startedAt, agentLabel) {
       const formattedDate = formatCreatedAt(startedAt);
@@ -1676,16 +1706,73 @@ export const registerQueueRoutes = (app: Express) => {
 
     function syncLeadProfilePreview() {
       const name = leadNameInput ? String(leadNameInput.value || "").trim() : "";
-      const whatsapp = resolveLeadWhatsappDisplay(
-        leadWhatsappInput ? leadWhatsappInput.value : "",
-        leadDrawerContact?.leadContext,
-      );
       if (leadProfileAvatar) leadProfileAvatar.textContent = getLeadInitials(name);
       if (leadProfileName) leadProfileName.textContent = name || "Visitante";
-      if (leadWhatsappPreview) leadWhatsappPreview.textContent = whatsapp || "Indisponível";
-      if (leadWhatsappCopy) leadWhatsappCopy.disabled = !whatsapp;
-      const cpf = resolveLeadCpfDisplay(leadCpfInput ? leadCpfInput.value : "", leadDrawerContact?.leadContext);
-      if (leadCpfPreview) leadCpfPreview.textContent = formatLeadCpfPreview(cpf);
+    }
+
+    function rememberLeadInlineFieldValue(input) {
+      if (!input) return;
+      leadInlineFieldState.set(input, String(input.value || "").trim());
+    }
+
+    function setLeadInlineFieldEditing(input, editing) {
+      if (!input) return;
+      const wrap = input.closest(".lead-inline-fact-input-wrap");
+      if (wrap) wrap.classList.toggle("is-editing", editing);
+      input.readOnly = !editing;
+      if (editing) {
+        input.focus();
+        input.select();
+      }
+    }
+
+    function syncLeadInlineCopyButton(input, copyButton) {
+      if (!copyButton) return;
+      copyButton.disabled = !String(input?.value || "").trim();
+    }
+
+    function bindLeadInlineField(input, copyButton, editButton) {
+      if (!input) return;
+      rememberLeadInlineFieldValue(input);
+      input.readOnly = true;
+      syncLeadInlineCopyButton(input, copyButton);
+      if (editButton) {
+        editButton.addEventListener("mousedown", (event) => event.preventDefault());
+        editButton.addEventListener("click", () => setLeadInlineFieldEditing(input, true));
+      }
+      input.addEventListener("input", () => {
+        syncLeadProfilePreview();
+        syncLeadInlineCopyButton(input, copyButton);
+      });
+      input.addEventListener("blur", () => {
+        setLeadInlineFieldEditing(input, false);
+        const next = String(input.value || "").trim();
+        const previous = String(leadInlineFieldState.get(input) || "").trim();
+        if (next === previous) return;
+        rememberLeadInlineFieldValue(input);
+        void saveLeadContactFields();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") input.blur();
+      });
+      if (copyButton) {
+        copyButton.addEventListener("click", async () => {
+          const value = String(input.value || "").trim();
+          if (!value) return;
+          try {
+            await navigator.clipboard.writeText(value);
+          } catch {}
+        });
+      }
+    }
+
+    function initLeadInlineFields() {
+      document.querySelectorAll(".lead-inline-fact-field").forEach((item) => {
+        const input = item.querySelector(".lead-inline-fact-input");
+        const copyButton = item.querySelector(".lead-fact-copy");
+        const editButton = item.querySelector(".lead-inline-fact-edit");
+        bindLeadInlineField(input, copyButton, editButton);
+      });
     }
 
     function setLeadAccordionOpen(section, open) {
@@ -1845,6 +1932,14 @@ export const registerQueueRoutes = (app: Express) => {
       if (leadNotesInput) leadNotesInput.value = "";
       if (leadTitle) leadTitle.textContent = String(contact?.contactName || leadTitle.textContent || "Visitante");
       syncLeadProfilePreview();
+      rememberLeadInlineFieldValue(leadNameInput);
+      rememberLeadInlineFieldValue(leadWhatsappInput);
+      rememberLeadInlineFieldValue(leadCpfInput);
+      document.querySelectorAll(".lead-inline-fact-field").forEach((item) => {
+        const input = item.querySelector(".lead-inline-fact-input");
+        const copyButton = item.querySelector(".lead-fact-copy");
+        syncLeadInlineCopyButton(input, copyButton);
+      });
       renderLeadVariables(contact?.leadContext || {});
       renderLeadAttachments(contact?.attachments || []);
       renderLeadNotesHistory(contact?.agentNotesHistory || []);
@@ -1943,11 +2038,9 @@ export const registerQueueRoutes = (app: Express) => {
       return true;
     }
 
-    async function saveLeadProfile() {
-      if (!isAgentMode) return;
+    async function saveLeadContactFields() {
+      if (!isAgentMode) return false;
       setLeadDrawerStatus("Salvando...");
-      const noteSaved = await registerLeadNote();
-      if (!noteSaved) return;
       const payload = {};
       const name = leadNameInput ? String(leadNameInput.value || "").trim() : "";
       const whatsapp = leadWhatsappInput ? String(leadWhatsappInput.value || "").trim() : "";
@@ -1962,10 +2055,20 @@ export const registerQueueRoutes = (app: Express) => {
       });
       if (!response.ok) {
         setLeadDrawerStatus("Falha ao salvar dados do lead.");
-        return;
+        return false;
       }
-      const updated = await response.json();
-      applyLeadContactToDrawer(updated);
+      applyLeadContactToDrawer(await response.json());
+      setLeadDrawerStatus("Dados do lead salvos.");
+      return true;
+    }
+
+    async function saveLeadProfile() {
+      if (!isAgentMode) return;
+      setLeadDrawerStatus("Salvando...");
+      const noteSaved = await registerLeadNote();
+      if (!noteSaved) return;
+      const saved = await saveLeadContactFields();
+      if (!saved) return;
 
       const assignTo = leadAssignSelect ? String(leadAssignSelect.value || "").trim() : "";
       const currentAssigned = String(leadDrawerContact?.assignedAgentId || "").trim().toLowerCase();
@@ -2019,34 +2122,11 @@ export const registerQueueRoutes = (app: Express) => {
 
     if (isAgentMode) {
       initLeadAccordion();
-    }
-    if (isAgentMode && leadNameInput) {
-      leadNameInput.addEventListener("input", syncLeadProfilePreview);
-    }
-    if (isAgentMode && leadWhatsappInput) {
-      leadWhatsappInput.addEventListener("input", syncLeadProfilePreview);
-    }
-    if (isAgentMode && leadCpfInput) {
-      leadCpfInput.addEventListener("input", syncLeadProfilePreview);
+      initLeadInlineFields();
     }
     if (isAgentMode && leadNotesRegisterButton) {
       leadNotesRegisterButton.addEventListener("click", () => {
         void registerLeadNote();
-      });
-    }
-    if (isAgentMode && leadWhatsappCopy) {
-      leadWhatsappCopy.addEventListener("click", async () => {
-        const value = resolveLeadWhatsappDisplay(
-          leadWhatsappInput ? leadWhatsappInput.value : "",
-          leadDrawerContact?.leadContext,
-        );
-        if (!value) return;
-        try {
-          await navigator.clipboard.writeText(value);
-          setLeadDrawerStatus("WhatsApp copiado.");
-        } catch {
-          setLeadDrawerStatus("Não foi possível copiar o WhatsApp.");
-        }
       });
     }
     if (isAgentMode && leadInfoButton) {

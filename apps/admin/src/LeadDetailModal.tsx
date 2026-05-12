@@ -1,15 +1,16 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
+import { LeadInlineFactField } from "./LeadInlineFactField";
 import {
-  formatLeadCpfDisplay,
   getLeadContextEntries,
   getLeadInitials,
   isLeadCpfContextKey,
   resolveLeadContactName,
+  resolveLeadCpf,
   resolveLeadWhatsapp,
   type LeadContactDetail,
 } from "./leadContactData";
 
-type LeadDetailSection = "contact" | "assign" | "variables" | "notes" | "attachments";
+type LeadDetailSection = "assign" | "variables" | "notes" | "attachments";
 
 type LeadDetailModalProps = {
   open: boolean;
@@ -45,12 +46,14 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
   const [contact, setContact] = useState<LeadContactDetail | null>(null);
   const [status, setStatus] = useState("");
   const [openSections, setOpenSections] = useState<Record<LeadDetailSection, boolean>>({
-    contact: false,
     assign: false,
     variables: false,
     notes: false,
     attachments: false,
   });
+  const [leadNameDraft, setLeadNameDraft] = useState("");
+  const [leadWhatsappDraft, setLeadWhatsappDraft] = useState("");
+  const [leadCpfDraft, setLeadCpfDraft] = useState("");
 
   useEffect(() => {
     if (!open || !contactId || !tenantId) return;
@@ -70,6 +73,9 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
       .then((loaded) => {
         if (cancelled) return;
         setContact(loaded);
+        setLeadNameDraft(resolveLeadContactName(loaded.contactName, loaded.leadContext));
+        setLeadWhatsappDraft(resolveLeadWhatsapp(loaded.leadWhatsapp, loaded.leadContext));
+        setLeadCpfDraft(resolveLeadCpf(loaded.leadContext));
         setStatus("");
       })
       .catch(() => {
@@ -83,19 +89,11 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
   }, [apiBase, contactId, open, tenantId]);
 
   const leadName = useMemo(
-    () => resolveLeadContactName(contact?.contactName, contact?.leadContext),
-    [contact?.contactName, contact?.leadContext],
+    () => leadNameDraft.trim() || resolveLeadContactName(contact?.contactName, contact?.leadContext),
+    [contact?.contactName, contact?.leadContext, leadNameDraft],
   );
   const leadVariables = useMemo(
     () => getLeadContextEntries(contact?.leadContext).filter(([key]) => !isLeadCpfContextKey(key)),
-    [contact?.leadContext],
-  );
-  const displayedWhatsapp = useMemo(
-    () => resolveLeadWhatsapp(contact?.leadWhatsapp, contact?.leadContext) || "Indisponível",
-    [contact?.leadContext, contact?.leadWhatsapp],
-  );
-  const displayedCpf = useMemo(
-    () => formatLeadCpfDisplay(contact?.leadContext),
     [contact?.leadContext],
   );
   const assignedLabel =
@@ -109,14 +107,30 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
   };
 
-  const copyWhatsapp = async () => {
-    const value = resolveLeadWhatsapp(contact?.leadWhatsapp, contact?.leadContext);
-    if (!value) return;
+  const saveLeadContactFields = async () => {
+    if (!contactId || !tenantId) return;
+    setStatus("Salvando...");
+    const payload: { contactName?: string; leadWhatsapp: string; leadCpf: string } = {
+      leadWhatsapp: leadWhatsappDraft.trim(),
+      leadCpf: leadCpfDraft.trim(),
+    };
+    const nextName = leadNameDraft.trim();
+    if (nextName.length >= 2) payload.contactName = nextName;
     try {
-      await navigator.clipboard.writeText(value);
-      setStatus("WhatsApp copiado.");
+      const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(contactId)}/profile`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error("save failed");
+      const updated = (await response.json()) as LeadContactDetail;
+      setContact(updated);
+      setLeadNameDraft(resolveLeadContactName(updated.contactName, updated.leadContext));
+      setLeadWhatsappDraft(resolveLeadWhatsapp(updated.leadWhatsapp, updated.leadContext));
+      setLeadCpfDraft(resolveLeadCpf(updated.leadContext));
+      setStatus("Dados do lead salvos.");
     } catch {
-      setStatus("Não foi possível copiar o WhatsApp.");
+      setStatus("Falha ao salvar dados do lead.");
     }
   };
 
@@ -149,62 +163,48 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
           </div>
 
           <ul className="lead-fact-list">
-            <li>
-              <span className="lead-fact-icon" aria-hidden="true">
+            <LeadInlineFactField
+              label="Nome do lead"
+              value={leadNameDraft}
+              onChange={setLeadNameDraft}
+              onCommit={() => void saveLeadContactFields()}
+              copyLabel="Copiar nome"
+              icon={
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+                </svg>
+              }
+            />
+            <LeadInlineFactField
+              label="WhatsApp"
+              value={leadWhatsappDraft}
+              onChange={setLeadWhatsappDraft}
+              onCommit={() => void saveLeadContactFields()}
+              copyLabel="Copiar WhatsApp"
+              inputMode="tel"
+              icon={
                 <svg viewBox="0 0 24 24">
                   <path d="M6.6 10.8a15.9 15.9 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .58 3.6 1 1 0 0 1-.24 1Z" />
                 </svg>
-              </span>
-              <span className="lead-fact-text">
-                <small>WhatsApp</small>
-                <span>{displayedWhatsapp}</span>
-              </span>
-              <button
-                type="button"
-                className="lead-fact-copy"
-                aria-label="Copiar WhatsApp"
-                title="Copiar WhatsApp"
-                onClick={() => void copyWhatsapp()}
-                disabled={displayedWhatsapp === "Indisponível"}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v16h13a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 18H8V7h11v16Z" />
-                </svg>
-              </button>
-            </li>
-            <li>
-              <span className="lead-fact-icon" aria-hidden="true">
+              }
+            />
+            <LeadInlineFactField
+              label="CPF"
+              value={leadCpfDraft}
+              onChange={setLeadCpfDraft}
+              onCommit={() => void saveLeadContactFields()}
+              copyLabel="Copiar CPF"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              icon={
                 <svg viewBox="0 0 24 24">
                   <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h16V6H4Zm3 4h10v1.5H7V10Zm0 3h7v1.5H7V13Z" />
                 </svg>
-              </span>
-              <span className="lead-fact-text">
-                <small>CPF</small>
-                <span>{displayedCpf}</span>
-              </span>
-            </li>
+              }
+            />
           </ul>
 
           <div className="lead-accordion">
-            <AccordionSection
-              label="Dados do contato"
-              open={openSections.contact}
-              onToggle={() => toggleSection("contact")}
-            >
-              <div className="lead-field">
-                <span>Nome do lead</span>
-                <p className="lead-field-value">{leadName || "Visitante"}</p>
-              </div>
-              <div className="lead-field">
-                <span>WhatsApp</span>
-                <p className="lead-field-value">{displayedWhatsapp}</p>
-              </div>
-              <div className="lead-field">
-                <span>CPF</span>
-                <p className="lead-field-value">{displayedCpf}</p>
-              </div>
-            </AccordionSection>
-
             <AccordionSection
               label="Atribuição"
               open={openSections.assign}

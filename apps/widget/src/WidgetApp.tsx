@@ -397,11 +397,9 @@ export function WidgetApp() {
     }
   };
 
-  const saveLeadProfile = async () => {
-    if (!sessionContactId) return;
+  const saveLeadContactFields = async (): Promise<boolean> => {
+    if (!sessionContactId) return false;
     setLeadDrawerStatus("Salvando...");
-    const noteSaved = await registerLeadNote();
-    if (!noteSaved) return;
     const payload: { contactName?: string; leadWhatsapp: string; leadCpf: string } = {
       leadWhatsapp: leadWhatsappDraft.trim(),
       leadCpf: leadCpfDraft.trim(),
@@ -417,39 +415,52 @@ export function WidgetApp() {
       captureResolvedTenantId(response);
       if (!response.ok) {
         setLeadDrawerStatus("Falha ao salvar dados do lead.");
-        return;
+        return false;
       }
       const updated = (await response.json()) as QueueContactProfile;
       applyLeadContactToForm(updated);
-      const assignTo = leadAssignTo.trim();
-      const currentAssigned = leadAssignedAgentId.trim().toLowerCase();
-      if (assignTo && assignTo.toLowerCase() !== currentAssigned) {
-        const attendant = leadAttendants.find((row) => row.username === assignTo);
-        const assignResponse = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/assign`, {
-          method: "PATCH",
-          headers: buildTenantHeaders(true),
-          body: JSON.stringify({
-            agentId: assignTo,
-            agentName: attendant?.displayName || resolveAttendantDisplayName({ username: assignTo }, {
-              sessionAgentId,
-              sessionAgentName: resolvedAgentName,
-              assignedAgentId: leadAssignedAgentId,
-              assignedAgentName: leadAssignedAgentName,
-            }) || assignTo,
-          }),
-        });
-        captureResolvedTenantId(assignResponse);
-        if (!assignResponse.ok) {
-          setLeadDrawerStatus("Dados salvos, mas a transferência falhou.");
-          return;
-        }
-        applyLeadContactToForm((await assignResponse.json()) as QueueContactProfile);
-        setLeadAssignTo("");
-      }
       setLeadDrawerStatus("Dados do lead salvos.");
+      return true;
     } catch {
       setLeadDrawerStatus("Falha ao salvar dados do lead.");
+      return false;
     }
+  };
+
+  const saveLeadProfile = async () => {
+    if (!sessionContactId) return;
+    setLeadDrawerStatus("Salvando...");
+    const noteSaved = await registerLeadNote();
+    if (!noteSaved) return;
+    const saved = await saveLeadContactFields();
+    if (!saved) return;
+
+    const assignTo = leadAssignTo.trim();
+    const currentAssigned = leadAssignedAgentId.trim().toLowerCase();
+    if (assignTo && assignTo.toLowerCase() !== currentAssigned) {
+      const attendant = leadAttendants.find((row) => row.username === assignTo);
+      const assignResponse = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/assign`, {
+        method: "PATCH",
+        headers: buildTenantHeaders(true),
+        body: JSON.stringify({
+          agentId: assignTo,
+          agentName: attendant?.displayName || resolveAttendantDisplayName({ username: assignTo }, {
+            sessionAgentId,
+            sessionAgentName: resolvedAgentName,
+            assignedAgentId: leadAssignedAgentId,
+            assignedAgentName: leadAssignedAgentName,
+          }) || assignTo,
+        }),
+      });
+      captureResolvedTenantId(assignResponse);
+      if (!assignResponse.ok) {
+        setLeadDrawerStatus("Dados salvos, mas a transferência falhou.");
+        return;
+      }
+      applyLeadContactToForm((await assignResponse.json()) as QueueContactProfile);
+      setLeadAssignTo("");
+    }
+    setLeadDrawerStatus("Dados do lead salvos.");
   };
 
   const uploadLeadAttachment = async (file: File) => {
@@ -897,6 +908,7 @@ export function WidgetApp() {
           leadVariables={leadVariables}
           leadDrawerStatus={leadDrawerStatus}
           onSave={() => void saveLeadProfile()}
+          onSaveContactFields={() => void saveLeadContactFields()}
           onFilesSelected={handleLeadFilesSelected}
           leadFilesInputRef={leadFilesInputRef}
           imageDataUrlPrefix={IMAGE_DATA_URL_PREFIX}
