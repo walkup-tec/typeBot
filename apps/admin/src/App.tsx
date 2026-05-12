@@ -304,8 +304,7 @@ const formatWhatsapp = (value: string) => {
   return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
 };
 
-/** Texto curto para a tabela (URL completa em `title` / `href`); parecido com preview de link no editor. */
-function abbreviateUrlForDisplay(raw: string, maxLen = 56): string {
+const abbreviateUrlForDisplay = (raw: string, maxLen = 56): string => {
   const trimmed = raw.trim();
   if (!trimmed || trimmed.length <= maxLen) return trimmed;
   try {
@@ -324,7 +323,38 @@ function abbreviateUrlForDisplay(raw: string, maxLen = 56): string {
   } catch {
     return `${trimmed.slice(0, maxLen - 1)}…`;
   }
+};
+
+type SidebarMenuIconName = "master" | "library" | "subscribers" | "liveQueue" | "clientList";
+
+const SIDEBAR_MENU_ICON_PATHS: Record<SidebarMenuIconName, string> = {
+  master:
+    "M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z",
+  library:
+    "M6 4h9l3 3v13a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm8 1.5V8h2.5L14 5.5ZM8 11h8v1.5H8V11Zm0 3.5h8V16H8v-1.5Z",
+  subscribers:
+    "M16 11c1.7 0 3-1.3 3-3S17.7 5 16 5s-3 1.3-3 3 1.3 3 3 3Zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3Zm0 2c-2.3 0-7 1.2-7 3.5V18h8v-2.5C9 15.2 8.3 14.4 8 14Zm8 0c-.3 0-1.2.4-2 2.5V18h7v-2.5C21 14.2 16.3 13 14 13Z",
+  liveQueue:
+    "M6.5 5A4.5 4.5 0 0 0 2 9.5v5A4.5 4.5 0 0 0 6.5 19H8v2.25c0 .4.44.64.77.42L12.7 19H17.5a4.5 4.5 0 0 0 4.5-4.5v-5A4.5 4.5 0 0 0 17.5 5h-11Z",
+  clientList:
+    "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z",
+};
+
+function SidebarMenuIcon({ name }: { name: SidebarMenuIconName }) {
+  return (
+    <svg className="menu-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d={SIDEBAR_MENU_ICON_PATHS[name]} fill="currentColor" />
+    </svg>
+  );
 }
+
+const readSidebarCollapsedPreference = (): boolean => {
+  try {
+    return window.localStorage.getItem("drax-admin-sidebar-collapsed") === "1";
+  } catch {
+    return false;
+  }
+};
 
 export function App() {
   const QUEUE_REFRESH_INTERVAL_MS = 3000;
@@ -360,6 +390,7 @@ export function App() {
   const [resetPassword, setResetPassword] = useState("");
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(readSidebarCollapsedPreference);
   const [didMigrateLocalFlows, setDidMigrateLocalFlows] = useState(false);
   const [tenantProfileImageUrl, setTenantProfileImageUrl] = useState("");
   const [leadChatDisplayName, setLeadChatDisplayName] = useState("");
@@ -765,6 +796,14 @@ export function App() {
       // ignore localStorage parsing errors
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("drax-admin-sidebar-collapsed", isSidebarCollapsed ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     if (!authSession) return;
@@ -1708,19 +1747,22 @@ export function App() {
   }
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
+    <div className={`layout${isSidebarCollapsed ? " layout--sidebar-collapsed" : ""}`}>
+      <aside className={`sidebar${isSidebarCollapsed ? " sidebar--collapsed" : ""}`}>
         <div className="brand-block">
           <img src="/drax-logo-footer.png" alt="DRAX" className="brand-logo" />
           <p>Type Bot e Chat de atendimento</p>
         </div>
-        <nav className="menu-nav">
+        <nav className="menu-nav" aria-label="Menu principal">
           {masterProfile === "subscriber_master" && authSession?.user?.role !== "attendant" ? (
             <button
               className={`menu-btn ${activeScreen === "master" ? "active" : ""}`}
               onClick={() => setActiveScreen("master")}
             >
-              Master Console
+              <span className="menu-btn-inner">
+                <SidebarMenuIcon name="master" />
+                <span className="menu-btn-label">Master Console</span>
+              </span>
             </button>
           ) : null}
           {masterProfile === "system_master" ? (
@@ -1728,7 +1770,10 @@ export function App() {
               className={`menu-btn ${activeScreen === "masterLibrary" ? "active" : ""}`}
               onClick={() => setActiveScreen("masterLibrary")}
             >
-              Biblioteca Master
+              <span className="menu-btn-inner">
+                <SidebarMenuIcon name="library" />
+                <span className="menu-btn-label">Biblioteca Master</span>
+              </span>
             </button>
           ) : null}
           {masterProfile === "system_master" ? (
@@ -1736,7 +1781,10 @@ export function App() {
               className={`menu-btn ${activeScreen === "subscribers" ? "active" : ""}`}
               onClick={() => setActiveScreen("subscribers")}
             >
-              Assinantes
+              <span className="menu-btn-inner">
+                <SidebarMenuIcon name="subscribers" />
+                <span className="menu-btn-label">Assinantes</span>
+              </span>
             </button>
           ) : null}
           {masterProfile === "subscriber_master" ? (
@@ -1744,8 +1792,11 @@ export function App() {
               className={`menu-btn ${activeScreen === "liveQueue" ? "active" : ""}`}
               onClick={() => setActiveScreen("liveQueue")}
             >
-              Fila ao vivo
-              {pendingQueueCount > 0 ? <span className="menu-badge">{pendingQueueCount}</span> : null}
+              <span className="menu-btn-inner">
+                <SidebarMenuIcon name="liveQueue" />
+                <span className="menu-btn-label">Fila ao vivo</span>
+                {pendingQueueCount > 0 ? <span className="menu-badge">{pendingQueueCount}</span> : null}
+              </span>
             </button>
           ) : null}
           {masterProfile === "subscriber_master" ? (
@@ -1753,10 +1804,32 @@ export function App() {
               className={`menu-btn ${activeScreen === "clientList" ? "active" : ""}`}
               onClick={() => setActiveScreen("clientList")}
             >
-              Lista de Clientes
+              <span className="menu-btn-inner">
+                <SidebarMenuIcon name="clientList" />
+                <span className="menu-btn-label">Lista de Clientes</span>
+              </span>
             </button>
           ) : null}
         </nav>
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={() => setIsSidebarCollapsed((current) => !current)}
+          aria-label={isSidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          <svg className="sidebar-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d={isSidebarCollapsed ? "M9 6l6 6-6 6" : "M15 6l-6 6 6 6"}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="menu-btn-label">{isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}</span>
+        </button>
       </aside>
 
       <main className="content">

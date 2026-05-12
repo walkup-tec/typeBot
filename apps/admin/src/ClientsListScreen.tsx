@@ -90,37 +90,22 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
           </select>
         </label>
 
-        <div className="clients-list-filter-group" role="group" aria-label="Filtrar por WhatsApp">
+        <label className="clients-list-filter">
           <span>WhatsApp</span>
-          <div className="subscriber-toolbar">
-            <button
-              type="button"
-              className={`filter-btn ${whatsappFilter === "all" ? "active" : ""}`}
-              onClick={() => setWhatsappFilter("all")}
-            >
-              Todos
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${whatsappFilter === "with" ? "active" : ""}`}
-              onClick={() => setWhatsappFilter("with")}
-            >
-              Com WhatsApp
-            </button>
-            <button
-              type="button"
-              className={`filter-btn ${whatsappFilter === "without" ? "active" : ""}`}
-              onClick={() => setWhatsappFilter("without")}
-            >
-              Sem WhatsApp
-            </button>
-          </div>
-        </div>
+          <select
+            value={whatsappFilter}
+            onChange={(event) => setWhatsappFilter(event.target.value as ClientWhatsappFilter)}
+          >
+            <option value="all">Todos</option>
+            <option value="with">Com WhatsApp</option>
+            <option value="without">Sem WhatsApp</option>
+          </select>
+        </label>
 
         {hasActiveFilters ? (
           <button
             type="button"
-            className="filter-btn clear"
+            className="filter-btn clear clients-list-clear"
             onClick={() => {
               setSearchQuery("");
               setFlowFilter("all");

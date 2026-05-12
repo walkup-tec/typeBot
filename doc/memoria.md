@@ -1,3 +1,10 @@
+## 2026-05-12 - Lista de clientes e menu lateral no admin
+
+- Filtros e pesquisa da lista de clientes ficam na area visivel; WhatsApp passou a select compacto.
+- Rolagem horizontal ficou restrita a tabela de clientes; menu lateral permanece fixo.
+- Menu lateral com icones e botao para recolher/expandir (preferencia em `localStorage`).
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Edicao inline de contato no topo do painel lead
 
 - Removida a secao inferior "Dados do contato"; Nome, WhatsApp e CPF editam no topo com input, lapis discreto e copiar ao lado.

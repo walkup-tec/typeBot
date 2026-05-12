@@ -103,6 +103,9 @@ body {
   display: grid;
   grid-template-columns: 1fr;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .sidebar {
@@ -120,6 +123,9 @@ body {
 
 .content {
   padding: 12px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .pending-summary-alert {
@@ -200,12 +206,60 @@ body {
   border-radius: 8px;
   padding: 9px 12px;
   color: #f8fafc;
-  text-align: center;
+  text-align: left;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
+}
+
+.menu-btn-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.menu-btn-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.menu-btn-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-toggle {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin-top: auto;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(15, 23, 42, 0.46);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.sidebar-toggle-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(30, 41, 59, 0.62);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #ffffff;
 }
 
 .menu-btn.active {
@@ -1947,52 +2001,65 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 .clients-list-toolbar {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  flex-wrap: wrap;
+  align-items: end;
+  width: 100%;
+}
+
+.clients-list-search-field {
+  grid-column: 1 / -1;
+  display: block;
+  min-width: 0;
 }
 
 .clients-list-search {
-  flex: 1 1 280px;
-  min-width: 220px;
+  width: 100%;
+  min-width: 0;
   min-height: 40px;
   border-radius: 10px;
   border: 1px solid var(--glass-border);
   background: rgba(15, 23, 42, 0.45);
   color: #e2e8f0;
   padding: 8px 12px;
+  box-sizing: border-box;
 }
 
 .clients-list-filter {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 220px;
+  min-width: 0;
   color: #cbd5e1;
   font-size: 13px;
   font-weight: 600;
 }
 
 .clients-list-filter select {
+  width: 100%;
+  min-width: 0;
   min-height: 40px;
   border-radius: 10px;
   border: 1px solid var(--glass-border);
   background: rgba(15, 23, 42, 0.45);
   color: #e2e8f0;
   padding: 8px 12px;
+  box-sizing: border-box;
 }
 
-.clients-list-filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  color: #cbd5e1;
-  font-size: 13px;
-  font-weight: 600;
+.clients-list-clear {
+  justify-self: start;
+}
+
+@media (max-width: 900px) {
+  .clients-list-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .clients-list-summary {
@@ -2001,6 +2068,8 @@ button:disabled {
 
 .clients-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .clients-table {
@@ -2560,18 +2629,58 @@ button.danger-btn:not(.ghost-btn):hover {
 
 @media (min-width: 1100px) {
   .layout {
-    grid-template-columns: 260px 1fr;
+    --sidebar-width: 260px;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .layout.layout--sidebar-collapsed {
+    --sidebar-width: 84px;
   }
 
   .sidebar {
     border-bottom: none;
     border-right: 1px solid #1f2a44;
     padding: 24px;
-    position: static;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     align-items: stretch;
     min-height: 100vh;
+    box-sizing: border-box;
+  }
+
+  .sidebar--collapsed .brand-block p,
+  .sidebar--collapsed .menu-btn-label,
+  .sidebar--collapsed .sidebar-toggle .menu-btn-label {
+    display: none;
+  }
+
+  .sidebar--collapsed .brand-logo {
+    width: 44px;
+  }
+
+  .sidebar--collapsed .menu-btn {
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  .sidebar--collapsed .menu-btn-inner {
+    justify-content: center;
+    width: auto;
+  }
+
+  .sidebar--collapsed .sidebar-toggle {
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  .sidebar-toggle {
+    display: inline-flex;
   }
 
   .sidebar h1 {
@@ -2596,7 +2705,11 @@ button.danger-btn:not(.ghost-btn):hover {
     width: 100%;
     text-align: left;
     min-width: 0;
-    justify-content: space-between;
+    justify-content: flex-start;
+  }
+
+  .clients-list-toolbar {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 
   .content {
