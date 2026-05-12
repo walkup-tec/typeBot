@@ -1,3 +1,8 @@
+## 2026-05-12 - Fonte da lista de clientes 14px/15px
+
+- Cabecalho da lista de clientes em 15px; corpo em 14px.
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Menu lateral recolhido corrigido
 
 - Logo e tagline ocultos no modo recolhido; topo mostra apenas o botao de expandir centralizado.
