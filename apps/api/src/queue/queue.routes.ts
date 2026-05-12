@@ -8,6 +8,7 @@ import {
   resolveAttendantDisplayName,
   resolveServiceStartedAt,
 } from "../lib/agent-session-meta";
+import { pruneLeadContext } from "../lib/lead-context";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   QueueService,
@@ -2129,6 +2130,7 @@ export const registerQueueRoutes = (app: Express) => {
 
       const payloadRecord = payload as Record<string, unknown>;
       const resolvedLeadContext = resolveLeadContextFromHandoffPayload(payloadRecord);
+      const storedLeadContext = pruneLeadContext(resolvedLeadContext);
       const resolvedContactName = pickLeadNameFromPayload(payloadRecord, resolvedLeadContext);
       const resolvedLeadWhatsapp = pickLeadWhatsappFromContext(resolvedLeadContext, payloadRecord);
       const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId) ?? matchingFlows[0];
@@ -2165,7 +2167,7 @@ export const registerQueueRoutes = (app: Express) => {
         contactName: resolvedContactName,
         source: "typebot",
         sourceFlowLabel: resolvedFlowLabel || "Fluxo",
-        leadContext: Object.keys(resolvedLeadContext).length > 0 ? resolvedLeadContext : undefined,
+        leadContext: storedLeadContext,
         leadWhatsapp: resolvedLeadWhatsapp,
       }, {
         distributionMode,
@@ -2207,8 +2209,8 @@ export const registerQueueRoutes = (app: Express) => {
       )}&themeUserBubbleBg=${encodeURIComponent(visualConfig.userBubbleBg)}&themeBotBubbleBg=${encodeURIComponent(
         visualConfig.botBubbleBg,
       )}${profileImageQuery}`;
-      const leadContextQuery = Object.keys(resolvedLeadContext).length > 0
-        ? `&leadContext=${encodeURIComponent(JSON.stringify(resolvedLeadContext))}`
+      const leadContextQuery = storedLeadContext
+        ? `&leadContext=${encodeURIComponent(JSON.stringify(storedLeadContext))}`
         : "";
       const handoffUrl = `${publicBaseUrl}/handoff-view?tenantId=${resolvedTenantId}&contactId=${item.contactId}&contactName=${encodeURIComponent(
         payload.contactName,

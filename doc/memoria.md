@@ -1,7 +1,7 @@
 ## 2026-05-12 - Modal do lead sem campos vazios na fila ao vivo
 
-- Modal "Dados informados pelo Lead" lista apenas chaves com valor preenchido; botao de visualizacao desabilitado sem dados uteis.
-- Pendencia: redeploy do admin.
+- Modal e fila ao vivo removem chaves sem valor util; API normaliza `leadContext` na leitura/gravacao.
+- Pendencia: redeploy API e admin.
 
 ## 2026-05-12 - Salvar lead sem repetir assumir atendimento e rodape fixo
 

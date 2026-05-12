@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { LeadAgentNote, QueueContact } from "../queue/queue.repository";
+import { pruneLeadContext } from "./lead-context";
 
 const sortNotesNewestFirst = (notes: LeadAgentNote[]): LeadAgentNote[] =>
   [...notes].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
@@ -34,4 +35,9 @@ export const resolveLeadAgentNotes = (contact: QueueContact): LeadAgentNote[] =>
 export const withResolvedLeadAgentNotes = (contact: QueueContact): QueueContact => ({
   ...contact,
   agentNotesHistory: resolveLeadAgentNotes(contact),
+});
+
+export const withNormalizedQueueContact = (contact: QueueContact): QueueContact => ({
+  ...withResolvedLeadAgentNotes(contact),
+  leadContext: pruneLeadContext(contact.leadContext),
 });

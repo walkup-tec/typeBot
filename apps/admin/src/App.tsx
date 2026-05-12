@@ -46,8 +46,19 @@ type QueueContact = {
   updatedAt: string;
 };
 
+const PLACEHOLDER_LEAD_CONTEXT_VALUES = new Set(["-", "—", "null", "undefined", "n/a", "na"]);
+
+const hasLeadContextValue = (value: unknown): boolean => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  const normalized = String(value).trim();
+  if (!normalized) return false;
+  return !PLACEHOLDER_LEAD_CONTEXT_VALUES.has(normalized.toLowerCase());
+};
+
 const getLeadContextEntries = (context?: Record<string, string | number | boolean> | null) =>
-  Object.entries(context ?? {}).filter(([, value]) => String(value ?? "").trim().length > 0);
+  Object.entries(context ?? {}).filter(([key, value]) => String(key).trim() && hasLeadContextValue(value));
 
 const hasLeadContextData = (context?: Record<string, string | number | boolean> | null) =>
   getLeadContextEntries(context).length > 0;
@@ -1087,7 +1098,8 @@ export function App() {
   }
 
   function openLeadContextModal(item: QueueContact) {
-    setSelectedLeadContext(item.leadContext ?? null);
+    const entries = getLeadContextEntries(item.leadContext ?? null);
+    setSelectedLeadContext(entries.length > 0 ? Object.fromEntries(entries) : null);
     setSelectedLeadContextContactName(item.contactName);
     setIsLeadContextModalOpen(true);
   }

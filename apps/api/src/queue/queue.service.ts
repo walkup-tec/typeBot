@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { resolveLeadAgentNotes, withResolvedLeadAgentNotes } from "../lib/lead-agent-notes";
+import { resolveLeadAgentNotes, withNormalizedQueueContact } from "../lib/lead-agent-notes";
+import { pruneLeadContext } from "../lib/lead-context";
 import { QueueRepository } from "./queue.repository";
 import type { QueueDistributionMode } from "../tenants/tenant.repository";
 
@@ -58,7 +59,7 @@ export class QueueService {
       contactName: input.contactName,
       source: input.source,
       sourceFlowLabel: input.sourceFlowLabel,
-      leadContext: input.leadContext,
+      leadContext: pruneLeadContext(input.leadContext),
       leadWhatsapp: input.leadWhatsapp,
       status: "waiting",
       updatedAt: new Date().toISOString(),
@@ -88,7 +89,7 @@ export class QueueService {
   list(tenantId: string) {
     return this.queueRepository
       .listByTenant(tenantId)
-      .map((contact) => withResolvedLeadAgentNotes(contact))
+      .map((contact) => withNormalizedQueueContact(contact))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
@@ -98,17 +99,17 @@ export class QueueService {
 
   getContact(tenantId: string, contactId: string) {
     const contact = this.queueRepository.getByTenantAndContactId(tenantId, contactId);
-    return contact ? withResolvedLeadAgentNotes(contact) : null;
+    return contact ? withNormalizedQueueContact(contact) : null;
   }
 
   getContactById(contactId: string) {
     const contact = this.queueRepository.getByContactId(contactId);
-    return contact ? withResolvedLeadAgentNotes(contact) : null;
+    return contact ? withNormalizedQueueContact(contact) : null;
   }
 
   assign(tenantId: string, contactId: string, input: z.infer<typeof assignSchema>) {
     const assigned = this.queueRepository.assign(tenantId, contactId, input.agentId, input.agentName);
-    return assigned ? withResolvedLeadAgentNotes(assigned) : null;
+    return assigned ? withNormalizedQueueContact(assigned) : null;
   }
 
   getMessages(tenantId: string, contactId: string) {
@@ -136,7 +137,7 @@ export class QueueService {
     if (input.contactName !== undefined) patch.contactName = input.contactName;
     if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
     const updated = this.queueRepository.updateContact(tenantId, contactId, patch);
-    return updated ? withResolvedLeadAgentNotes(updated) : null;
+    return updated ? withNormalizedQueueContact(updated) : null;
   }
 
   addAgentNote(tenantId: string, contactId: string, input: z.infer<typeof addAgentNoteSchema>) {
@@ -158,7 +159,7 @@ export class QueueService {
       agentNotesHistory,
       agentNotes: "",
     });
-    return updated ? withResolvedLeadAgentNotes(updated) : null;
+    return updated ? withNormalizedQueueContact(updated) : null;
   }
 
   addAttachment(tenantId: string, contactId: string, input: z.infer<typeof addLeadAttachmentSchema>) {
@@ -173,6 +174,6 @@ export class QueueService {
     };
     const attachments = [...(contact.attachments ?? []), attachment];
     const updated = this.queueRepository.updateContact(tenantId, contactId, { attachments });
-    return updated ? withResolvedLeadAgentNotes(updated) : null;
+    return updated ? withNormalizedQueueContact(updated) : null;
   }
 }
