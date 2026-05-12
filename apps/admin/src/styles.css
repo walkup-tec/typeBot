@@ -2702,7 +2702,7 @@ button.danger-btn:not(.ghost-btn):hover {
   }
 
   .layout.layout--sidebar-collapsed {
-    --sidebar-width: 84px;
+    --sidebar-width: 76px;
   }
 
   .sidebar {
@@ -2721,6 +2721,10 @@ button.danger-btn:not(.ghost-btn):hover {
     box-sizing: border-box;
   }
 
+  .sidebar--collapsed {
+    padding: 16px 10px;
+  }
+
   .sidebar--collapsed .brand-tagline,
   .sidebar--collapsed .menu-btn-label {
     display: none;
@@ -2728,19 +2732,23 @@ button.danger-btn:not(.ghost-btn):hover {
 
   .sidebar--collapsed .sidebar-top {
     align-items: center;
+    gap: 6px;
   }
 
   .sidebar--collapsed .brand-head {
     justify-content: center;
+    width: 100%;
   }
 
   .sidebar--collapsed .brand-logo {
-    width: 44px;
+    display: none;
   }
 
   .sidebar--collapsed .menu-btn {
     justify-content: center;
-    padding-inline: 10px;
+    padding-inline: 8px;
+    min-width: 0;
+    width: 100%;
   }
 
   .sidebar--collapsed .menu-btn-inner {

@@ -1,3 +1,8 @@
+## 2026-05-12 - Menu lateral recolhido corrigido
+
+- Logo e tagline ocultos no modo recolhido; topo mostra apenas o botao de expandir centralizado.
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Fonte da lista de clientes ajustada
 
 - Tabela da lista de clientes com fonte um pouco maior (13px no corpo, 12px no cabecalho).
