@@ -46,6 +46,12 @@ type QueueContact = {
   updatedAt: string;
 };
 
+const getLeadContextEntries = (context?: Record<string, string | number | boolean> | null) =>
+  Object.entries(context ?? {}).filter(([, value]) => String(value ?? "").trim().length > 0);
+
+const hasLeadContextData = (context?: Record<string, string | number | boolean> | null) =>
+  getLeadContextEntries(context).length > 0;
+
 type SavedFlow = {
   id: string;
   tenantId?: string;
@@ -2571,7 +2577,7 @@ export function App() {
                       onClick={() => openLeadContextModal(item)}
                       title="Ver dados do Lead"
                       aria-label="Ver dados do Lead"
-                      disabled={!item.leadContext || Object.keys(item.leadContext).length === 0}
+                      disabled={!hasLeadContextData(item.leadContext)}
                     >
                       <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path
@@ -2757,12 +2763,12 @@ export function App() {
             <div className="modal-card" onClick={(event) => event.stopPropagation()}>
               <h3>Dados informados pelo Lead</h3>
               <p className="muted">Contato: {selectedLeadContextContactName || "-"}</p>
-              {selectedLeadContext && Object.keys(selectedLeadContext).length > 0 ? (
+              {selectedLeadContext && hasLeadContextData(selectedLeadContext) ? (
                 <div className="lead-context-list">
-                  {Object.entries(selectedLeadContext).map(([key, value]) => (
+                  {getLeadContextEntries(selectedLeadContext).map(([key, value]) => (
                     <div className="lead-context-row" key={key}>
                       <span>{key}</span>
-                      <strong>{String(value ?? "")}</strong>
+                      <strong>{String(value)}</strong>
                     </div>
                   ))}
                 </div>

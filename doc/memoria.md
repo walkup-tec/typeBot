@@ -1,3 +1,8 @@
+## 2026-05-12 - Modal do lead sem campos vazios na fila ao vivo
+
+- Modal "Dados informados pelo Lead" lista apenas chaves com valor preenchido; botao de visualizacao desabilitado sem dados uteis.
+- Pendencia: redeploy do admin.
+
 ## 2026-05-12 - Salvar lead sem repetir assumir atendimento e rodape fixo
 
 - Causa: salvar reatribuia o mesmo atendente e gerava mensagem de sistema no chat.
