@@ -20,6 +20,8 @@ const formatClientDate = (value: string): string => {
   return parsed.toLocaleString("pt-BR");
 };
 
+const CLIENT_COLUMN_MIN_WIDTH_PX = 133;
+
 export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreenProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [flowFilter, setFlowFilter] = useState("all");
@@ -58,7 +60,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
 
   const tableGridStyle = useMemo(
     () => ({
-      gridTemplateColumns: `repeat(${tableColumns.length}, minmax(140px, 1fr))`,
+      gridTemplateColumns: `repeat(${tableColumns.length}, minmax(${CLIENT_COLUMN_MIN_WIDTH_PX}px, 1fr))`,
     }),
     [tableColumns.length],
   );
@@ -146,11 +148,17 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
               <span className="clients-table-actions">
                 <button
                   type="button"
-                  className="ghost-btn"
+                  className="queue-icon-btn clients-table-action-btn"
                   onClick={() => onOpenContact(row.contactId)}
+                  title={`Ver detalhes de ${row.contactName || "cliente"}`}
                   aria-label={`Ver detalhes de ${row.contactName || "cliente"}`}
                 >
-                  Ver detalhes
+                  <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path
+                      d="M11 4a7 7 0 1 0 4.384 12.46l3.578 3.579a1 1 0 0 0 1.414-1.415l-3.578-3.578A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
+                      fill="currentColor"
+                    />
+                  </svg>
                 </button>
               </span>
             </div>

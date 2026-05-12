@@ -1,3 +1,8 @@
+## 2026-05-12 - Lista de clientes: colunas e acao com lupa
+
+- Colunas 5% mais estreitas; acao de detalhe com icone de lupa (mesma funcao).
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Fonte da lista de clientes 14px/15px
 
 - Cabecalho da lista de clientes em 15px; corpo em 14px.
