@@ -8,7 +8,7 @@ import {
   type ClientDirectoryContact,
   type ClientWhatsappFilter,
 } from "./clientDirectory";
-
+import { downloadClientDirectoryExcel } from "./exportClientDirectoryExcel";
 type ClientsListScreenProps = {
   contacts: ClientDirectoryContact[];
   onOpenContact: (contactId: string) => void;
@@ -19,8 +19,6 @@ const formatClientDate = (value: string): string => {
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleString("pt-BR");
 };
-
-const CLIENT_COLUMN_MIN_WIDTH_PX = 133;
 
 export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreenProps) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,21 +56,30 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
     return columns;
   }, [dynamicColumns, showCpfColumn]);
 
-  const tableGridStyle = useMemo(
-    () => ({
-      gridTemplateColumns: `repeat(${tableColumns.length}, minmax(${CLIENT_COLUMN_MIN_WIDTH_PX}px, 1fr))`,
-    }),
-    [tableColumns.length],
-  );
-
   const hasActiveFilters = searchQuery.trim().length > 0 || flowFilter !== "all" || whatsappFilter !== "all";
+
+  const handleExportClients = () => {
+    void downloadClientDirectoryExcel(filteredRows, { usesFilters: hasActiveFilters });
+  };
 
   return (
     <section className="card clients-list-card">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
+        <button
+          type="button"
+          className="filter-btn clients-list-export-btn"
+          onClick={handleExportClients}
+          disabled={filteredRows.length === 0}
+          title={
+            hasActiveFilters
+              ? "Exportar clientes filtrados para Excel"
+              : "Exportar lista completa de clientes para Excel"
+          }
+        >
+          Exportar Excel
+        </button>
       </div>
-
       <div className="clients-list-toolbar">
         <input
           className="clients-list-search"
@@ -127,43 +134,52 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
       </p>
 
       <div className="clients-table-wrap">
-        <div className="table clients-table">
-          <div className="table-row table-header clients-table-row" style={tableGridStyle}>
-            {tableColumns.map((column) => (
-              <span key={column}>{column}</span>
-            ))}
-          </div>
-
-          {filteredRows.map((row) => (
-            <div key={row.contactId} className="table-row clients-table-row" style={tableGridStyle}>
-              <span>{row.contactName || "-"}</span>
-              <span>{row.whatsapp || "-"}</span>
-              {showCpfColumn ? <span>{row.cpf || "-"}</span> : null}
-              <span>{row.sourceFlowLabel || "-"}</span>
-              <span>{row.assignedAgentName || "-"}</span>
-              <span>{formatClientDate(row.updatedAt)}</span>
-              {dynamicColumns.map((column) => (
-                <span key={`${row.contactId}-${column}`}>{row.fieldValues[column] ?? ""}</span>
-              ))}
-              <span className="clients-table-actions">
-                <button
-                  type="button"
-                  className="queue-icon-btn clients-table-action-btn"
-                  onClick={() => onOpenContact(row.contactId)}
-                  title={`Ver detalhes de ${row.contactName || "cliente"}`}
-                  aria-label={`Ver detalhes de ${row.contactName || "cliente"}`}
+        <table className="clients-table">
+          <thead>
+            <tr>
+              {tableColumns.map((column, columnIndex) => (
+                <th
+                  key={column}
+                  scope="col"
+                  className={columnIndex === tableColumns.length - 1 ? "clients-table-col-actions" : undefined}
                 >
-                  <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path
-                      d="M11 4a7 7 0 1 0 4.384 12.46l3.578 3.579a1 1 0 0 0 1.414-1.415l-3.578-3.578A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </button>
-              </span>
-            </div>
-          ))}
-        </div>
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRows.map((row) => (
+              <tr key={row.contactId}>
+                <td>{row.contactName || "-"}</td>
+                <td>{row.whatsapp || "-"}</td>
+                {showCpfColumn ? <td>{row.cpf || "-"}</td> : null}
+                <td>{row.sourceFlowLabel || "-"}</td>
+                <td>{row.assignedAgentName || "-"}</td>
+                <td>{formatClientDate(row.updatedAt)}</td>
+                {dynamicColumns.map((column) => (
+                  <td key={`${row.contactId}-${column}`}>{row.fieldValues[column] ?? ""}</td>
+                ))}
+                <td className="clients-table-col-actions">
+                  <button
+                    type="button"
+                    className="queue-icon-btn clients-table-action-btn"
+                    onClick={() => onOpenContact(row.contactId)}
+                    title={`Ver detalhes de ${row.contactName || "cliente"}`}
+                    aria-label={`Ver detalhes de ${row.contactName || "cliente"}`}
+                  >
+                    <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path
+                        d="M11 4a7 7 0 1 0 4.384 12.46l3.578 3.579a1 1 0 0 0 1.414-1.415l-3.578-3.578A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {filteredRows.length === 0 ? (

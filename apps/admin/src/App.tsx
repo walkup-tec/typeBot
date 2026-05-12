@@ -140,6 +140,13 @@ function resolveApiBase(): string {
 }
 
 const apiBase = resolveApiBase();
+
+function formatApiConnectionError(error: unknown): string {
+  const detail = error instanceof Error ? error.message.trim() : "";
+  const base = `Sem ligação à API em ${apiBase}. Confirme rede, TLS e se esta URL é mesmo o serviço Node (ex.: /health).`;
+  return detail ? `${base} (${detail})` : base;
+}
+
 const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
 /** Builder Typebot da matriz (Master do Sistema): abre em nova aba a partir do header. */
 const systemMasterTypebotBuilderUrlFromEnv = import.meta.env.VITE_SYSTEM_MASTER_TYPEBOT_BUILDER_URL?.trim();
@@ -383,6 +390,7 @@ export function App() {
   const [newFlowNickname, setNewFlowNickname] = useState("");
   const [newFlowUrl, setNewFlowUrl] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [apiReachable, setApiReachable] = useState<boolean | null>(null);
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -781,6 +789,26 @@ export function App() {
       // ignore storage parsing errors
     }
   }, []);
+
+  useEffect(() => {
+    if (authSession) {
+      setApiReachable(null);
+      return;
+    }
+    let cancelled = false;
+    const probeApi = async () => {
+      try {
+        const response = await fetch(`${apiBase}/health`, { cache: "no-store" });
+        if (!cancelled) setApiReachable(response.ok);
+      } catch {
+        if (!cancelled) setApiReachable(false);
+      }
+    };
+    void probeApi();
+    return () => {
+      cancelled = true;
+    };
+  }, [authSession]);
 
   useEffect(() => {
     if (!authSession) return;
@@ -1579,10 +1607,12 @@ export function App() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-    } catch {
-      setStatusMessage(`Sem ligação à API em ${apiBase}. Confirme rede, TLS e se esta URL é mesmo o serviço Node (ex.: /health).`);
+    } catch (error) {
+      setApiReachable(false);
+      setStatusMessage(formatApiConnectionError(error));
       return;
     }
+    setApiReachable(true);
     const payload = (await response.json().catch(() => ({}))) as AuthSession & { message?: string };
     if (!response.ok) {
       const hint = ` [HTTP ${response.status} · ${apiBase}]`;
@@ -1632,10 +1662,12 @@ export function App() {
           newPassword: nextPassword,
         }),
       });
-    } catch {
-      setStatusMessage(`Sem ligação à API em ${apiBase}. Confirme rede, TLS e se esta URL é mesmo o serviço Node (ex.: /health).`);
+    } catch (error) {
+      setApiReachable(false);
+      setStatusMessage(formatApiConnectionError(error));
       return;
     }
+    setApiReachable(true);
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
     if (!response.ok) {
       const hint = ` [HTTP ${response.status} · ${apiBase}]`;
@@ -1733,8 +1765,22 @@ export function App() {
               Redefinir senha
             </button>
           ) : null}
-          <p className="auth-api-endpoint-hint" title="URL usada nas chamadas /api/auth/*">
+          <p
+            className={`auth-api-endpoint-hint${
+              apiReachable === true
+                ? " auth-api-endpoint-hint--ok"
+                : apiReachable === false
+                  ? " auth-api-endpoint-hint--error"
+                  : ""
+            }`}
+            title="URL usada nas chamadas /api/auth/*"
+          >
             API: {apiBase}
+            {apiReachable === true
+              ? " · ligação OK"
+              : apiReachable === false
+                ? " · sem ligação (teste /health no browser)"
+                : " · a verificar ligação…"}
           </p>
         </section>
         {statusMessage ? (
@@ -2651,7 +2697,7 @@ export function App() {
                 <span>Fluxo de origem</span>
                 <span>Atendente</span>
                 <span>Atualizado em</span>
-                <span>Ação</span>
+                <span className="queue-table-col-actions">Ação</span>
               </div>
               {queueItems.map((item) => (
                 <div className="table-row queue-table-row" key={item.contactId}>
@@ -2659,7 +2705,7 @@ export function App() {
                   <span>{item.sourceFlowLabel}</span>
                   <span>{item.status === "in_service" ? item.assignedAgentName || "-" : "-"}</span>
                   <span>{new Date(item.updatedAt).toLocaleString("pt-BR")}</span>
-                  <span className="queue-actions">
+                  <span className="queue-actions queue-table-col-actions">
                     <button
                       className="queue-icon-btn queue-icon-btn--lead"
                       onClick={() => openLeadDetailModal(item)}

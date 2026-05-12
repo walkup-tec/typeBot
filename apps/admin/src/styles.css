@@ -68,6 +68,14 @@ body {
   line-height: 1.35;
 }
 
+.auth-api-endpoint-hint--ok {
+  color: #5fd0a5;
+}
+
+.auth-api-endpoint-hint--error {
+  color: #ff8f8f;
+}
+
 .auth-card .grid-form {
   grid-template-columns: 1fr;
   width: 100%;
@@ -624,9 +632,12 @@ button:disabled {
 }
 
 .queue-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .queue-refresh-banner {
@@ -2030,6 +2041,11 @@ button:disabled {
   min-width: 0;
 }
 
+.clients-list-export-btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .clients-list-toolbar {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2099,62 +2115,76 @@ button:disabled {
 }
 
 .clients-table {
+  width: 100%;
   min-width: max(100%, 912px);
-  gap: 2px;
+  border-collapse: separate;
+  border-spacing: 0 2px;
   font-size: 14px;
   line-height: 1.4;
+  table-layout: auto;
 }
 
-.clients-table .table-row.clients-table-row {
-  border: none !important;
-  border-radius: 6px;
-  padding: 6px 10px;
-  gap: 8px;
-  background: transparent !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-.clients-table .table-row.clients-table-row:not(.table-header):nth-child(even) {
-  background: rgba(15, 23, 42, 0.24) !important;
-}
-
-.clients-table .table-row.clients-table-row:not(.table-header):nth-child(odd) {
-  background: rgba(15, 23, 42, 0.1) !important;
-}
-
-.clients-table .table-row.clients-table-row:not(.table-header):hover {
-  background: rgba(30, 41, 59, 0.38) !important;
-}
-
-.clients-table .table-header.clients-table-row {
-  background: rgba(15, 23, 42, 0.2) !important;
+.clients-table thead th {
+  background: rgba(15, 23, 42, 0.2);
   color: #94a3b8;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
   padding: 5px 10px;
+  text-align: left;
+  white-space: nowrap;
 }
 
-.clients-table-row {
-  grid-template-columns: 1fr;
-}
-
-.clients-table-row > span {
+.clients-table th,
+.clients-table td {
+  padding: 6px 10px;
+  vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: inherit;
 }
 
-.clients-table-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.clients-table tbody tr:nth-child(even) td {
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.clients-table tbody tr:nth-child(odd) td {
+  background: rgba(15, 23, 42, 0.1);
+}
+
+.clients-table tbody tr:hover td {
+  background: rgba(30, 41, 59, 0.38);
+}
+
+.clients-table th.clients-table-col-actions,
+.clients-table td.clients-table-col-actions {
+  width: 76px;
+  min-width: 76px;
+  max-width: 76px;
+  text-align: center;
+  overflow: visible;
+  padding-inline: 6px;
 }
 
 .clients-table-action-btn {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
   flex-shrink: 0;
+}
+
+.queue-table-row > span.queue-table-col-actions,
+.queue-table-row > .queue-actions.queue-table-col-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  align-self: center;
+  text-align: center;
+  overflow: visible;
+  white-space: normal;
+  min-width: 0;
+  width: 100%;
 }
 
 .add-icon {
@@ -2577,10 +2607,18 @@ button.danger-btn:not(.ghost-btn):hover {
     text-overflow: ellipsis;
   }
 
-  .clients-table-row > span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .queue-table-row > span.queue-table-col-actions,
+  .queue-table-row > .queue-actions.queue-table-col-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+    align-self: center;
+    text-align: center;
+    overflow: visible;
+    white-space: normal;
+    min-width: 0;
+    width: 100%;
   }
 
   .table-header {
@@ -2805,7 +2843,7 @@ button.danger-btn:not(.ghost-btn):hover {
   }
 
   .queue-table-row {
-    grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1fr;
+    grid-template-columns: 1.5fr 1.5fr 1fr 1fr 76px;
   }
 
   .modal-card .grid-form {
