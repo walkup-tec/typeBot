@@ -1,10 +1,12 @@
 ## 2026-05-12 - Edicao inline de contato no topo do painel lead
 
 - Removida a secao inferior "Dados do contato"; Nome, WhatsApp e CPF editam no topo com input, lapis discreto e copiar ao lado.
-- Widget: `LeadInlineFactField.tsx`, `LeadDrawerPanel.tsx`, `WidgetApp.tsx` (`saveLeadContactFields` no blur; `saveLeadProfile` reutiliza o mesmo fluxo).
+- Widget: `LeadInlineFactField.tsx`, `LeadDrawerPanel.tsx`, `WidgetApp.tsx` (`saveLeadContactFields` no blur; `saveProfile` reutiliza o mesmo fluxo).
 - Handoff: HTML/CSS/JS em `queue.routes.ts` alinhados; listener antigo de copiar WhatsApp removido.
-- Validacao: `npm run build:api` OK.
-- Pendencia: commit/push, redeploy API/widget e teste manual (blur salva, copiar, CPF vazio).
+- Admin: modal da fila ao vivo com o mesmo padrao inline.
+- Commit publicado: `1807c3b`.
+- Validacao local: `npm run build:api`, `build:widget` e `build:admin` OK.
+- Pendencia: redeploy Easypanel (`api-typebot-crm`, `widget-typebot-crm`, `painel-typebot-crm`) e hard refresh no browser.
 
 ## 2026-05-12 - Deploy producao sem alteracoes visiveis
 
