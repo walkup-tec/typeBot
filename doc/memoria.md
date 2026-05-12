@@ -2,10 +2,8 @@
 
 - Filtros e pesquisa da lista de clientes ficam na area visivel; WhatsApp passou a select compacto.
 - Rolagem horizontal ficou restrita a tabela de clientes; menu lateral permanece fixo.
-- Menu lateral com icones e botao para recolher/expandir (preferencia em `localStorage`).
+- Menu lateral com icones; recolher/expandir por icone no topo (preferencia em `localStorage`).
 - Pendencia: redeploy do `painel-typebot-crm`.
-
-## 2026-05-12 - Edicao inline de contato no topo do painel lead
 
 - Removida a secao inferior "Dados do contato"; Nome, WhatsApp e CPF editam no topo com input, lapis discreto e copiar ao lado.
 - Widget: `LeadInlineFactField.tsx`, `LeadDrawerPanel.tsx`, `WidgetApp.tsx` (`saveLeadContactFields` no blur; `saveProfile` reutiliza o mesmo fluxo).

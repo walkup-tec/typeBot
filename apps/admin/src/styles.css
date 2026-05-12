@@ -183,6 +183,15 @@ body {
 .brand-block {
   display: grid;
   gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .brand-logo {
@@ -238,11 +247,11 @@ body {
 .sidebar-toggle {
   display: none;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 40px;
-  margin-top: auto;
-  padding: 9px 12px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  padding: 0;
   border-radius: 8px;
   border: 1px solid var(--glass-border);
   background: rgba(15, 23, 42, 0.46);
@@ -2655,9 +2664,19 @@ button.danger-btn:not(.ghost-btn):hover {
   }
 
   .sidebar--collapsed .brand-block p,
-  .sidebar--collapsed .menu-btn-label,
-  .sidebar--collapsed .sidebar-toggle .menu-btn-label {
+  .sidebar--collapsed .menu-btn-label {
     display: none;
+  }
+
+  .sidebar--collapsed .sidebar-top {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .sidebar--collapsed .brand-block {
+    width: 100%;
+    align-items: center;
+    justify-items: center;
   }
 
   .sidebar--collapsed .brand-logo {
@@ -2672,11 +2691,6 @@ button.danger-btn:not(.ghost-btn):hover {
   .sidebar--collapsed .menu-btn-inner {
     justify-content: center;
     width: auto;
-  }
-
-  .sidebar--collapsed .sidebar-toggle {
-    justify-content: center;
-    padding-inline: 10px;
   }
 
   .sidebar-toggle {
