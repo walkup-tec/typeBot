@@ -14,6 +14,7 @@ import { registerAuthRoutes } from "./auth/auth.routes";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
+import { ensureSystemMasterAuthIfConfigured } from "./bootstrap/ensure-system-master-auth";
 import {
   bootstrapAuthDataFromDatabase,
   enforceProductionAuthEnv,
@@ -196,6 +197,7 @@ async function startApi(): Promise<void> {
   await bootstrapAuthDataFromDatabase();
   logAuthPersistenceMode();
   await seedTenantOnEmptyIfConfigured();
+  await ensureSystemMasterAuthIfConfigured();
 
   const dataMarker = getDataFilePath("saved-flows.json");
   if (String(process.env.NODE_ENV ?? "").toLowerCase() === "production") {

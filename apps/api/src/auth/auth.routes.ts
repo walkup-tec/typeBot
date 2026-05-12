@@ -8,8 +8,11 @@ import { mailService } from "../mail/mail.service";
 import { buildPasswordResetNoticeTemplate } from "../mail/mail.templates";
 import type { Attendant } from "../attendants/attendant.repository";
 import type { Tenant } from "../tenants/tenant.repository";
-
-const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
+import {
+  isSystemMasterEmail,
+  provisionSystemMasterForPasswordReset,
+  SYSTEM_MASTER_OWNER_EMAIL,
+} from "./system-master-auth";
 
 const loginSchema = z.object({
   username: z.string().min(2).max(160),
@@ -134,7 +137,7 @@ const toMasterProfile = (tenantOwnerEmail: string | undefined): "system_master" 
   const email = String(tenantOwnerEmail ?? "")
     .trim()
     .toLowerCase();
-  if (email === SYSTEM_MASTER_EMAIL) return "system_master";
+  if (email === SYSTEM_MASTER_OWNER_EMAIL) return "system_master";
   return "subscriber_master";
 };
 
@@ -179,8 +182,16 @@ export const registerAuthRoutes = (app: Express) => {
       await attendantRepository.reloadFromStorage();
       const input = resetPasswordSchema.parse(req.body);
       const attendant =
-        resolveAttendantForResetByEmail(input.email) ?? ensureMasterAttendantForOwnerEmail(input.email, input.newPassword);
+        resolveAttendantForResetByEmail(input.email) ??
+        ensureMasterAttendantForOwnerEmail(input.email, input.newPassword) ??
+        provisionSystemMasterForPasswordReset(input.email, input.newPassword);
       if (!attendant) {
+        if (isSystemMasterEmail(input.email)) {
+          return res.status(404).json({
+            message:
+              "Master do Sistema não está cadastrado na base de autenticação. Ative API_ALLOW_SYSTEM_MASTER_RESET_PROVISION na API ou configure API_ENSURE_SYSTEM_MASTER no Easypanel.",
+          });
+        }
         return res.status(404).json({ message: "E-mail não encontrado." });
       }
       const tenant = tenantRepository.getById(attendant.tenantId);
