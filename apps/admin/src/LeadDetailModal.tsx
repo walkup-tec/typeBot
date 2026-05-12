@@ -1,7 +1,10 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
+  formatLeadCpfDisplay,
   getLeadContextEntries,
   getLeadInitials,
+  isLeadCpfContextKey,
+  resolveLeadContactName,
   resolveLeadWhatsapp,
   type LeadContactDetail,
 } from "./leadContactData";
@@ -79,11 +82,21 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
     };
   }, [apiBase, contactId, open, tenantId]);
 
-  const leadName = String(contact?.contactName ?? "").trim();
-  const leadVariables = useMemo(() => getLeadContextEntries(contact?.leadContext), [contact?.leadContext]);
+  const leadName = useMemo(
+    () => resolveLeadContactName(contact?.contactName, contact?.leadContext),
+    [contact?.contactName, contact?.leadContext],
+  );
+  const leadVariables = useMemo(
+    () => getLeadContextEntries(contact?.leadContext).filter(([key]) => !isLeadCpfContextKey(key)),
+    [contact?.leadContext],
+  );
   const displayedWhatsapp = useMemo(
     () => resolveLeadWhatsapp(contact?.leadWhatsapp, contact?.leadContext) || "Indisponível",
     [contact?.leadContext, contact?.leadWhatsapp],
+  );
+  const displayedCpf = useMemo(
+    () => formatLeadCpfDisplay(contact?.leadContext),
+    [contact?.leadContext],
   );
   const assignedLabel =
     String(contact?.assignedAgentName ?? "").trim() ||
@@ -159,6 +172,17 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
                 </svg>
               </button>
             </li>
+            <li>
+              <span className="lead-fact-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h16V6H4Zm3 4h10v1.5H7V10Zm0 3h7v1.5H7V13Z" />
+                </svg>
+              </span>
+              <span className="lead-fact-text">
+                <small>CPF</small>
+                <span>{displayedCpf}</span>
+              </span>
+            </li>
           </ul>
 
           <div className="lead-accordion">
@@ -174,6 +198,10 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
               <div className="lead-field">
                 <span>WhatsApp</span>
                 <p className="lead-field-value">{displayedWhatsapp}</p>
+              </div>
+              <div className="lead-field">
+                <span>CPF</span>
+                <p className="lead-field-value">{displayedCpf}</p>
               </div>
             </AccordionSection>
 

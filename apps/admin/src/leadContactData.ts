@@ -31,6 +31,58 @@ export type LeadContactDetail = {
 
 const PLACEHOLDER_LEAD_CONTEXT_VALUES = new Set(["-", "—", "null", "undefined", "n/a", "na"]);
 const WHATSAPP_CONTEXT_KEYS = ["WhatsApp", "Whatsapp", "whatsapp", "telefone", "celular", "phone", "fone"];
+export const LEAD_CPF_CONTEXT_KEY = "CPF";
+const CPF_CONTEXT_KEYS = ["cpf", "documento", "doc", "identificacao", "document"];
+
+const normalizeLeadContextKey = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+export const isLeadCpfContextKey = (key: string): boolean => {
+  const normalizedKey = normalizeLeadContextKey(key);
+  return CPF_CONTEXT_KEYS.some((candidate) => normalizedKey.includes(candidate));
+};
+
+export const normalizeCpfDigits = (value: string): string => value.replace(/\D/g, "").slice(0, 11);
+
+export const formatBrazilianCpf = (value: string): string => {
+  const digits = normalizeCpfDigits(value);
+  if (!digits) return "";
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
+export const resolveLeadCpf = (leadContext?: Record<string, string | number | boolean>): string => {
+  if (!leadContext) return "";
+
+  const canonical = String(leadContext[LEAD_CPF_CONTEXT_KEY] ?? "").trim();
+  if (hasLeadContextValue(canonical)) return canonical;
+
+  for (const [key, value] of Object.entries(leadContext)) {
+    if (key === LEAD_CPF_CONTEXT_KEY) continue;
+    if (!isLeadCpfContextKey(key)) continue;
+    const resolved = String(value ?? "").trim();
+    if (hasLeadContextValue(resolved)) return resolved;
+  }
+
+  return "";
+};
+
+export const formatLeadCpfDisplay = (
+  leadContext?: Record<string, string | number | boolean>,
+  fallback = "Não informado",
+): string => {
+  const resolved = resolveLeadCpf(leadContext);
+  if (!resolved) return fallback;
+  const masked = formatBrazilianCpf(resolved);
+  return masked || fallback;
+};
 
 export const hasLeadContextValue = (value: unknown): boolean => {
   if (value === null || value === undefined) return false;
@@ -76,3 +128,79 @@ export const getLeadInitials = (label: string): string =>
     .join("")
     .slice(0, 2)
     .toUpperCase() || "L";
+
+const PLACEHOLDER_CONTACT_NAMES = new Set(["-", "lead", "visitante", "lead typebot"]);
+
+const isNomeContatoKey = (key: string): boolean => normalizeLeadContextKey(key) === "nome_contato";
+
+const isNomeCompletoKey = (key: string): boolean => {
+  const normalizedKey = normalizeLeadContextKey(key);
+  return normalizedKey === "nome_completo" || normalizedKey === "nome_competo" || normalizedKey === "nome completo";
+};
+
+const isMeaningfulLeadContactName = (value: unknown): boolean => {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return false;
+  return !PLACEHOLDER_CONTACT_NAMES.has(normalized.toLowerCase());
+};
+
+const pickContactNameFromSource = (
+  source: Record<string, unknown> | undefined,
+  matchesKey: (key: string) => boolean,
+): string => {
+  if (!source) return "";
+
+  for (const [key, value] of Object.entries(source)) {
+    if (!matchesKey(key)) continue;
+    const resolved = String(value ?? "").trim();
+    if (isMeaningfulLeadContactName(resolved)) return resolved;
+  }
+
+  return "";
+};
+
+const pickContactNameFromSources = (
+  sources: Array<Record<string, unknown> | undefined>,
+  matchesKey: (key: string) => boolean,
+): string => {
+  for (const source of sources) {
+    const resolved = pickContactNameFromSource(source, matchesKey);
+    if (resolved) return resolved;
+  }
+  return "";
+};
+
+const pickFallbackContactName = (sources: Array<Record<string, unknown> | undefined>): string => {
+  const fallbackKeys = ["contactName", "Nome", "nome", "name"];
+
+  for (const source of sources) {
+    if (!source) continue;
+    for (const key of fallbackKeys) {
+      const resolved = String(source[key] ?? "").trim();
+      if (isMeaningfulLeadContactName(resolved)) return resolved;
+    }
+  }
+
+  return "";
+};
+
+export const resolveLeadContactName = (
+  contactName?: string,
+  leadContext?: Record<string, string | number | boolean>,
+  extraSources: Array<Record<string, unknown> | undefined> = [],
+): string => {
+  const sources = [...extraSources, leadContext];
+  const fromNomeContato = pickContactNameFromSources(sources, isNomeContatoKey);
+  if (fromNomeContato) return fromNomeContato;
+
+  const fromNomeCompleto = pickContactNameFromSources(sources, isNomeCompletoKey);
+  if (fromNomeCompleto) return fromNomeCompleto;
+
+  const direct = String(contactName ?? "").trim();
+  if (isMeaningfulLeadContactName(direct)) return direct;
+
+  const fallback = pickFallbackContactName(sources);
+  if (fallback) return fallback;
+
+  return direct || "Lead";
+};

@@ -1855,6 +1855,85 @@ button:disabled {
   color: #e2e8f0;
 }
 
+.clients-list-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.clients-list-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.clients-list-search {
+  flex: 1 1 280px;
+  min-width: 220px;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(15, 23, 42, 0.45);
+  color: #e2e8f0;
+  padding: 8px 12px;
+}
+
+.clients-list-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.clients-list-filter select {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(15, 23, 42, 0.45);
+  color: #e2e8f0;
+  padding: 8px 12px;
+}
+
+.clients-list-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.clients-list-summary {
+  margin: 0;
+}
+
+.clients-table-wrap {
+  overflow-x: auto;
+}
+
+.clients-table {
+  min-width: max(100%, 960px);
+}
+
+.clients-table-row {
+  grid-template-columns: 1fr;
+}
+
+.clients-table-row > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clients-table-actions {
+  display: flex;
+  align-items: center;
+}
+
 .add-icon {
   width: 34px;
   height: 34px;
@@ -2270,6 +2349,12 @@ button.danger-btn:not(.ghost-btn):hover {
   }
 
   .queue-table-row > span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .clients-table-row > span {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

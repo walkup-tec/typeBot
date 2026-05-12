@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { syncSourceWorkspaceFlowsToMasterTenant } from "../flows/source-master-sync.service";
+import { probeFlowUrlStatus } from "../lib/flow-url-health";
 
 const flowStatusSchema = z.object({
   url: z.string().url(),
@@ -29,32 +30,14 @@ export const registerTypebotRoutes = (app: Express) => {
   app.get("/api/typebot/flow-status", async (req, res) => {
     try {
       const { url } = flowStatusSchema.parse(req.query);
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-
-      try {
-        const response = await fetch(url, {
-          method: "GET",
-          redirect: "follow",
-          signal: controller.signal,
-        });
-
-        // Em alguns hosts o viewer pode responder 3xx/401/403 para bots/healthcheck,
-        // mas ainda estar funcional para uso humano no link público.
-        const isActive =
-          (response.status >= 200 && response.status < 400) ||
-          response.status === 401 ||
-          response.status === 403 ||
-          response.status === 405;
-        return res.status(200).json({
-          status: isActive ? "active" : "inactive",
-          httpStatus: response.status,
-          checkedAt: new Date().toISOString(),
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
+      const probe = await probeFlowUrlStatus(url);
+      return res.status(200).json({
+        status: probe.status,
+        httpStatus: probe.httpStatus,
+        resolvedUrl: probe.resolvedUrl,
+        fallbackUrl: probe.fallbackUrl,
+        checkedAt: new Date().toISOString(),
+      });
     } catch (error) {
       return res.status(200).json({
         status: "inactive",

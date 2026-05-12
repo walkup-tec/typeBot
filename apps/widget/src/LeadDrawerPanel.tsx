@@ -1,4 +1,5 @@
 import { ChangeEvent, ReactNode, RefObject, useEffect, useMemo, useState } from "react";
+import { formatLeadCpfValue, isLeadCpfContextKey } from "./resolveLeadCpf";
 import { resolveLeadWhatsapp } from "./resolveLeadWhatsapp";
 
 export type LeadAttachment = {
@@ -32,6 +33,8 @@ type LeadDrawerPanelProps = {
   onLeadNameDraftChange: (value: string) => void;
   leadWhatsappDraft: string;
   onLeadWhatsappDraftChange: (value: string) => void;
+  leadCpfDraft: string;
+  onLeadCpfDraftChange: (value: string) => void;
   leadNotesDraft: string;
   onLeadNotesDraftChange: (value: string) => void;
   leadNotesHistory: LeadAgentNote[];
@@ -95,6 +98,8 @@ export function LeadDrawerPanel({
   onLeadNameDraftChange,
   leadWhatsappDraft,
   onLeadWhatsappDraftChange,
+  leadCpfDraft,
+  onLeadCpfDraftChange,
   leadNotesDraft,
   onLeadNotesDraftChange,
   leadNotesHistory,
@@ -127,6 +132,11 @@ export function LeadDrawerPanel({
     [leadWhatsappDraft, contextFromVariables],
   );
   const whatsappPreview = displayedWhatsapp || "Indisponível";
+  const cpfPreview = formatLeadCpfValue(leadCpfDraft);
+  const visibleLeadVariables = useMemo(
+    () => leadVariables.filter((item) => !isLeadCpfContextKey(item.key)),
+    [leadVariables],
+  );
   const hasAttachments = leadAttachments.length > 0;
   const hasNotes = leadNotesHistory.length > 0;
 
@@ -197,6 +207,17 @@ export function LeadDrawerPanel({
                 </svg>
               </button>
             </li>
+            <li>
+              <span className="lead-fact-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h16V6H4Zm3 4h10v1.5H7V10Zm0 3h7v1.5H7V13Z" />
+                </svg>
+              </span>
+              <span className="lead-fact-text">
+                <small>CPF</small>
+                <span>{cpfPreview}</span>
+              </span>
+            </li>
           </ul>
 
           <div className="lead-toolbar">
@@ -265,6 +286,15 @@ export function LeadDrawerPanel({
                   inputMode="tel"
                 />
               </label>
+              <label className="lead-field">
+                <span>CPF</span>
+                <input
+                  value={leadCpfDraft}
+                  onChange={(event) => onLeadCpfDraftChange(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                />
+              </label>
             </AccordionSection>
 
             <AccordionSection section="assign" label="Atribuição" open={openSections.assign} onToggle={toggleSection}>
@@ -288,12 +318,12 @@ export function LeadDrawerPanel({
               onToggle={toggleSection}
             >
               <div className="lead-variables-list">
-                {leadVariables.length === 0 ? (
+                {visibleLeadVariables.length === 0 ? (
                   <div className="lead-variable-chip">
                     <strong>Sem variáveis registradas</strong>
                   </div>
                 ) : (
-                  leadVariables.map((item) => (
+                  visibleLeadVariables.map((item) => (
                     <div className="lead-variable-chip" key={item.key}>
                       <strong>{item.key}</strong>
                       {item.value}

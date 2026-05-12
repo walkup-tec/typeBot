@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ClientsListScreen } from "./ClientsListScreen";
 import { LeadDetailModal } from "./LeadDetailModal";
 
 type TenantDefaultChatTheme = {
@@ -41,6 +42,7 @@ type QueueContact = {
   source: "typebot" | "widget";
   sourceFlowLabel: string;
   leadContext?: Record<string, string | number | boolean>;
+  leadWhatsapp?: string;
   status: "waiting" | "in_service";
   assignedAgentId?: string;
   assignedAgentName?: string;
@@ -100,7 +102,7 @@ type CreateAttendantResponse = AttendantRow & {
 
 type FlowStatus = "active" | "inactive" | "checking";
 type MasterProfile = "system_master" | "subscriber_master";
-type ScreenId = "master" | "masterLibrary" | "subscribers" | "liveQueue";
+type ScreenId = "master" | "masterLibrary" | "subscribers" | "liveQueue" | "clientList";
 type AuthSession = {
   user: {
     id: string;
@@ -409,8 +411,8 @@ export function App() {
   }, [authSession, selectedTenantObject]);
   const allowedScreens = useMemo<ScreenId[]>(() => {
     const role = authSession?.user?.role;
-    if (role === "attendant") return ["liveQueue"];
-    return masterProfile === "system_master" ? ["masterLibrary", "subscribers"] : ["master", "liveQueue"];
+    if (role === "attendant") return ["liveQueue", "clientList"];
+    return masterProfile === "system_master" ? ["masterLibrary", "subscribers"] : ["master", "liveQueue", "clientList"];
   }, [masterProfile, authSession]);
   const filteredTenants = useMemo(
     () =>
@@ -1087,6 +1089,12 @@ export function App() {
     setIsLeadDetailModalOpen(true);
   }
 
+  function openLeadDetailByContactId(contactId: string) {
+    const item = queueItems.find((row) => row.contactId === contactId);
+    if (!item) return;
+    openLeadDetailModal(item);
+  }
+
   async function saveTenantFlow() {
     if (!selectedTenant) {
       setStatusMessage("Selecione um assinante antes de salvar o fluxo.");
@@ -1738,6 +1746,14 @@ export function App() {
             >
               Fila ao vivo
               {pendingQueueCount > 0 ? <span className="menu-badge">{pendingQueueCount}</span> : null}
+            </button>
+          ) : null}
+          {masterProfile === "subscriber_master" ? (
+            <button
+              className={`menu-btn ${activeScreen === "clientList" ? "active" : ""}`}
+              onClick={() => setActiveScreen("clientList")}
+            >
+              Lista de Clientes
             </button>
           ) : null}
         </nav>
@@ -2599,6 +2615,10 @@ export function App() {
               ))}
             </div>
           </section>
+        ) : null}
+
+        {activeScreen === "clientList" ? (
+          <ClientsListScreen contacts={queueItems} onOpenContact={openLeadDetailByContactId} />
         ) : null}
 
         {statusMessage ? (

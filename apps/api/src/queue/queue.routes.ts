@@ -9,6 +9,7 @@ import {
   resolveServiceStartedAt,
 } from "../lib/agent-session-meta";
 import { pruneLeadContext } from "../lib/lead-context";
+import { resolveLeadContactName } from "../lib/lead-contact-name";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   QueueService,
@@ -351,27 +352,7 @@ const pickLeadWhatsappFromContext = (
 const pickLeadNameFromPayload = (
   payload: Record<string, unknown>,
   leadContext?: Record<string, string | number | boolean>,
-): string => {
-  const candidates = [
-    payload.contactName,
-    payload.Nome,
-    payload.Nome_Contato,
-    payload.nome,
-    payload.nome_completo,
-    payload["nome completo"],
-    payload.name,
-    leadContext?.Nome,
-    leadContext?.Nome_Contato,
-    leadContext?.nome,
-    leadContext?.nome_completo,
-    leadContext?.name,
-  ];
-  for (const candidate of candidates) {
-    const value = String(candidate ?? "").trim();
-    if (value && value.toLowerCase() !== "lead") return value;
-  }
-  return "Lead";
-};
+): string => resolveLeadContactName(String(payload.contactName ?? ""), leadContext, [payload]);
 
 const getTenantId = (req: Request) => {
   const tenantId = req.header("x-tenant-id");
@@ -1112,6 +1093,12 @@ export const registerQueueRoutes = (app: Express) => {
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v16h13a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 18H8V7h11v16Z"/></svg>
               </button>
             </li>
+            <li>
+              <span class="lead-fact-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h16V6H4Zm3 4h10v1.5H7V10Zm0 3h7v1.5H7V13Z"/></svg>
+              </span>
+              <span class="lead-fact-text"><small>CPF</small><span id="leadCpfPreview">Não informado</span></span>
+            </li>
           </ul>
           <div class="lead-toolbar">
             <button type="button" class="lead-toolbar-button" data-open-section="contact" aria-label="Editar dados" title="Editar dados">
@@ -1133,6 +1120,7 @@ export const registerQueueRoutes = (app: Express) => {
               <div class="lead-accordion-panel">
                 <label class="lead-field"><span>Nome do lead</span><input id="leadNameInput" /></label>
                 <label class="lead-field"><span>WhatsApp</span><input id="leadWhatsappInput" inputmode="tel" /></label>
+                <label class="lead-field"><span>CPF</span><input id="leadCpfInput" inputmode="numeric" placeholder="000.000.000-00" /></label>
               </div>
             </section>
             <section class="lead-accordion-item" data-lead-section="assign">
@@ -1547,6 +1535,7 @@ export const registerQueueRoutes = (app: Express) => {
     const leadDrawerClose = document.getElementById("leadDrawerClose");
     const leadNameInput = document.getElementById("leadNameInput");
     const leadWhatsappInput = document.getElementById("leadWhatsappInput");
+    const leadCpfInput = document.getElementById("leadCpfInput");
     const leadAssignSelect = document.getElementById("leadAssignSelect");
     const leadFilesInput = document.getElementById("leadFilesInput");
     const leadAttachmentsList = document.getElementById("leadAttachmentsList");
@@ -1560,6 +1549,7 @@ export const registerQueueRoutes = (app: Express) => {
     const leadProfileName = document.getElementById("leadProfileName");
     const leadWhatsappPreview = document.getElementById("leadWhatsappPreview");
     const leadWhatsappCopy = document.getElementById("leadWhatsappCopy");
+    const leadCpfPreview = document.getElementById("leadCpfPreview");
     const sessionMeta = document.getElementById("sessionMeta");
 
     function formatSessionMetaLabel(startedAt, agentLabel) {
@@ -1640,6 +1630,50 @@ export const registerQueueRoutes = (app: Express) => {
       return pickLeadWhatsappFromContext(context);
     }
 
+    function isLeadCpfContextKey(key) {
+      const normalized = String(key || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\\u0300-\\u036f]/g, "");
+      return ["cpf", "documento", "doc", "identificacao", "document"].some((candidate) => normalized.includes(candidate));
+    }
+
+    function resolveLeadCpfFromContext(context) {
+      const source = context && typeof context === "object" ? context : {};
+      const canonical = String(source.CPF || "").trim();
+      if (canonical) return canonical;
+      for (const [key, value] of Object.entries(source)) {
+        if (String(key || "").trim() === "CPF") continue;
+        if (!isLeadCpfContextKey(key)) continue;
+        const resolved = String(value || "").trim();
+        if (resolved) return resolved;
+      }
+      return "";
+    }
+
+    function formatBrazilianCpf(value) {
+      const digits = String(value || "").replace(/\\D/g, "").slice(0, 11);
+      if (!digits) return "";
+      if (digits.length <= 3) return digits;
+      if (digits.length <= 6) return digits.slice(0, 3) + "." + digits.slice(3);
+      if (digits.length <= 9) return digits.slice(0, 3) + "." + digits.slice(3, 6) + "." + digits.slice(6);
+      return digits.slice(0, 3) + "." + digits.slice(3, 6) + "." + digits.slice(6, 9) + "-" + digits.slice(9);
+    }
+
+    function resolveLeadCpfDisplay(inputValue, context) {
+      const direct = String(inputValue || "").trim();
+      if (direct) return direct;
+      return resolveLeadCpfFromContext(context);
+    }
+
+    function formatLeadCpfPreview(value) {
+      const resolved = String(value || "").trim();
+      if (!resolved) return "Não informado";
+      const masked = formatBrazilianCpf(resolved);
+      return masked || "Não informado";
+    }
+
     function syncLeadProfilePreview() {
       const name = leadNameInput ? String(leadNameInput.value || "").trim() : "";
       const whatsapp = resolveLeadWhatsappDisplay(
@@ -1650,6 +1684,8 @@ export const registerQueueRoutes = (app: Express) => {
       if (leadProfileName) leadProfileName.textContent = name || "Visitante";
       if (leadWhatsappPreview) leadWhatsappPreview.textContent = whatsapp || "Indisponível";
       if (leadWhatsappCopy) leadWhatsappCopy.disabled = !whatsapp;
+      const cpf = resolveLeadCpfDisplay(leadCpfInput ? leadCpfInput.value : "", leadDrawerContact?.leadContext);
+      if (leadCpfPreview) leadCpfPreview.textContent = formatLeadCpfPreview(cpf);
     }
 
     function setLeadAccordionOpen(section, open) {
@@ -1703,7 +1739,10 @@ export const registerQueueRoutes = (app: Express) => {
 
     function renderLeadVariables(contextMap) {
       if (!leadVariablesList) return;
-      const entries = Object.entries(contextMap || {}).filter(([key, value]) => key && String(value ?? "").trim());
+      const entries = Object.entries(contextMap || {}).filter(([key, value]) => {
+        if (!key || !String(value ?? "").trim()) return false;
+        return !isLeadCpfContextKey(key);
+      });
       if (entries.length === 0) {
         leadVariablesList.innerHTML = '<div class="lead-variable-chip"><strong>Sem variáveis registradas</strong></div>';
         return;
@@ -1799,6 +1838,9 @@ export const registerQueueRoutes = (app: Express) => {
       if (leadNameInput) leadNameInput.value = String(contact?.contactName || "");
       if (leadWhatsappInput) {
         leadWhatsappInput.value = resolveLeadWhatsappDisplay(contact?.leadWhatsapp, contact?.leadContext);
+      }
+      if (leadCpfInput) {
+        leadCpfInput.value = resolveLeadCpfFromContext(contact?.leadContext || {});
       }
       if (leadNotesInput) leadNotesInput.value = "";
       if (leadTitle) leadTitle.textContent = String(contact?.contactName || leadTitle.textContent || "Visitante");
@@ -1909,8 +1951,10 @@ export const registerQueueRoutes = (app: Express) => {
       const payload = {};
       const name = leadNameInput ? String(leadNameInput.value || "").trim() : "";
       const whatsapp = leadWhatsappInput ? String(leadWhatsappInput.value || "").trim() : "";
+      const cpf = leadCpfInput ? String(leadCpfInput.value || "").trim() : "";
       if (name.length >= 2) payload.contactName = name;
       payload.leadWhatsapp = whatsapp;
+      payload.leadCpf = cpf;
       const response = await fetch("/api/chat/queue/" + contactId + "/profile", {
         method: "PATCH",
         headers: { "content-type": "application/json", "x-tenant-id": tenantId },
@@ -1981,6 +2025,9 @@ export const registerQueueRoutes = (app: Express) => {
     }
     if (isAgentMode && leadWhatsappInput) {
       leadWhatsappInput.addEventListener("input", syncLeadProfilePreview);
+    }
+    if (isAgentMode && leadCpfInput) {
+      leadCpfInput.addEventListener("input", syncLeadProfilePreview);
     }
     if (isAgentMode && leadNotesRegisterButton) {
       leadNotesRegisterButton.addEventListener("click", () => {

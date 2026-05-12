@@ -2,8 +2,7 @@ import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { loadFlowLibrary } from "./flow-library.repository";
 import { syncSourceWorkspaceFlowsToMasterTenant } from "./source-master-sync.service";
-import { flowRepository } from "../lib/repositories";
-import { tenantRepository } from "../lib/repositories";
+import { flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
 import {
   getSystemMasterLibraryById,
   getSystemMasterLibraryBySourceFlowId,
@@ -18,7 +17,7 @@ import {
   updateFlowThemeSchema,
   updateFlowDisplayLabelSchema,
 } from "./flow.service";
-import { isFlowUrlActive } from "../lib/flow-url-health";
+import { isFlowUrlActive, probeFlowUrlStatus } from "../lib/flow-url-health";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   importManualWorkspaceTypebotsIntoTenantFlows,
@@ -34,6 +33,87 @@ import {
 const flowService = new FlowService(flowRepository);
 const MASTER_SOURCE_EMAIL = "walkup@walkuptec.com.br";
 const normalizeText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
+const slugifyFlowNickname = (value: string): string =>
+  String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-")
+    .slice(0, 120);
+
+const inferViewerBaseUrl = (tenantId: string): string => {
+  const explicit = String(process.env.TYPEBOT_TARGET_VIEWER_BASE_URL ?? process.env.TYPEBOT_SOURCE_VIEWER_BASE_URL ?? "").trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const fromTenantFlow = flowRepository.listByTenant(tenantId).map((flow) => flow.url).find((url) => /^https?:\/\//i.test(url));
+  if (fromTenantFlow) {
+    try {
+      const parsed = new URL(fromTenantFlow);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch {
+      // noop
+    }
+  }
+  return "";
+};
+
+const ensureTenantFlowLibraryFromQueue = (tenantId: string): void => {
+  const queueItems = queueRepository.listByTenant(tenantId);
+  if (queueItems.length === 0) return;
+  const current = flowRepository.listByTenant(tenantId);
+  const viewerBase = inferViewerBaseUrl(tenantId);
+  const normalize = (value: string) => normalizeText(value);
+
+  for (const item of queueItems) {
+    const label = String(item.sourceFlowLabel ?? "").trim();
+    if (label.length < 2) continue;
+    const labelToken = normalize(label);
+    const exists = current.some((flow) => {
+      const publicIdFromUrl = typebotPublicIdFromViewerUrl(flow.url);
+      return (
+        normalize(flow.nickname) === labelToken ||
+        normalize(flow.displayLabel ?? "") === labelToken ||
+        normalize(flow.typebotPublicId ?? "") === labelToken ||
+        normalize(publicIdFromUrl) === labelToken
+      );
+    });
+    if (exists) continue;
+
+    let nickname = slugifyFlowNickname(label);
+    if (nickname.length < 2) nickname = `fluxo-${Date.now()}`;
+    if (current.some((flow) => normalize(flow.nickname) === normalize(nickname))) {
+      nickname = `${nickname}-${Date.now().toString().slice(-4)}`;
+    }
+    const looksLikePublicId = !/^https?:\/\//i.test(label) && !/\s/.test(label);
+    const url = looksLikePublicId && viewerBase ? `${viewerBase}/${encodeURIComponent(label)}` : `https://placeholder.local/${encodeURIComponent(label)}`;
+    const created = flowRepository.create({
+      id: randomUUID(),
+      tenantId,
+      createdAt: new Date().toISOString(),
+      nickname,
+      displayLabel: label,
+      url,
+      typebotPublicId: looksLikePublicId ? label : undefined,
+    });
+    current.push(created);
+  }
+};
+
+const selfHealTenantFlowViewerUrls = async (tenantId: string): Promise<void> => {
+  const flows = flowRepository.listByTenant(tenantId);
+  for (const flow of flows) {
+    const currentUrl = String(flow.url ?? "").trim();
+    if (!currentUrl) continue;
+    const probe = await probeFlowUrlStatus(currentUrl);
+    if (probe.status !== "active") continue;
+    if (!probe.fallbackUrl || probe.resolvedUrl === currentUrl) continue;
+    const patch: { url: string; typebotPublicId?: string } = { url: probe.resolvedUrl };
+    const publicId = typebotPublicIdFromViewerUrl(probe.resolvedUrl);
+    if (publicId) patch.typebotPublicId = publicId;
+    flowRepository.updateById(flow.id, patch);
+  }
+};
 const applyTenantLogoAsBotAvatar = <T extends { tenantId: string; redirectTheme?: { profileImageUrl?: string } }>(flow: T): T => {
   const tenant = tenantRepository.getById(flow.tenantId);
   const tenantLogo = String(tenant?.profileImageUrl ?? "").trim();
@@ -242,6 +322,12 @@ export const registerFlowRoutes = (app: Express) => {
       await refreshTenantFlowViewerUrls(tenantId);
     } catch {
       // listagem ainda entrega; URLs podem ser corrigidas no "Copiar link" ou após sync
+    }
+    ensureTenantFlowLibraryFromQueue(tenantId);
+    try {
+      await selfHealTenantFlowViewerUrls(tenantId);
+    } catch {
+      // auto-heal best-effort: não bloqueia listagem de fluxos
     }
     const flows = flowService.listByTenant(tenantId).map(applyTenantLogoAsBotAvatar);
     return res.status(200).json(flows);

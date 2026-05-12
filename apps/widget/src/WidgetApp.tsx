@@ -2,6 +2,9 @@ import { CSSProperties, ChangeEvent, FormEvent, useEffect, useMemo, useRef, useS
 import { LeadDrawerPanel, type AttendantOption, type LeadAgentNote, type LeadAttachment, type LeadDrawerSection } from "./LeadDrawerPanel";
 import { formatAgentSessionMeta, resolveServiceStartedAt } from "./agentSessionMeta";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
+import { resolveLeadContactName } from "./resolveLeadContactName";
+import { isLeadCpfContextKey, resolveLeadCpf } from "./resolveLeadCpf";
+import { resolveLeadWhatsapp } from "./resolveLeadWhatsapp";
 
 const defaultApiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3333";
 const tenantId = import.meta.env.VITE_TENANT_ID ?? "demo-tenant";
@@ -132,6 +135,7 @@ export function WidgetApp() {
   const [leadDrawerFocusSection, setLeadDrawerFocusSection] = useState<LeadDrawerSection | null>(null);
   const [leadNameDraft, setLeadNameDraft] = useState("");
   const [leadWhatsappDraft, setLeadWhatsappDraft] = useState("");
+  const [leadCpfDraft, setLeadCpfDraft] = useState("");
   const [leadNotesDraft, setLeadNotesDraft] = useState("");
   const [leadNotesHistory, setLeadNotesHistory] = useState<LeadAgentNote[]>([]);
   const [leadAssignTo, setLeadAssignTo] = useState("");
@@ -296,16 +300,17 @@ export function WidgetApp() {
   }
 
   const applyLeadContactToForm = (contact: QueueContactProfile) => {
-    const nextName = String(contact.contactName ?? "").trim();
+    const nextName = resolveLeadContactName(contact.contactName, contact.leadContext);
     setLeadNameDraft(nextName);
     setLeadWhatsappDraft(resolveLeadWhatsapp(contact.leadWhatsapp, contact.leadContext));
+    setLeadCpfDraft(resolveLeadCpf(contact.leadContext));
     setLeadNotesDraft("");
     setLeadNotesHistory(Array.isArray(contact.agentNotesHistory) ? contact.agentNotesHistory : []);
     setLeadAssignedAgentId(String(contact.assignedAgentId ?? "").trim().toLowerCase());
     setLeadAssignedAgentName(String(contact.assignedAgentName ?? "").trim());
     if (nextName) setLeadDisplayName(nextName);
     const variables = Object.entries(contact.leadContext ?? {})
-      .filter(([key, value]) => key && String(value ?? "").trim())
+      .filter(([key, value]) => key && String(value ?? "").trim() && !isLeadCpfContextKey(key))
       .map(([key, value]) => ({ key, value: String(value) }));
     setLeadVariables(variables);
     setLeadAttachments(Array.isArray(contact.attachments) ? contact.attachments : []);
@@ -397,8 +402,9 @@ export function WidgetApp() {
     setLeadDrawerStatus("Salvando...");
     const noteSaved = await registerLeadNote();
     if (!noteSaved) return;
-    const payload: { contactName?: string; leadWhatsapp: string } = {
+    const payload: { contactName?: string; leadWhatsapp: string; leadCpf: string } = {
       leadWhatsapp: leadWhatsappDraft.trim(),
+      leadCpf: leadCpfDraft.trim(),
     };
     const nextName = leadNameDraft.trim();
     if (nextName.length >= 2) payload.contactName = nextName;
@@ -878,6 +884,8 @@ export function WidgetApp() {
           onLeadNameDraftChange={setLeadNameDraft}
           leadWhatsappDraft={leadWhatsappDraft}
           onLeadWhatsappDraftChange={setLeadWhatsappDraft}
+          leadCpfDraft={leadCpfDraft}
+          onLeadCpfDraftChange={setLeadCpfDraft}
           leadNotesDraft={leadNotesDraft}
           onLeadNotesDraftChange={setLeadNotesDraft}
           leadNotesHistory={leadNotesHistory}

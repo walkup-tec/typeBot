@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveLeadAgentNotes, withNormalizedQueueContact } from "../lib/lead-agent-notes";
+import { mergeLeadCpfIntoContext } from "../lib/lead-cpf";
 import { pruneLeadContext } from "../lib/lead-context";
 import { QueueRepository } from "./queue.repository";
 import type { QueueDistributionMode } from "../tenants/tenant.repository";
@@ -26,6 +27,7 @@ export const sendLiveMessageSchema = z.object({
 export const updateQueueContactSchema = z.object({
   contactName: z.string().min(2).max(120).optional(),
   leadWhatsapp: z.string().max(24).optional(),
+  leadCpf: z.string().max(20).optional(),
 });
 
 export const addAgentNoteSchema = z.object({
@@ -130,12 +132,19 @@ export class QueueService {
   }
 
   updateContact(tenantId: string, contactId: string, input: z.infer<typeof updateQueueContactSchema>) {
+    const contact = this.queueRepository.getByTenantAndContactId(tenantId, contactId);
+    if (!contact) return null;
+
     const patch: Partial<{
       contactName: string;
       leadWhatsapp: string;
+      leadContext: Record<string, string | number | boolean> | undefined;
     }> = {};
     if (input.contactName !== undefined) patch.contactName = input.contactName;
     if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
+    if (input.leadCpf !== undefined) {
+      patch.leadContext = mergeLeadCpfIntoContext(contact.leadContext, input.leadCpf);
+    }
     const updated = this.queueRepository.updateContact(tenantId, contactId, patch);
     return updated ? withNormalizedQueueContact(updated) : null;
   }
