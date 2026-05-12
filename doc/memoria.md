@@ -2861,3 +2861,14 @@
 
 - `master-queue-contacts`
 - `lista-clientes-system-master`
+
+## 2026-05-12 - Commit e push deploy (caf5618)
+
+- Commit `caf5618`: lista global de clientes no master, nome Drax Sistemas e endpoint `GET /api/master/queue/contacts`.
+- Push em `origin/master` apos deploy da API apenas com `21e9687` (docs walkup), sem codigo do painel.
+- Proximo passo: redeploy **api-typebot-crm** e **painel-typebot-crm**; hard refresh no painel.
+
+### Palavras-chave para pesquisa futura
+
+- `commit-caf5618-deploy`
+- `redeploy-painel-api-pos-push`
