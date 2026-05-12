@@ -2101,8 +2101,8 @@ button:disabled {
 .clients-table {
   min-width: max(100%, 960px);
   gap: 2px;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .clients-table .table-row.clients-table-row {
@@ -2130,7 +2130,7 @@ button:disabled {
 .clients-table .table-header.clients-table-row {
   background: rgba(15, 23, 42, 0.2) !important;
   color: #94a3b8;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   padding: 5px 10px;
@@ -2155,7 +2155,7 @@ button:disabled {
 .clients-table-actions .ghost-btn {
   min-height: 30px;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .add-icon {

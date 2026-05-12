@@ -1,3 +1,8 @@
+## 2026-05-12 - Fonte da lista de clientes ajustada
+
+- Tabela da lista de clientes com fonte um pouco maior (13px no corpo, 12px no cabecalho).
+- Pendencia: redeploy do `painel-typebot-crm`.
+
 ## 2026-05-12 - Inscricao do menu lateral em linha unica
 
 - Texto "Type Bot e Chat de atendimento" ocupa toda a largura do menu em uma linha.
