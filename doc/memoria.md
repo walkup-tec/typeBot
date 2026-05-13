@@ -1,3 +1,8 @@
+## 2026-05-13 - Checkout LP: erro com API HTTPS (sem ligação)
+
+- Mensagem antiga sugeria só build; com `https://api.chattypebot.com` o problema é **rede/DNS/serviço**: de um ambiente de teste, `api.chattypebot.com` **não resolve** (DNS).
+- `salesApi.ts`: texto de erro no `catch` do `fetch` orienta abrir `{base}/health`, DNS A/AAAA, TLS e API no Easypanel; detalhe da exceção só em `DEV`.
+
 ## 2026-05-13 - LP checkout chamava localhost: `VITE_*` duplicado no Easypanel + fallback
 
 - Erro no modal: API `http://localhost:3333` → última `VITE_API_BASE_URL` no build era localhost ou variável ausente e o **fallback** em `salesApi.ts` embutia localhost no bundle.

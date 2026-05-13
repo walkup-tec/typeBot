@@ -45,10 +45,14 @@ export const createSalesSubscription = async (input: {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
     });
-  } catch {
-    throw new Error(
-      `Sem conexão com a API (${base}). Confira: build da landing com VITE_API_BASE_URL apontando para a API pública HTTPS; API no ar; sem bloqueio de rede ou conteúdo misto (página HTTPS chamando API HTTP).`,
-    );
+  } catch (cause: unknown) {
+    const hint =
+      base.startsWith("https://")
+        ? ` Teste no browser: ${base}/health — tem de aparecer JSON com "status":"ok". Se não abrir: DNS (registo A/AAAA para o subdomínio), certificado TLS, ou serviço da API parado no Easypanel.`
+        : " Confira URL da API (HTTPS) e firewall.";
+    const detail =
+      import.meta.env.DEV && cause instanceof Error && cause.message ? ` (${cause.message})` : "";
+    throw new Error(`Sem ligação à API em ${base}.${hint}${detail}`);
   }
 
   const raw = await response.text();
