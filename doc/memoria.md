@@ -1,3 +1,8 @@
+## 2026-05-13 - `git push` origin/master (commit 7cc7916)
+
+- Push feito a partir de `D:\typebot-Saas`: `master` → `https://github.com/walkup-tec/typeBot.git` (`7d1bd39..7cc7916`).
+- **Próximo passo só no Easypanel:** redeploy do serviço da landing (LP) para puxar o código e subir o contentor.
+
 ## 2026-05-13 - Pedido: tudo local; deploy só pelo utilizador
 
 - Repo: `apps/sales` com `start` + `nixpacks.toml` `[start]` prontos para Easypanel.
