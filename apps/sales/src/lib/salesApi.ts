@@ -8,11 +8,19 @@ const resolveInjectedApiBase = (): string => {
 export const resolveApiBase = (): string => {
   const injected = resolveInjectedApiBase();
   if (injected) return injected.replace(/\/$/, "");
-  return String(import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3333").trim().replace(/\/$/, "");
+  const fromEnv = String(import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  // Em produção nunca usar localhost embutido: evita bundle com API errada se o build não tiver VITE_*.
+  if (import.meta.env.DEV) return "http://localhost:3333".replace(/\/$/, "");
+  return "";
 };
 
-export const resolvePainelUrl = (): string =>
-  String(import.meta.env.VITE_PAINEL_URL ?? "http://localhost:5173").trim().replace(/\/$/, "");
+export const resolvePainelUrl = (): string => {
+  const fromEnv = String(import.meta.env.VITE_PAINEL_URL ?? "").trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  if (import.meta.env.DEV) return "http://localhost:5173".replace(/\/$/, "");
+  return "";
+};
 
 export type SalesSubscriptionCycle = "MONTHLY" | "YEARLY";
 
@@ -23,6 +31,11 @@ export const createSalesSubscription = async (input: {
   cycle: SalesSubscriptionCycle;
 }): Promise<{ subscriptionId: string; invoiceUrl: string | null }> => {
   const base = resolveApiBase();
+  if (!base) {
+    throw new Error(
+      "API não configurada nesta versão da página (VITE_API_BASE_URL em falta no build). Refaça o deploy da landing com variáveis de build HTTPS no Easypanel, sem localhost.",
+    );
+  }
   const url = `${base}/api/public/sales/subscriptions`;
 
   let response: Response;

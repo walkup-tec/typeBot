@@ -91,7 +91,7 @@ function Header() {
 
         <div className="hidden items-center gap-3 md:flex">
           <a
-            href={resolvePainelUrl()}
+            href={resolvePainelUrl() || "#"}
             className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             Entrar

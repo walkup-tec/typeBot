@@ -1,3 +1,10 @@
+## 2026-05-13 - LP checkout chamava localhost: `VITE_*` duplicado no Easypanel + fallback
+
+- Erro no modal: API `http://localhost:3333` → última `VITE_API_BASE_URL` no build era localhost ou variável ausente e o **fallback** em `salesApi.ts` embutia localhost no bundle.
+- `salesApi.ts`: fallback localhost **só em DEV**; produção sem `VITE_*` → base vazia + mensagem explícita; `resolvePainelUrl` idem; `index` link Entrar `|| "#"`.
+- `scripts/check-prod-vite-api.mjs` + `npm run build`: falha antes do Vite se `VITE_API_BASE_URL` vazio/localhost (merge `.env.production` + `process.env`); `SALES_SKIP_VITE_ENV_CHECK=1` para exceção.
+- **Easypanel:** rebuild só com `VITE_API_BASE_URL` / `VITE_PAINEL_URL` HTTPS, **sem** segunda linha localhost.
+
 ## 2026-05-13 - Diagnóstico LP Easypanel: ambiente com chaves duplicadas e mistura API+LP
 
 - Utilizador colou env do serviço LP com **VITE_*** duplicado (HTTPS + localhost), **PORT** 3000 e depois **3333**, **NODE_ENV** duplicado, variáveis **API** (DATABASE_URL, HANDOFF, ASAAS) no mesmo bloco — Easypanel/proxy tende a usar **último valor** por chave → proxy pode apontar para **3333** enquanto `serve-production.mjs` ouve **3000** → "Service not reachable"; ou bundle Vite com **localhost**.
