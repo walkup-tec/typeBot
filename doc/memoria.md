@@ -1,3 +1,10 @@
+## 2026-05-13 - Diagnóstico LP Easypanel: ambiente com chaves duplicadas e mistura API+LP
+
+- Utilizador colou env do serviço LP com **VITE_*** duplicado (HTTPS + localhost), **PORT** 3000 e depois **3333**, **NODE_ENV** duplicado, variáveis **API** (DATABASE_URL, HANDOFF, ASAAS) no mesmo bloco — Easypanel/proxy tende a usar **último valor** por chave → proxy pode apontar para **3333** enquanto `serve-production.mjs` ouve **3000** → "Service not reachable"; ou bundle Vite com **localhost**.
+- **Correção operacional:** no serviço **só da landing** deixar apenas `NODE_ENV`, `VITE_API_BASE_URL`, `VITE_PAINEL_URL`, `PORT=3000`, `HOST=0.0.0.0` (e alinhar porta no UI do proxy). Tudo de API/Asaas/Postgres → **serviço da API**.
+- **Segurança:** chaves Asaas não devem estar no env da LP; se foram expostas, **rodar** no Asaas.
+- `apps/sales/.env.example`: bloco de aviso Easypanel (sem duplicar chaves); removidos exemplos com tokens em comentário.
+
 ## 2026-05-13 - `git push` origin/master (commit 7cc7916)
 
 - Push feito a partir de `D:\typebot-Saas`: `master` → `https://github.com/walkup-tec/typeBot.git` (`7d1bd39..7cc7916`).
