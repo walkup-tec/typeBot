@@ -1,0 +1,11 @@
+[variables]
+NIXPACKS_NODE_VERSION = "22"
+
+# Easypanel envia NODE_ENV=production no build do Docker → `npm ci` omite
+# devDependencies e o Vite falha ao carregar `@lovable.dev/vite-tanstack-config`.
+[phases.install]
+cmds = ["npm ci --include=dev"]
+
+# Easypanel / Nixpacks usam por defeito `npm start` — tem de servir `dist/` já feito no build.
+[start]
+cmd = "npm run start:static"

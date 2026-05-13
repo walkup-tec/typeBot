@@ -1,3 +1,97 @@
+## 2026-05-13 - Pedido: tudo local; deploy só pelo utilizador
+
+- Repo: `apps/sales` com `start` + `nixpacks.toml` `[start]` prontos para Easypanel.
+- Build **nesta máquina**: `npm ci` em `apps/sales` falhou com **EPERM** (Windows: ficheiros em uso / antivírus). Sem Docker local para simular Linux; o **build no Easypanel** (Nixpacks Linux) é o validador.
+- **Utilizador:** `git push` + redeploy do serviço da LP; após fechar processos que lockem `node_modules`, pode correr `npm ci --include=dev` e `npm run build` em `apps/sales` para validar em Windows.
+
+## 2026-05-13 - LP fora do ar: Easypanel "Service is not reachable" + hardening start
+
+- Causa típica: proxy sem upstream (contentor parado, crash no boot, ou comando/porta errados).
+- `apps/sales/package.json`: script `start` igual ao servidor estático (muitos Paais chamam `npm start` por defeito; antes só existia `start:static`).
+- `apps/sales/nixpacks.toml`: `[start] cmd = "npm run start:static"`.
+- **Easypanel:** ver logs do serviço; confirmar **porta interna** = `PORT` (ex. 3000); comando de arranque não pode ser só `vite dev` em produção; redeploy após push.
+- **SSL "Não seguro":** emitir/renovar TLS no domínio no Easypanel após o serviço voltar a responder.
+
+## 2026-05-13 - Utilizador: ambiente configurado e deploy concluído
+
+- Confirmação: env + deploy em produção (API + landing conforme conversa anterior).
+- Próximo (opcional): teste checkout sandbox + webhook Asaas na API.
+
+## 2026-05-13 - Segurança: chaves Asaas removidas de `apps/sales/.env.example`
+
+- Ficheiro de exemplo da landing continha **API keys reais** (sandbox + produção) e Wallet ID — **não** devem estar em ficheiros versionados; a landing **não** usa `ASAAS_*` (só a API em `apps/api`).
+- `.env.example` limpo: placeholders comentados + aviso para Easypanel/API e rotação se vazamento.
+- **Ação do utilizador:** se este conteúdo chegou ao Git remoto ou foi partilhado, **revogar/regenerar** chaves no Asaas e configurar `ASAAS_API_KEY` (e URL) apenas no ambiente do **serviço da API**.
+
+## 2026-05-13 - Deploy Easypanel vendas: ERR_MODULE_NOT_FOUND @lovable.dev/vite-tanstack-config
+
+- Causa: build-arg `NODE_ENV=production` → `npm ci` **sem** devDependencies; o `vite.config.ts` importa `@lovable.dev/vite-tanstack-config` (estava em devDeps).
+- Correção: `nixpacks.toml` com `[phases.install] cmds = ["npm ci --include=dev"]` em `apps/sales` e `_pv-typebot-chat-temp`; `@lovable.dev/vite-tanstack-config` mantido em **dependencies** no `package.json` (cinto e suspensórios). PV commit `f3451d4`.
+
+## 2026-05-13 - Landing: máscara CPF/CNPJ + nota DNS checkout
+
+- `maskCpfCnpj.ts` + campo no modal Assinar; envio só dígitos; validação 11 ou 14 dígitos antes do POST.
+- `ERR_NAME_NOT_RESOLVED` em `api.chattypebot.com`: DNS público inexistente — criar A/AAAA ou usar no build o host HTTPS real da API (Easypanel).
+- `.env.example`: secção DNS. `PV-typebot-chat` `365cd90`.
+
+## 2026-05-13 - apps/sales: .env.example completo + .env.local.example
+
+- `.env.example`: secções [BUILD] Vite, [RUNTIME] Node, local comentado, ponteiro para API (`doc/EASYPANEL-AMBIENTE.env.example`).
+- `.env.local.example`: template para `vite dev` (copiar para `.env.local`).
+- `.env.production`: nota sobre PORT/HOST.
+- `_pv-typebot-chat-temp/.env.example` alinhado.
+
+## 2026-05-13 - Env landing: VITE_API_BASE_URL / VITE_PAINEL_URL documentados
+
+- Valores de produção do projeto: `https://api.chattypebot.com`, `https://painel.chattypebot.com` (doc DEPLOY-VPS). Comentários em `apps/sales/.env.production`, `.env.example` e `_pv-typebot-chat-temp/.env.production`; lembrete Easypanel se o build não ler o ficheiro.
+
+## 2026-05-13 - Landing: erro “Failed to fetch” no checkout — mensagem e causa
+
+- `createSalesSubscription` em `salesApi.ts`: `fetch` em try/catch com mensagem em PT citando `VITE_API_BASE_URL`, HTTPS e API no ar; parse com `text` + `JSON.parse` para evitar falha opaca.
+- Causa típica: build da landing sem URL da API ou com `localhost`; ou API inacessível/CORS (menos provável com `cors({origin:true})`).
+- `PV-typebot-chat` `8d0ce29`; `apps/sales` espelhado.
+
+## 2026-05-13 - Landing: lista de tópicos do plano Business (duas colunas)
+
+- Em vez de uma única `grid` com fluxo em “linhas” (o item curto da esquerda herdava a altura da linha do item longo da direita), passou a **duas listas** (`slice` ao meio) com `flex flex-col gap-2.5`, wrapper `grid sm:grid-cols-2 sm:items-start`, texto `leading-snug`.
+- `PV-typebot-chat` `9a57521`; `apps/sales` espelhado.
+
+## 2026-05-13 - Landing: toggle mensal/anual menos alto
+
+- Trilho `h-7` (antes `h-9`), thumb `h-5 w-5`, `translate-x-[26px]` no estado anual para manter alinhamento na largura `52px`.
+- `PV-typebot-chat` `60455e9`; `apps/sales` espelhado.
+
+## 2026-05-13 - Landing: toggle mensal/anual (preços)
+
+- Trilho `52px`, thumb `24px` com `left-[3px]` e `translate-x-[22px]` quando anual (sem sobreposição com “Anual”); `shrink-0`, `flex-wrap` e label/badge separados.
+- Desativado: `bg-secondary` + `border-border` + sombra interna; thumb `bg-foreground` + anel para contraste no fundo escuro. Ativado: trilho `primary`, thumb `primary-foreground`.
+- Badge “economize”: interpolação corrigida para `{`economize R$${savings.toFixed(0)}`}`.
+- `PV-typebot-chat` `66700aa`; `apps/sales` + import `cn`.
+
+## 2026-05-13 - Landing: secção Funcionalidades (experiência + sem Integrações)
+
+- `FEATURES`: primeiro cartão "Excelente experiência" / "Seu Lead com um atendimento excepcional." (ícone `Sparkles`); removido cartão Integrações; import `Plug` removido.
+- `BUSINESS_FEATURES` (pricing): alinhado — nova linha de experiência; removida linha de integrações.
+- `PV-typebot-chat` commit `877c4a7`; espelho `apps/sales`.
+
+## 2026-05-13 - Landing: ícone WhatsApp (gradiente Drax) no card Sobre
+
+- Componente `WhatsAppBrandIcon` (SVG oficial + `linearGradient` com mesmas tonalidades de `--gradient-primary` em `styles.css`); card "Integração com WhatsApp" usa esse ícone em vez de `Phone` do Lucide.
+- `PV-typebot-chat` commit `73ab5ce`; espelho em `apps/sales`.
+- Build local do clone `_pv-typebot-chat-temp` falhou por pacote `@lovable.dev/vite-tanstack-config` ausente no ambiente (não relacionado ao diff).
+
+## 2026-05-13 - Landing: copy "Como funciona" (time + passos 01/02)
+
+- `PV-typebot-chat` / `apps/sales` `index.tsx`: título "Um time especializado para você" (gradient em `especializado`); subtítulo sobre setup/fluxos e qualidade 5 estrelas; passo 01 "Criamos seus fluxos" + texto especialistas; passo 02 mantém título "Publique no site" com novo texto de integração no site.
+- Commit remoto: `13238d6`.
+- Próximo: rebuild Easypanel.
+
+## 2026-05-13 - Landing PV: cartão WhatsApp na secção "O que é o Drax"
+
+- `_pv-typebot-chat-temp` / `walkup-tec/PV-typebot-chat`: quarto cartão na About — título "Integração com WhatsApp", texto sobre direcionar o final do atendimento para um número; ícone `Phone`; grelha `sm:grid-cols-2 xl:grid-cols-4`. Espelhado em `apps/sales/src/routes/index.tsx`.
+- Commit remoto: `ffb0d33` (push `main`).
+- Próximo: rebuild Easypanel do app de vendas/landing.
+
 ## 2026-05-12 - Lista de clientes: colunas e acao com lupa
 
 - Colunas 5% mais estreitas; acao de detalhe com icone de lupa (mesma funcao).
@@ -2872,3 +2966,92 @@
 
 - `commit-caf5618-deploy`
 - `redeploy-painel-api-pos-push`
+
+## 2026-05-12 - Página de vendas e checkout Asaas (base)
+
+- Novo app `apps/sales` (Vite) com planos, checkout e acompanhamento do pedido.
+- API: `GET /api/public/sales/plans`, `POST /api/public/sales/checkout`, `GET /api/public/sales/orders/:id`, `POST /api/webhooks/asaas`.
+- Pós-pagamento: provisiona assinante, fluxos padrão e e-mail de boas-vindas; pedidos em `billing-orders.json`.
+- Env: `ASAAS_API_KEY`, `ASAAS_API_BASE_URL`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `SALES_PLAN_*`; build vendas com `VITE_API_BASE_URL` e `VITE_PAINEL_URL`.
+
+### Palavras-chave para pesquisa futura
+
+- `sales-checkout-asaas`
+- `billing-orders-json`
+
+## 2026-05-12 - PV chattypebot.com (TanStack Start)
+
+- `apps/sales` passou a usar o PV `walkup-tec/PV-typebot-chat` (TanStack Start); checkout via `POST /api/public/sales/subscriptions` e **Entrar** com `VITE_PAINEL_URL`.
+- Build de produção: `apps/sales/.env.production` (`api.chattypebot.com`, `painel.chattypebot.com`); arranque `node scripts/serve-production.mjs` (SSR Node, porta `PORT`).
+- Monorepo: `apps/sales` fora do workspace npm da raiz; scripts raiz usam `npm --prefix apps/sales`.
+- Deploy: `doc/DEPLOY-VPS-chattypebot-com.md` — `chattypebot.com` = vendas; painel em subdomínio.
+- Pendência: serviço Easypanel dedicado + `npm ci` limpo em `apps/sales` no servidor (node_modules local no Windows instável).
+
+### Palavras-chave para pesquisa futura
+
+- `pv-chattypebot-com-tanstack-start`
+- `serve-production-sales-ssr`
+
+## 2026-05-12 - Env Asaas na API local
+
+- `apps/api/.env`: `ASAAS_API_BASE_URL`, `ASAAS_API_KEY`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `SALES_PLAN_*` (mensal R$ 190, anual R$ 1188).
+- Pendência: usuário preencher chaves e webhook no painel Asaas; replicar env no Easypanel da API.
+
+### Palavras-chave para pesquisa futura
+
+- `env-asaas-api-local`
+- `webhook-asaas-access-token`
+
+## 2026-05-13 - Retomada sessão (continuar projeto)
+
+- Contexto recuperado: última entrega em 2026-05-12 foi **página de vendas** (`apps/sales`, TanStack Start) + **billing Asaas** na API (`/api/public/sales/*`, webhook `/api/webhooks/asaas`).
+- Pendências operacionais (inalteradas): serviço Easypanel dedicado para `apps/sales` em `chattypebot.com` (build com `VITE_*`, start `node scripts/serve-production.mjs`); env `ASAAS_*` + webhook na API em produção; DNS/TLS `chattypebot.com` / `www`; opcional `npm ci` só em `apps/sales` no servidor se houver corrupção de `node_modules` no Windows.
+- Validação local: `npm run build:sales` na raiz concluiu com sucesso (client + SSR, ~40s + ~1.4s).
+
+### Palavras-chave para pesquisa futura
+
+- `retomada-2026-05-13-typebot-saas`
+- `build-sales-windows-ok`
+
+## 2026-05-13 - PV-typebot-chat GitHub (Easypanel deploy)
+
+- Repositório `walkup-tec/PV-typebot-chat`: commit `d2d49b8` em `main` — `package-lock.json` alinhado ao `package.json` (corrige `npm ci` no Nixpacks), `scripts/serve-production.mjs` versionado (SSR), `src/lib/salesApi.ts`, checkout no `index` via API pública, `vite.config` com `cloudflare: false` para build Node/Docker.
+- Push feito a partir do clone local em `_pv-typebot-chat-temp` (Windows: `npm ci` local pode falhar com ENOTEMPTY; o CI Docker usa Linux).
+- Nota: `.env.production` passou a ser versionado no commit seguinte (`04042bc`) — ver entrada abaixo.
+
+### Palavras-chave para pesquisa futura
+
+- `pv-typebot-chat-lockfile-ci`
+- `easypanel-start-static-serve-production`
+
+## 2026-05-13 - PV-typebot-chat `.env.production` (VITE URLs)
+
+- Repositório `walkup-tec/PV-typebot-chat`: ficheiro **`.env.production`** versionado com `VITE_API_BASE_URL=https://api.chattypebot.com` e `VITE_PAINEL_URL=https://painel.chattypebot.com` para o `vite build` no Easypanel embutir URLs públicas; **`.env.example`** com defaults locais.
+- Rebuild no Easypanel necessário para o novo bundle.
+
+### Palavras-chave para pesquisa futura
+
+- `vite-env-production-chattypebot`
+- `pv-typebot-vite-api-painel-urls`
+
+## 2026-05-13 - PV-typebot CSS 404 em `/assets/*`
+
+- Causa: `curl -I https://chattypebot.com/assets/styles-*.css` → **404**; HTML SSR referenciava `/assets/...` mas o handler só delegava a `dist/server/server.js` sem servir ficheiros de `dist/client`.
+- Correção: `scripts/serve-production.mjs` passa a servir **GET/HEAD** para `/assets/*` (e `favicon.ico` / `robots.txt`) a partir de `dist/client`, com MIME e cache; depois delega ao SSR.
+- Commit `aaf74ab` em `walkup-tec/PV-typebot-chat`; mesmo padrão aplicado em `apps/sales/scripts/serve-production.mjs` no monorepo local.
+
+### Palavras-chave para pesquisa futura
+
+- `tanstack-ssr-assets-404`
+- `serve-production-dist-client-assets`
+
+## 2026-05-13 - Landing PV: logo igual ao painel admin
+
+- Logo **DRAX** (`/drax-logo-footer.png`, ficheiro igual a `apps/admin/public/drax-logo-footer.png`) no **header** e **footer** da landing (`PV-typebot-chat`); removido ícone Lucide `Bot` + texto duplicado nesses blocos.
+- `public/drax-logo-footer.png` no repo; `serve-production.mjs` passa a servir também `/drax-logo-footer.png` desde `dist/client`.
+- Commit `12accb4` em `walkup-tec/PV-typebot-chat`; alinhado `apps/sales` (public + index + serve-production) no monorepo local.
+
+### Palavras-chave para pesquisa futura
+
+- `landing-drax-logo-admin-parity`
+- `serve-production-public-png`
