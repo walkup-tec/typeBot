@@ -1,3 +1,9 @@
+## 2026-05-14 - Easypanel API: `npm ci` EUSAGE + Node 18 vs stack sales
+
+- **Causa:** `package-lock.json` (raiz) tinha `workspaces: ["apps/*","packages/*"]` mas `package.json` listava só `apps/api|admin|widget` — `npm ci` falhava com pacotes em falta (`@typebot-saas/sales`, Vite 7, etc.). Nixpacks usava **Node 18**; dependências da LP exigem **Node ≥22**.
+- **Correção:** `package.json` raiz com `apps/*` + `packages/*`, `engines.node >=22.12.0`, scripts `dev/build/start:sales` via `--workspace @typebot-saas/sales`; `nixpacks.toml` na raiz com `NIXPACKS_NODE_VERSION=22`; `npm install` na raiz para alinhar lock (incl. `engines` no importer raiz).
+- **Próximo:** `git push` + redeploy do serviço **API** no Easypanel (opcional: variável `NIXPACKS_NODE_VERSION=22` no UI se o ficheiro não for lido).
+
 ## 2026-05-13 - Admin Lista de Clientes: scroll horizontal visível
 
 - `styles.css` `.clients-table-wrap`: `max-height` com `100dvh`/viewport e `overflow: auto` — a tabela rola dentro da caixa; a barra horizontal fica no fundo **dessa** área, sem precisar de scroll vertical da página até ao fim. Cabeçalho da tabela `position: sticky`.

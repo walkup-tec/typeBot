@@ -6,17 +6,26 @@
     "apps/*",
     "packages/*"
   ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev:api": "npm --workspace @typebot-saas/api run dev",
     "dev:admin": "npm --workspace @typebot-saas/admin run dev",
     "dev:widget": "npm --workspace @typebot-saas/widget run dev",
+    "dev:sales": "npm --workspace @typebot-saas/sales run dev",
     "dev": "npm run dev:api",
     "build:api": "npm --workspace @typebot-saas/api run build",
     "build:admin": "npm --workspace @typebot-saas/admin run build",
     "build:widget": "npm --workspace @typebot-saas/widget run build",
-    "build": "npm run build:api && npm run build:admin && npm run build:widget",
+    "build:sales": "npm --workspace @typebot-saas/sales run build",
+    "build": "npm run build:api && npm run build:admin && npm run build:widget && npm run build:sales",
     "start:api": "npm --workspace @typebot-saas/api run start",
     "start:admin": "npm --workspace @typebot-saas/admin run start:static",
-    "easypanel:deploy-empty": "node scripts/easypanel-deploy-empty.cjs"
+    "start:sales": "npm --workspace @typebot-saas/sales run start:static",
+    "easypanel:deploy-empty": "node scripts/easypanel-deploy-empty.cjs",
+    "backup:predeploy": "powershell -ExecutionPolicy Bypass -File ./scripts/predeploy-backup.ps1",
+    "smoke:prod": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke-prod.ps1",
+    "rollback:data": "powershell -ExecutionPolicy Bypass -File ./scripts/rollback.ps1"
   }
 }

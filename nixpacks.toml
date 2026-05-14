@@ -1,0 +1,3 @@
+# Easypanel / Nixpacks: monorepo root installs all workspaces (incl. apps/sales → Vite 7 / Node 22).
+[variables]
+NIXPACKS_NODE_VERSION = "22"
