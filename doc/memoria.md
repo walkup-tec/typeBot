@@ -1,3 +1,7 @@
+## 2026-05-13 - Admin: menu "Configurar CRM"
+
+- `apps/admin/src/App.tsx`: novo `ScreenId` `configureCrm`, item no `menu-nav` (master sistema + master assinante, não atendente), `allowedScreens`, ícone lateral, cartão placeholder e cabeçalho contextual.
+
 ## 2026-05-13 - Checkout LP: erro com API HTTPS (sem ligação)
 
 - Mensagem antiga sugeria só build; com `https://api.chattypebot.com` o problema é **rede/DNS/serviço**: de um ambiente de teste, `api.chattypebot.com` **não resolve** (DNS).

@@ -104,7 +104,7 @@ type CreateAttendantResponse = AttendantRow & {
 
 type FlowStatus = "active" | "inactive" | "checking";
 type MasterProfile = "system_master" | "subscriber_master";
-type ScreenId = "master" | "masterLibrary" | "subscribers" | "liveQueue" | "clientList";
+type ScreenId = "master" | "masterLibrary" | "subscribers" | "liveQueue" | "clientList" | "configureCrm";
 type AuthSession = {
   user: {
     id: string;
@@ -359,7 +359,13 @@ const abbreviateUrlForDisplay = (raw: string, maxLen = 56): string => {
   }
 };
 
-type SidebarMenuIconName = "master" | "library" | "subscribers" | "liveQueue" | "clientList";
+type SidebarMenuIconName =
+  | "master"
+  | "library"
+  | "subscribers"
+  | "liveQueue"
+  | "clientList"
+  | "configureCrm";
 
 const SIDEBAR_MENU_ICON_PATHS: Record<SidebarMenuIconName, string> = {
   master:
@@ -372,6 +378,8 @@ const SIDEBAR_MENU_ICON_PATHS: Record<SidebarMenuIconName, string> = {
     "M6.5 5A4.5 4.5 0 0 0 2 9.5v5A4.5 4.5 0 0 0 6.5 19H8v2.25c0 .4.44.64.77.42L12.7 19H17.5a4.5 4.5 0 0 0 4.5-4.5v-5A4.5 4.5 0 0 0 17.5 5h-11Z",
   clientList:
     "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z",
+  /** Três faixas — sugestão de ajustes / CRM */
+  configureCrm: "M5 4h14v3H5V4Zm0 6.5h14v3H5v-3Zm0 6.5h10v3H5V17Z",
 };
 
 function SidebarMenuIcon({ name }: { name: SidebarMenuIconName }) {
@@ -480,8 +488,8 @@ export function App() {
     const role = authSession?.user?.role;
     if (role === "attendant") return ["liveQueue", "clientList"];
     return masterProfile === "system_master"
-      ? ["masterLibrary", "subscribers", "clientList"]
-      : ["master", "liveQueue", "clientList"];
+      ? ["masterLibrary", "subscribers", "configureCrm", "clientList"]
+      : ["master", "liveQueue", "configureCrm", "clientList"];
   }, [masterProfile, authSession]);
   const filteredTenants = useMemo(
     () =>
@@ -1904,6 +1912,17 @@ export function App() {
               </span>
             </button>
           ) : null}
+          {allowedScreens.includes("configureCrm") ? (
+            <button
+              className={`menu-btn ${activeScreen === "configureCrm" ? "active" : ""}`}
+              onClick={() => setActiveScreen("configureCrm")}
+            >
+              <span className="menu-btn-inner">
+                <SidebarMenuIcon name="configureCrm" />
+                <span className="menu-btn-label">Configurar CRM</span>
+              </span>
+            </button>
+          ) : null}
           {allowedScreens.includes("clientList") ? (
             <button
               className={`menu-btn ${activeScreen === "clientList" ? "active" : ""}`}
@@ -1934,8 +1953,12 @@ export function App() {
         ) : null}
         <header className="top-header">
           <div>
-            <h2>Painel Master</h2>
-            <p>Gerencie assinantes, assinatura e bloqueio de acesso</p>
+            <h2>{activeScreen === "configureCrm" ? "Configurar CRM" : "Painel Master"}</h2>
+            <p>
+              {activeScreen === "configureCrm"
+                ? "Preferências do CRM, integrações e regras de atendimento."
+                : "Gerencie assinantes, assinatura e bloqueio de acesso"}
+            </p>
           </div>
           <div className="top-header-actions">
             {masterProfile === "system_master" ? (
@@ -2790,6 +2813,16 @@ export function App() {
             contacts={masterProfile === "system_master" ? masterClientContacts : queueItems}
             onOpenContact={openLeadDetailByContactId}
           />
+        ) : null}
+
+        {activeScreen === "configureCrm" ? (
+          <section className="card">
+            <h3>Configuração do CRM</h3>
+            <p className="muted">
+              Esta área será expandida com opções de CRM (campos, etapas, integrações). Por agora use{" "}
+              <strong>Lista de Clientes</strong> e <strong>Fila ao vivo</strong> para operação diária.
+            </p>
+          </section>
         ) : null}
 
         {statusMessage ? (
