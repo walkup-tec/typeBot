@@ -2109,9 +2109,17 @@ button:disabled {
 }
 
 .clients-table-wrap {
-  overflow-x: auto;
+  /* Caixa de scroll própria: barra horizontal visível junto à zona da tabela,
+     sem precisar de descer o scroll da página até ao fim da lista. */
+  overflow: auto;
   max-width: 100%;
+  max-height: calc(100vh - 240px);
+  max-height: calc(100dvh - 240px);
   -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+  border: 1px solid rgba(51, 65, 85, 0.55);
+  box-sizing: border-box;
+  min-height: 12rem;
 }
 
 .clients-table {
@@ -2125,7 +2133,13 @@ button:disabled {
 }
 
 .clients-table thead th {
-  background: rgba(15, 23, 42, 0.2);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 1px 0 rgba(30, 41, 59, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: #94a3b8;
   font-size: 15px;
   font-weight: 600;

@@ -1,3 +1,7 @@
+## 2026-05-13 - Admin Lista de Clientes: scroll horizontal visível
+
+- `styles.css` `.clients-table-wrap`: `max-height` com `100dvh`/viewport e `overflow: auto` — a tabela rola dentro da caixa; a barra horizontal fica no fundo **dessa** área, sem precisar de scroll vertical da página até ao fim. Cabeçalho da tabela `position: sticky`.
+
 ## 2026-05-13 - Admin: "Configurar CRM" também para atendentes
 
 - `allowedScreens`: papel `attendant` passa a incluir `configureCrm` (ordem: Fila ao vivo, Configurar CRM, Lista de Clientes). Assinantes (master/manager do tenant) já tinham o item.
