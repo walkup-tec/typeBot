@@ -1,3 +1,9 @@
+## 2026-05-14 - Easypanel: deploy ainda em `a1359a5` + push `master`
+
+- Log do build com `GIT_SHA=a1359a5` = remoto **sem** `fix(ci)` (`d3fb934`); local estava `ahead 1` — causa do mesmo erro.
+- `git push origin master`: `a1359a5..33f7a09` (inclui `fix(ci)` + `chore(ci): .nvmrc 22 e engines 22.x`).
+- **Próximo:** só redeploy no Easypanel (ou aguardar auto-deploy) para apanhar `33f7a09`.
+
 ## 2026-05-14 - Easypanel API: `npm ci` EUSAGE + Node 18 vs stack sales
 
 - **Causa:** `package-lock.json` (raiz) tinha `workspaces: ["apps/*","packages/*"]` mas `package.json` listava só `apps/api|admin|widget` — `npm ci` falhava com pacotes em falta (`@typebot-saas/sales`, Vite 7, etc.). Nixpacks usava **Node 18**; dependências da LP exigem **Node ≥22**.
