@@ -1,3 +1,7 @@
+## 2026-05-13 - Admin: "Configurar CRM" também para atendentes
+
+- `allowedScreens`: papel `attendant` passa a incluir `configureCrm` (ordem: Fila ao vivo, Configurar CRM, Lista de Clientes). Assinantes (master/manager do tenant) já tinham o item.
+
 ## 2026-05-13 - Admin: menu "Configurar CRM"
 
 - `apps/admin/src/App.tsx`: novo `ScreenId` `configureCrm`, item no `menu-nav` (master sistema + master assinante, não atendente), `allowedScreens`, ícone lateral, cartão placeholder e cabeçalho contextual.

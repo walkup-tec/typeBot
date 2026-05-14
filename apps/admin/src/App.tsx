@@ -486,7 +486,7 @@ export function App() {
   }, [authSession, selectedTenantObject]);
   const allowedScreens = useMemo<ScreenId[]>(() => {
     const role = authSession?.user?.role;
-    if (role === "attendant") return ["liveQueue", "clientList"];
+    if (role === "attendant") return ["liveQueue", "configureCrm", "clientList"];
     return masterProfile === "system_master"
       ? ["masterLibrary", "subscribers", "configureCrm", "clientList"]
       : ["master", "liveQueue", "configureCrm", "clientList"];
