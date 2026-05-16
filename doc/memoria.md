@@ -1,3 +1,13 @@
+## 2026-05-14 - Histórico da sessão (chat): deploy API Easypanel + sync repo
+
+- **Pedidos no fio:** corrigir `npm ci` / Node 18 no Nixpacks; commit local do fix; explicar deploy que ainda falhava (`GIT_SHA` antigo); `git push`; pedido final “atualizar tudo e guardar chat no histórico”.
+- **Causa raiz:** lock da raiz com `apps/*` mas `package.json` só três apps; workspace **sales** faltava no manifest → `npm ci` EUSAGE. `fix(ci)` (`d3fb934`) ficou **só local** (`ahead 1`) → Easypanel construía `a1359a5` sem correção.
+- **Commits enviados:** `d3fb934` (workspaces + lock + `nixpacks.toml`), `33f7a09` (`.nvmrc` 22, `engines.node` `22.x`), `6d29388` (memória push). **HEAD remoto:** `6d29388` (confirmar com `git log origin/master -1`).
+- **Histórico do projeto:** snapshot deste fio em `doc/LOG-2026-05-14__220000__historico-sessao-chat-deploy-api.md`.
+- **Ações locais deste pedido:** `git fetch` + `git pull --ff-only origin master` → **Already up to date.**
+- **Segurança:** logs de build colados continham secrets — recomenda-se **rotação** (JWT, DB, tokens Typebot, password master).
+- **Pendência operacional:** redeploy serviço API no Easypanel para `GIT_SHA` ≥ `6d29388` e setup **nodejs_22**.
+
 ## 2026-05-14 - Easypanel: deploy ainda em `a1359a5` + push `master`
 
 - Log do build com `GIT_SHA=a1359a5` = remoto **sem** `fix(ci)` (`d3fb934`); local estava `ahead 1` — causa do mesmo erro.
@@ -7,8 +17,8 @@
 ## 2026-05-14 - Easypanel API: `npm ci` EUSAGE + Node 18 vs stack sales
 
 - **Causa:** `package-lock.json` (raiz) tinha `workspaces: ["apps/*","packages/*"]` mas `package.json` listava só `apps/api|admin|widget` — `npm ci` falhava com pacotes em falta (`@typebot-saas/sales`, Vite 7, etc.). Nixpacks usava **Node 18**; dependências da LP exigem **Node ≥22**.
-- **Correção:** `package.json` raiz com `apps/*` + `packages/*`, `engines.node >=22.12.0`, scripts `dev/build/start:sales` via `--workspace @typebot-saas/sales`; `nixpacks.toml` na raiz com `NIXPACKS_NODE_VERSION=22`; `npm install` na raiz para alinhar lock (incl. `engines` no importer raiz).
-- **Próximo:** `git push` + redeploy do serviço **API** no Easypanel (opcional: variável `NIXPACKS_NODE_VERSION=22` no UI se o ficheiro não for lido).
+- **Correção:** `package.json` raiz com `apps/*` + `packages/*`, `engines.node` `22.x`, `.nvmrc` `22`, scripts `dev/build/start:sales` via `--workspace @typebot-saas/sales`; `nixpacks.toml` na raiz com `NIXPACKS_NODE_VERSION=22`; `npm install` na raiz para alinhar lock.
+- **Próximo:** redeploy API no Easypanel; opcional env `NIXPACKS_NODE_VERSION=22` no painel se Nixpacks ignorar ficheiros.
 
 ## 2026-05-13 - Admin Lista de Clientes: scroll horizontal visível
 
