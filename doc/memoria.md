@@ -1,9 +1,17 @@
+## 2026-05-18 - Kanban: parametrização e prévia (etapa 5 + menu)
+
+- API: `GET/PUT /api/master/tenants/:tenantId/kanban-config` → `tenant-kanban-config.json`.
+- `organizeBy`: `priority` | `labels` | `custom`; colunas personalizadas (2–12) com nomes únicos.
+- Admin: `TenantKanbanStep` (wizard), `KanbanScreen` (menu Kanban), `KanbanBoardPreview`.
+- **Deploy:** API + painel.
+
 ## 2026-05-18 - Prioridades no Master Console (etapa 4)
 
 - API: CRUD `/api/master/tenants/:tenantId/priorities`; persistência `tenant-priorities.json`.
 - Padrões na 1ª listagem: **Alta**, **Média**, **Baixa** (`isDefault: true`); editar e adicionar novas.
 - Admin: `TenantPrioritiesStep.tsx` — input + Adicionar, lista com Editar/Remover.
 - **Deploy:** API + painel.
+- **Push:** `6e75171` — redeploy **api-typebot-crm** e **painel-typebot-crm**.
 
 ## 2026-05-18 - Menu bloqueado até Master Console completo
 

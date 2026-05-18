@@ -4,6 +4,7 @@ import {
   flowRepository,
   labelRepository,
   priorityRepository,
+  kanbanRepository,
   queueRepository,
   tenantRepository,
 } from "../lib/repositories";
@@ -34,6 +35,7 @@ const tenantService = new TenantService(
   queueRepository,
   labelRepository,
   priorityRepository,
+  kanbanRepository,
 );
 const flowService = new FlowService(flowRepository);
 const SYSTEM_LOGIN_URL = String(process.env.SYSTEM_LOGIN_URL ?? "http://localhost:5173").trim();

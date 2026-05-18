@@ -3,6 +3,8 @@ import { ClientsListScreen } from "./ClientsListScreen";
 import { LiveInboxScreen } from "./LiveInboxScreen";
 import { TenantLabelsStep } from "./TenantLabelsStep";
 import { TenantPrioritiesStep } from "./TenantPrioritiesStep";
+import { TenantKanbanStep } from "./TenantKanbanStep";
+import { KanbanScreen } from "./KanbanScreen";
 import { LeadDetailModal } from "./LeadDetailModal";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
@@ -2449,20 +2451,13 @@ export function App() {
             ) : null}
 
             {selectedTenant && masterWizardStep === 5 ? (
-              <div className="tenant-profile-card">
-                <h4>Etapa 5 — Kanban</h4>
-                <p className="muted muted-subtle">
-                  Organize etapas do funil em um quadro Kanban. O desenvolvimento desta etapa será definido em seguida.
-                </p>
-                <div className="wizard-step-actions">
-                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(4)}>
-                    Voltar
-                  </button>
-                  <button type="button" onClick={() => continueMasterWizard(5)}>
-                    Continuar
-                  </button>
-                </div>
-              </div>
+              <TenantKanbanStep
+                apiBase={apiBase}
+                tenantId={selectedTenant}
+                onStatusMessage={setStatusMessage}
+                onBack={() => setMasterWizardStep(4)}
+                onContinue={() => continueMasterWizard(5)}
+              />
             ) : null}
 
             {selectedTenant && masterWizardStep === 6 ? (
@@ -2857,14 +2852,8 @@ export function App() {
           />
         ) : null}
 
-        {activeScreen === "kanban" ? (
-          <section className="card">
-            <h3>Kanban</h3>
-            <p className="muted">
-              O quadro Kanban será configurado em breve. Use a etapa Kanban no Master Console para definir as colunas do
-              funil.
-            </p>
-          </section>
+        {activeScreen === "kanban" && selectedTenant ? (
+          <KanbanScreen apiBase={apiBase} tenantId={selectedTenant} />
         ) : null}
 
         {activeScreen === "scheduling" ? (
