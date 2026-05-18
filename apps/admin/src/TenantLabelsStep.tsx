@@ -238,11 +238,21 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
               className="label-tag--inline"
             />
           </div>
-        </div>
 
-        <button type="button" onClick={() => void createLabel()} disabled={isSaving || isLoading}>
-          {isSaving ? "Salvando…" : "Adicionar etiqueta"}
-        </button>
+          <div className="tenant-labels-inline-cell tenant-labels-inline-cell--add">
+            <span className="field-label field-label--primary" aria-hidden="true">
+              &nbsp;
+            </span>
+            <button
+              type="button"
+              className="tenant-labels-add-btn"
+              onClick={() => void createLabel()}
+              disabled={isSaving || isLoading}
+            >
+              {isSaving ? "Salvando…" : "Adicionar"}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="tenant-labels-list">

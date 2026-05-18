@@ -1315,11 +1315,11 @@ button:disabled {
 
 .tenant-labels-inline-row {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.5fr) 32px minmax(72px, 0.65fr) minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
   width: 50%;
-  min-width: min(100%, 560px);
+  min-width: min(100%, 640px);
 }
 
 .tenant-labels-inline-cell {
@@ -1329,20 +1329,8 @@ button:disabled {
   min-width: 0;
 }
 
-.tenant-labels-inline-cell--name {
-  grid-column: span 2;
-}
-
 .tenant-labels-inline-cell--color {
-  grid-column: span 1;
-}
-
-.tenant-labels-inline-cell--hex {
-  grid-column: span 1;
-}
-
-.tenant-labels-inline-cell--preview {
-  grid-column: span 2;
+  align-self: end;
 }
 
 .tenant-labels-inline-cell .field-label {
@@ -1352,7 +1340,6 @@ button:disabled {
 }
 
 .tenant-labels-inline-cell input,
-.tenant-labels-inline-cell .label-color-picker-wrap--inline,
 .tenant-labels-inline-cell .label-tag--inline {
   width: 100%;
   min-height: 40px;
@@ -1360,16 +1347,42 @@ button:disabled {
 }
 
 .label-color-picker-wrap--inline {
-  justify-content: center;
-  padding: 4px;
-  min-height: 40px;
+  display: block;
+  position: relative;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.label-color-picker-wrap--inline .label-color-picker-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .label-color-picker-wrap--inline .label-color-picker-swatch {
-  width: 100%;
-  max-width: 40px;
-  height: 32px;
-  margin: 0 auto;
+  position: absolute;
+  inset: 3px;
+  width: auto;
+  height: auto;
+  max-width: none;
+  margin: 0;
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+.tenant-labels-add-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  white-space: nowrap;
 }
 
 .label-color-hex-input {
@@ -1384,19 +1397,17 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .tenant-labels-inline-cell--name,
-  .tenant-labels-inline-cell--color,
-  .tenant-labels-inline-cell--hex,
-  .tenant-labels-inline-cell--preview {
-    grid-column: span 1;
+  .tenant-labels-inline-row {
+    grid-template-columns: 1fr 32px minmax(72px, 0.5fr);
   }
 
-  .tenant-labels-inline-cell--name {
-    grid-column: span 2;
+  .tenant-labels-inline-cell--preview,
+  .tenant-labels-inline-cell--add {
+    grid-column: 1 / -1;
   }
 
-  .tenant-labels-inline-cell--preview {
-    grid-column: span 2;
+  .tenant-labels-inline-cell--add {
+    justify-self: end;
   }
 }
 
