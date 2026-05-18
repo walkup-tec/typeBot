@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientsListScreen } from "./ClientsListScreen";
+import { LiveInboxScreen } from "./LiveInboxScreen";
 import { TenantLabelsStep } from "./TenantLabelsStep";
 import { LeadDetailModal } from "./LeadDetailModal";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
@@ -1987,7 +1988,7 @@ export function App() {
         </nav>
       </aside>
 
-      <main className="content">
+      <main className={`content${activeScreen === "liveQueue" ? " content--live-inbox" : ""}`}>
         {pendingQueueCount > 0 ? (
           <section className="pending-summary-alert" role="status" aria-live="polite">
             <div className="pending-summary-alert__content">
@@ -2839,60 +2840,20 @@ export function App() {
           </>
         ) : null}
 
-        {activeScreen === "liveQueue" ? (
-          <section className="card">
-            <h3>Fila de atendimento</h3>
-            <div className="table">
-              <div className="table-row table-header queue-table-row">
-                <span>Contato</span>
-                <span>Fluxo de origem</span>
-                <span>Atendente</span>
-                <span>Atualizado em</span>
-                <span className="queue-table-col-actions">Ação</span>
-              </div>
-              {queueItems.map((item) => (
-                <div className="table-row queue-table-row" key={item.contactId}>
-                  <span>{item.contactName}</span>
-                  <span>{item.sourceFlowLabel}</span>
-                  <span>
-                    {item.status === "in_service"
-                      ? resolveQueueItemAssignedAgentName(item, attendants) || "-"
-                      : "-"}
-                  </span>
-                  <span>{new Date(item.updatedAt).toLocaleString("pt-BR")}</span>
-                  <span className="queue-actions queue-table-col-actions">
-                    <button
-                      className="queue-icon-btn queue-icon-btn--lead"
-                      onClick={() => openLeadDetailModal(item)}
-                      title="Ver detalhes do Lead"
-                      aria-label="Ver detalhes do Lead"
-                    >
-                      <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path
-                          d="M11 4a7 7 0 1 0 4.384 12.46l3.578 3.579a1 1 0 0 0 1.414-1.415l-3.578-3.578A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      className={`queue-icon-btn queue-chat-icon ${item.status === "waiting" ? "queue-chat-icon--pulse" : ""}`}
-                      onClick={() => assignContact(item.contactId, item.contactName)}
-                      title={item.status === "waiting" ? "Iniciar atendimento" : "Atendimento já iniciado"}
-                      aria-label={item.status === "waiting" ? "Iniciar atendimento" : "Atendimento já iniciado"}
-                      disabled={item.status !== "waiting"}
-                    >
-                      <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path
-                          d="M6.5 5A4.5 4.5 0 0 0 2 9.5v5A4.5 4.5 0 0 0 6.5 19H8v2.25c0 .4.44.64.77.42L12.7 19H17.5a4.5 4.5 0 0 0 4.5-4.5v-5A4.5 4.5 0 0 0 17.5 5h-11Z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
+        {activeScreen === "liveQueue" && selectedTenant ? (
+          <LiveInboxScreen
+            apiBase={apiBase}
+            tenantId={selectedTenant}
+            contacts={queueItems}
+            authUsername={authSession?.user?.username}
+            authDisplayName={resolveSessionUserDisplayName(authSession?.user)}
+            agentId={agentId}
+            noSeparateAttendants={selectedTenantObject?.noSeparateAttendants}
+            buildAgentChatUrl={getAgentViewUrl}
+            onRefreshQueue={async () => loadQueue(selectedTenant)}
+            onStatusMessage={setStatusMessage}
+            onOpenLeadDetail={openLeadDetailModal}
+          />
         ) : null}
 
         {activeScreen === "clientList" ? (
