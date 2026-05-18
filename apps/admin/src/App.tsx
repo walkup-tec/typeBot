@@ -104,7 +104,14 @@ type CreateAttendantResponse = AttendantRow & {
 
 type FlowStatus = "active" | "inactive" | "checking";
 type MasterProfile = "system_master" | "subscriber_master";
-type ScreenId = "master" | "masterLibrary" | "subscribers" | "liveQueue" | "clientList" | "configureCrm";
+type ScreenId =
+  | "master"
+  | "masterLibrary"
+  | "subscribers"
+  | "kanban"
+  | "liveQueue"
+  | "scheduling"
+  | "clientList";
 type AuthSession = {
   user: {
     id: string;
@@ -365,7 +372,8 @@ type SidebarMenuIconName =
   | "subscribers"
   | "liveQueue"
   | "clientList"
-  | "configureCrm";
+  | "kanban"
+  | "scheduling";
 
 const SIDEBAR_MENU_ICON_PATHS: Record<SidebarMenuIconName, string> = {
   master:
@@ -378,8 +386,27 @@ const SIDEBAR_MENU_ICON_PATHS: Record<SidebarMenuIconName, string> = {
     "M6.5 5A4.5 4.5 0 0 0 2 9.5v5A4.5 4.5 0 0 0 6.5 19H8v2.25c0 .4.44.64.77.42L12.7 19H17.5a4.5 4.5 0 0 0 4.5-4.5v-5A4.5 4.5 0 0 0 17.5 5h-11Z",
   clientList:
     "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z",
-  /** Três faixas — sugestão de ajustes / CRM */
-  configureCrm: "M5 4h14v3H5V4Zm0 6.5h14v3H5v-3Zm0 6.5h10v3H5V17Z",
+  kanban: "M4 6h5v14H4V6Zm6 0h5v10h-5V6Zm6 0h5v7h-5V6Z",
+  scheduling: "M7 3h2v2H7V3Zm8 0h2v2h-2V3ZM5 7h14v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7Zm2 2v10h10V9H7Z",
+};
+
+const SCREEN_PAGE_HEADER: Partial<Record<ScreenId, { title: string; subtitle: string }>> = {
+  kanban: {
+    title: "Kanban",
+    subtitle: "Visualize e mova leads pelas etapas do funil.",
+  },
+  liveQueue: {
+    title: "Fila ao vivo",
+    subtitle: "Atenda contatos em tempo real na fila de espera.",
+  },
+  scheduling: {
+    title: "Agendamento",
+    subtitle: "Gerencie compromissos e retornos agendados com clientes.",
+  },
+  clientList: {
+    title: "Lista de Clientes",
+    subtitle: "Consulte o histórico e detalhes dos contatos atendidos.",
+  },
 };
 
 function SidebarMenuIcon({ name }: { name: SidebarMenuIconName }) {
@@ -397,6 +424,17 @@ const readSidebarCollapsedPreference = (): boolean => {
     return false;
   }
 };
+
+const MASTER_CONSOLE_WIZARD_STEPS = [
+  { step: 1, label: "Perfil Assinante" },
+  { step: 2, label: "Atendente" },
+  { step: 3, label: "Etiquetas" },
+  { step: 4, label: "Prioridade" },
+  { step: 5, label: "Kanban" },
+  { step: 6, label: "Biblioteca de Fluxos" },
+] as const;
+
+const MASTER_WIZARD_FLOWS_STEP = 6;
 
 export function App() {
   const QUEUE_REFRESH_INTERVAL_MS = 3000;
@@ -486,10 +524,10 @@ export function App() {
   }, [authSession, selectedTenantObject]);
   const allowedScreens = useMemo<ScreenId[]>(() => {
     const role = authSession?.user?.role;
-    if (role === "attendant") return ["liveQueue", "configureCrm", "clientList"];
+    if (role === "attendant") return ["kanban", "liveQueue", "scheduling", "clientList"];
     return masterProfile === "system_master"
-      ? ["masterLibrary", "subscribers", "configureCrm", "clientList"]
-      : ["master", "liveQueue", "configureCrm", "clientList"];
+      ? ["masterLibrary", "subscribers", "kanban", "scheduling", "clientList"]
+      : ["master", "kanban", "liveQueue", "scheduling", "clientList"];
   }, [masterProfile, authSession]);
   const filteredTenants = useMemo(
     () =>
@@ -639,7 +677,7 @@ export function App() {
     selectedTenant &&
       (step2ConfirmedByTenant[selectedTenant] === true || selectedTenantObject?.noSeparateAttendants === true),
   );
-  const isStep3Completed = selectedTenantFlows.length > 0;
+  const isFlowsWizardStepCompleted = selectedTenantFlows.length > 0;
   const pendingQueueCount = useMemo(
     () => queueItems.filter((item) => item.status === "waiting").length,
     [queueItems],
@@ -892,9 +930,9 @@ export function App() {
     run().catch(() => setStatusMessage("Falha ao carregar dados do assinante"));
   }, [selectedTenant]);
 
-  /** Na etapa 3, inclui automaticamente na biblioteca do assinante cada fluxo marcado como padrão na Master. */
+  /** Na etapa Biblioteca de Fluxos, inclui automaticamente cada fluxo padrão da Biblioteca Master. */
   useEffect(() => {
-    if (masterWizardStep !== 3 || !selectedTenant || masterProfile !== "subscriber_master") return;
+    if (masterWizardStep !== MASTER_WIZARD_FLOWS_STEP || !selectedTenant || masterProfile !== "subscriber_master") return;
     const defaultIds = systemMasterLibrary.filter((item) => item.isSystemDefault).map((item) => item.id);
     if (defaultIds.length === 0) return;
     const flows = savedFlowsByTenant[selectedTenant] ?? [];
@@ -959,14 +997,14 @@ export function App() {
       setMasterWizardStep(2);
       return;
     }
-    if (!isStep3Completed) {
-      setMasterWizardUnlocked(3);
-      setMasterWizardStep(3);
+    setMasterWizardUnlocked(MASTER_WIZARD_FLOWS_STEP);
+    if (!isFlowsWizardStepCompleted) {
+      setMasterWizardStep((current) =>
+        current < 3 ? 3 : current > MASTER_WIZARD_FLOWS_STEP ? MASTER_WIZARD_FLOWS_STEP : current,
+      );
       return;
     }
-    setMasterWizardUnlocked(3);
-    setMasterWizardStep(3);
-  }, [selectedTenant, isStep1Completed, isStep2Completed, isStep3Completed]);
+  }, [selectedTenant, isStep1Completed, isStep2Completed, isFlowsWizardStepCompleted]);
 
   useEffect(() => {
     if (!selectedTenant || masterProfile === "system_master") return;
@@ -987,7 +1025,7 @@ export function App() {
   }, [authSession, masterProfile, activeScreen]);
 
   useEffect(() => {
-    if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== 3) return;
+    if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== MASTER_WIZARD_FLOWS_STEP) return;
     const refreshLibrary = async () => {
       await loadFlows(selectedTenant, { silentList: true });
     };
@@ -1405,7 +1443,7 @@ export function App() {
       });
     }
     const next = fromStep + 1;
-    if (next > 3) return;
+    if (next > MASTER_WIZARD_FLOWS_STEP) return;
     setMasterWizardUnlocked((previous) => Math.max(previous, next));
     setMasterWizardStep(next);
   }
@@ -1900,6 +1938,17 @@ export function App() {
               </span>
             </button>
           ) : null}
+          {allowedScreens.includes("kanban") ? (
+            <button
+              className={`menu-btn ${activeScreen === "kanban" ? "active" : ""}`}
+              onClick={() => setActiveScreen("kanban")}
+            >
+              <span className="menu-btn-inner">
+                <SidebarMenuIcon name="kanban" />
+                <span className="menu-btn-label">Kanban</span>
+              </span>
+            </button>
+          ) : null}
           {masterProfile === "subscriber_master" ? (
             <button
               className={`menu-btn ${activeScreen === "liveQueue" ? "active" : ""}`}
@@ -1912,14 +1961,14 @@ export function App() {
               </span>
             </button>
           ) : null}
-          {allowedScreens.includes("configureCrm") ? (
+          {allowedScreens.includes("scheduling") ? (
             <button
-              className={`menu-btn ${activeScreen === "configureCrm" ? "active" : ""}`}
-              onClick={() => setActiveScreen("configureCrm")}
+              className={`menu-btn ${activeScreen === "scheduling" ? "active" : ""}`}
+              onClick={() => setActiveScreen("scheduling")}
             >
               <span className="menu-btn-inner">
-                <SidebarMenuIcon name="configureCrm" />
-                <span className="menu-btn-label">Configurar CRM</span>
+                <SidebarMenuIcon name="scheduling" />
+                <span className="menu-btn-label">Agendamento</span>
               </span>
             </button>
           ) : null}
@@ -1953,11 +2002,10 @@ export function App() {
         ) : null}
         <header className="top-header">
           <div>
-            <h2>{activeScreen === "configureCrm" ? "Configurar CRM" : "Painel Master"}</h2>
+            <h2>{SCREEN_PAGE_HEADER[activeScreen]?.title ?? "Painel Master"}</h2>
             <p>
-              {activeScreen === "configureCrm"
-                ? "Preferências do CRM, integrações e regras de atendimento."
-                : "Gerencie assinantes, assinatura e bloqueio de acesso"}
+              {SCREEN_PAGE_HEADER[activeScreen]?.subtitle ??
+                "Gerencie assinantes, assinatura e bloqueio de acesso"}
             </p>
           </div>
           <div className="top-header-actions">
@@ -2014,13 +2062,7 @@ export function App() {
             {selectedTenant ? (
               <>
               <div className="master-wizard-progress" role="navigation" aria-label="Etapas de configuração">
-                {(
-                  [
-                    { step: 1, label: "Perfil de atendimento" },
-                    { step: 2, label: "Atendentes" },
-                    { step: 3, label: "Biblioteca de fluxos" },
-                  ] as const
-                ).map(({ step, label }) => (
+                {MASTER_CONSOLE_WIZARD_STEPS.map(({ step, label }) => (
                   <button
                     key={step}
                     type="button"
@@ -2263,7 +2305,7 @@ export function App() {
 
             {selectedTenant && masterWizardStep === 2 ? (
               <div className="tenant-profile-card">
-                <h4>Etapa 2 — Atendentes</h4>
+                <h4>Etapa 2 — Atendente</h4>
                 <label className="queue-distribution-choice" style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
                   <input
                     type="checkbox"
@@ -2385,7 +2427,58 @@ export function App() {
 
             {selectedTenant && masterWizardStep === 3 ? (
               <div className="tenant-profile-card">
-                <h4>Etapa 3 — Biblioteca de fluxos</h4>
+                <h4>Etapa 3 — Etiquetas</h4>
+                <p className="muted muted-subtle">
+                  Configure etiquetas para classificar leads e atendimentos. O desenvolvimento desta etapa será definido em seguida.
+                </p>
+                <div className="wizard-step-actions">
+                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(2)}>
+                    Voltar
+                  </button>
+                  <button type="button" onClick={() => continueMasterWizard(3)}>
+                    Continuar
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedTenant && masterWizardStep === 4 ? (
+              <div className="tenant-profile-card">
+                <h4>Etapa 4 — Prioridade</h4>
+                <p className="muted muted-subtle">
+                  Defina níveis de prioridade para a fila e o CRM. O desenvolvimento desta etapa será definido em seguida.
+                </p>
+                <div className="wizard-step-actions">
+                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(3)}>
+                    Voltar
+                  </button>
+                  <button type="button" onClick={() => continueMasterWizard(4)}>
+                    Continuar
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedTenant && masterWizardStep === 5 ? (
+              <div className="tenant-profile-card">
+                <h4>Etapa 5 — Kanban</h4>
+                <p className="muted muted-subtle">
+                  Organize etapas do funil em um quadro Kanban. O desenvolvimento desta etapa será definido em seguida.
+                </p>
+                <div className="wizard-step-actions">
+                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(4)}>
+                    Voltar
+                  </button>
+                  <button type="button" onClick={() => continueMasterWizard(5)}>
+                    Continuar
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {selectedTenant && masterWizardStep === 6 ? (
+              <div className="tenant-profile-card">
+                <h4>Etapa 6 — Biblioteca de Fluxos</h4>
                 <p className="muted muted-subtle">
                   Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
                   <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
@@ -2528,7 +2621,7 @@ export function App() {
                   )}
                 </div>
                 <div className="wizard-step-actions">
-                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(2)}>
+                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(5)}>
                     Voltar
                   </button>
                 </div>
@@ -2815,12 +2908,21 @@ export function App() {
           />
         ) : null}
 
-        {activeScreen === "configureCrm" ? (
+        {activeScreen === "kanban" ? (
           <section className="card">
-            <h3>Configuração do CRM</h3>
+            <h3>Kanban</h3>
             <p className="muted">
-              Esta área será expandida com opções de CRM (campos, etapas, integrações). Por agora use{" "}
-              <strong>Lista de Clientes</strong> e <strong>Fila ao vivo</strong> para operação diária.
+              O quadro Kanban será configurado em breve. Use a etapa Kanban no Master Console para definir as colunas do
+              funil.
+            </p>
+          </section>
+        ) : null}
+
+        {activeScreen === "scheduling" ? (
+          <section className="card">
+            <h3>Agendamento</h3>
+            <p className="muted">
+              A agenda de compromissos e retornos com clientes será disponibilizada nesta área em breve.
             </p>
           </section>
         ) : null}

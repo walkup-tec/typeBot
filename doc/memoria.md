@@ -1,3 +1,24 @@
+## 2026-05-18 - Menu lateral: Kanban e Agendamento (remove Configurar CRM)
+
+- `apps/admin/src/App.tsx`: removido `configureCrm`; novos ecrãs `kanban` e `scheduling` (rótulo **Agendamento**).
+- Ordem operacional no menu: **Kanban** → **Fila ao vivo** → **Agendamento** → **Lista de Clientes** (após Master Console / Biblioteca Master / Assinantes conforme perfil).
+- Placeholders nas novas telas; cabeçalho contextual via `SCREEN_PAGE_HEADER`.
+
+## 2026-05-18 - Master Console: 6 etapas (Etiquetas, Prioridade, Kanban)
+
+- `apps/admin/src/App.tsx`: wizard do assinante passou de 3 para **6 etapas** na ordem: Perfil Assinante → Atendente → Etiquetas → Prioridade → Kanban → Biblioteca de Fluxos.
+- Etapas 3–5: UI placeholder com Voltar/Continuar; funcionalidade a definir pelo utilizador.
+- Biblioteca de fluxos movida para etapa **6**; auto-import e refresh de fluxos só quando `masterWizardStep === 6`.
+- Constantes: `MASTER_CONSOLE_WIZARD_STEPS`, `MASTER_WIZARD_FLOWS_STEP`.
+- **Pendente:** implementar Etiquetas, Prioridade e Kanban (API + persistência).
+
+## 2026-05-18 - Migração Easypanel: projeto `typebot` (8 serviços)
+
+- Utilizador migrou do projeto antigo (`soma`) para **typebot**: `api-typebot-crm`, `minio`, `paginadevendas`, `painel-typebot-crm`, `typebot-walkup-builder`, `typebot-walkup-db`, `typebot-walkup-redis`, `typebot-walkup-viewer` — sistema fora do ar.
+- **Causas típicas pós-migração:** domínios/DNS ainda no projeto antigo; env com URLs internas `soma-*`; volumes não remontados na API; `VITE_*` só no runtime (painel/LP); Typebot builder/viewer sem `DATABASE_URL`/`REDIS_URL` dos novos nomes de serviço; `CORS_ORIGIN` desatualizado.
+- **Ordem sugerida:** db + redis → minio → builder + viewer → api (volume + Postgres) → painel + paginadevendas (rebuild com VITE) → DNS/TLS → `/health` e login.
+- Guia detalhado: resposta ao utilizador neste chat (2026-05-18); templates em `doc/EASYPANEL-AMBIENTE.env.example`, `doc/EASYPANEL-PAINEL-VITE-build.env.example`, `doc/EASYPANEL-VOLUME-FLUXOS-FILA.md`.
+
 ## 2026-05-14 - Histórico da sessão (chat): deploy API Easypanel + sync repo
 
 - **Pedidos no fio:** corrigir `npm ci` / Node 18 no Nixpacks; commit local do fix; explicar deploy que ainda falhava (`GIT_SHA` antigo); `git push`; pedido final “atualizar tudo e guardar chat no histórico”.
