@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientsListScreen } from "./ClientsListScreen";
+import { TenantLabelsStep } from "./TenantLabelsStep";
 import { LeadDetailModal } from "./LeadDetailModal";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
@@ -2426,20 +2427,13 @@ export function App() {
             ) : null}
 
             {selectedTenant && masterWizardStep === 3 ? (
-              <div className="tenant-profile-card">
-                <h4>Etapa 3 — Etiquetas</h4>
-                <p className="muted muted-subtle">
-                  Configure etiquetas para classificar leads e atendimentos. O desenvolvimento desta etapa será definido em seguida.
-                </p>
-                <div className="wizard-step-actions">
-                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(2)}>
-                    Voltar
-                  </button>
-                  <button type="button" onClick={() => continueMasterWizard(3)}>
-                    Continuar
-                  </button>
-                </div>
-              </div>
+              <TenantLabelsStep
+                apiBase={apiBase}
+                tenantId={selectedTenant}
+                onStatusMessage={setStatusMessage}
+                onBack={() => setMasterWizardStep(2)}
+                onContinue={() => continueMasterWizard(3)}
+              />
             ) : null}
 
             {selectedTenant && masterWizardStep === 4 ? (

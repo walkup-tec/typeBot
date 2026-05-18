@@ -1,4 +1,10 @@
-import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
+import {
+  attendantRepository,
+  flowRepository,
+  labelRepository,
+  queueRepository,
+  tenantRepository,
+} from "../lib/repositories";
 import { TenantService } from "../tenants/tenant.service";
 
 /**
@@ -34,7 +40,13 @@ export async function seedTenantOnEmptyIfConfigured(): Promise<void> {
   const whatsapp = rawWhatsapp.length >= 8 && rawWhatsapp.length <= 30 ? rawWhatsapp : "5500000000000";
 
   try {
-    const svc = new TenantService(tenantRepository, attendantRepository, flowRepository, queueRepository);
+    const svc = new TenantService(
+      tenantRepository,
+      attendantRepository,
+      flowRepository,
+      queueRepository,
+      labelRepository,
+    );
     svc.create({
       name: tenantName,
       ownerEmail,

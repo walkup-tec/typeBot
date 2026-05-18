@@ -1,5 +1,11 @@
 import type { Express } from "express";
-import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
+import {
+  attendantRepository,
+  flowRepository,
+  labelRepository,
+  queueRepository,
+  tenantRepository,
+} from "../lib/repositories";
 import {
   TenantService,
   createTenantSchema,
@@ -20,7 +26,13 @@ import {
 } from "../typebot/typebot-flow-viewer-url-sync";
 import { isAuthPostgresEnabled, loadTenantsFromPostgres } from "../lib/auth-postgres";
 
-const tenantService = new TenantService(tenantRepository, attendantRepository, flowRepository, queueRepository);
+const tenantService = new TenantService(
+  tenantRepository,
+  attendantRepository,
+  flowRepository,
+  queueRepository,
+  labelRepository,
+);
 const flowService = new FlowService(flowRepository);
 const SYSTEM_LOGIN_URL = String(process.env.SYSTEM_LOGIN_URL ?? "http://localhost:5173").trim();
 

@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { normalizeAuthIdentifier } from "../lib/auth-email";
-import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
+import {
+  attendantRepository,
+  flowRepository,
+  labelRepository,
+  queueRepository,
+  tenantRepository,
+} from "../lib/repositories";
 import { hashAttendantPassword } from "../attendants/attendant.service";
 import type { Attendant } from "../attendants/attendant.repository";
 import type { Tenant } from "../tenants/tenant.repository";
@@ -68,7 +74,13 @@ export const ensureSystemMasterAuth = (
 
   let tenant = findSystemMasterTenant();
   if (!tenant) {
-    const tenantService = new TenantService(tenantRepository, attendantRepository, flowRepository, queueRepository);
+    const tenantService = new TenantService(
+      tenantRepository,
+      attendantRepository,
+      flowRepository,
+      queueRepository,
+      labelRepository,
+    );
     try {
       tenantService.create({
         name: resolveSystemMasterTenantName(),

@@ -8,6 +8,7 @@ import { registerQueueRoutes } from "./queue/queue.routes";
 import { registerTypebotRoutes } from "./typebot/typebot.routes";
 import { registerFlowRoutes } from "./flows/flow.routes";
 import { registerAttendantRoutes } from "./attendants/attendant.routes";
+import { registerLabelRoutes } from "./labels/label.routes";
 import { flowRepository, tenantRepository } from "./lib/repositories";
 import { getDataFilePath } from "./lib/data-path";
 import { registerAuthRoutes } from "./auth/auth.routes";
@@ -154,6 +155,7 @@ app.get("/", (_req, res) => {
 registerTenantRoutes(app);
 registerFlowRoutes(app);
 registerAttendantRoutes(app);
+registerLabelRoutes(app);
 registerAuthRoutes(app);
 registerQueueRoutes(app);
 registerTypebotRoutes(app);

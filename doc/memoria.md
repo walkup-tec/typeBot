@@ -1,3 +1,11 @@
+## 2026-05-18 - Push `d9835d6` — deploy só painel
+
+- **Commit:** `d9835d6` — `feat(admin): Master Console 6 etapas e menu Kanban/Agendamento`
+- **GitHub:** `master` atualizado (`2bf9d42..d9835d6`)
+- **Deploy:** apenas serviço **painel-typebot-crm** no Easypanel (redeploy/rebuild). API **não** precisa.
+- **Build env:** confirmar `VITE_API_BASE_URL` no painel antes do build.
+- **Pós-deploy:** Ctrl+F5 em `painel.chattypebot.com` — menu Kanban, Agendamento; wizard 6 etapas.
+
 ## 2026-05-18 - Menu lateral: Kanban e Agendamento (remove Configurar CRM)
 
 - `apps/admin/src/App.tsx`: removido `configureCrm`; novos ecrãs `kanban` e `scheduling` (rótulo **Agendamento**).
