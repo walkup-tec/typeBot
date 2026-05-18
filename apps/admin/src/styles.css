@@ -325,6 +325,40 @@ body {
   color: #ffffff !important;
 }
 
+.menu-btn--locked,
+.menu-btn--locked:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.menu-btn--locked:hover {
+  background: inherit !important;
+  border-color: inherit !important;
+  color: inherit !important;
+}
+
+.master-wizard-lock-banner {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.master-wizard-complete-banner {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 212, 191, 0.45);
+  background: rgba(20, 184, 166, 0.12);
+  color: #99f6e4;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .top-header {
   display: flex;
   justify-content: space-between;
@@ -1533,6 +1567,72 @@ button:disabled {
 .label-hex-code {
   font-size: 12px;
   color: #94a3b8;
+}
+
+.tenant-priorities-step h5 {
+  margin: 20px 0 10px;
+  font-size: 15px;
+}
+
+.tenant-priorities-form {
+  margin-top: 16px;
+}
+
+.tenant-priorities-inline-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto;
+  gap: 12px 16px;
+  align-items: end;
+  max-width: 560px;
+}
+
+.tenant-priorities-inline-cell .field-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.tenant-priorities-inline-cell input {
+  width: 100%;
+}
+
+.tenant-priorities-add-btn {
+  min-height: 40px;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+
+.tenant-priorities-table .tenant-priorities-header,
+.tenant-priorities-table .tenant-priorities-row {
+  grid-template-columns: minmax(140px, 1fr) minmax(100px, 0.7fr) minmax(160px, auto);
+}
+
+.tenant-priority-name {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.tenant-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(20, 184, 166, 0.2);
+  color: #5eead4;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+}
+
+.tenant-priorities-row--edit {
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .tenant-priorities-inline-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .tenant-profile-preview img {

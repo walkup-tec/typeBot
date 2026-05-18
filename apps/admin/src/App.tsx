@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientsListScreen } from "./ClientsListScreen";
 import { LiveInboxScreen } from "./LiveInboxScreen";
 import { TenantLabelsStep } from "./TenantLabelsStep";
+import { TenantPrioritiesStep } from "./TenantPrioritiesStep";
 import { LeadDetailModal } from "./LeadDetailModal";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 
@@ -2438,20 +2439,13 @@ export function App() {
             ) : null}
 
             {selectedTenant && masterWizardStep === 4 ? (
-              <div className="tenant-profile-card">
-                <h4>Etapa 4 — Prioridade</h4>
-                <p className="muted muted-subtle">
-                  Defina níveis de prioridade para a fila e o CRM. O desenvolvimento desta etapa será definido em seguida.
-                </p>
-                <div className="wizard-step-actions">
-                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(3)}>
-                    Voltar
-                  </button>
-                  <button type="button" onClick={() => continueMasterWizard(4)}>
-                    Continuar
-                  </button>
-                </div>
-              </div>
+              <TenantPrioritiesStep
+                apiBase={apiBase}
+                tenantId={selectedTenant}
+                onStatusMessage={setStatusMessage}
+                onBack={() => setMasterWizardStep(3)}
+                onContinue={() => continueMasterWizard(4)}
+              />
             ) : null}
 
             {selectedTenant && masterWizardStep === 5 ? (

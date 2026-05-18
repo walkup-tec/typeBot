@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TenantRepository, type QueueDistributionMode, type TenantStatus } from "./tenant.repository";
 import type { AttendantRepository } from "../attendants/attendant.repository";
 import type { LabelRepository } from "../labels/label.repository";
+import type { PriorityRepository } from "../priorities/priority.repository";
 import type { FlowRepository } from "../flows/flow.repository";
 import type { QueueRepository } from "../queue/queue.repository";
 import { hashAttendantPassword } from "../attendants/attendant.service";
@@ -166,6 +167,7 @@ export class TenantService {
     private readonly flowRepository: FlowRepository,
     private readonly queueRepository: QueueRepository,
     private readonly labelRepository?: LabelRepository,
+    private readonly priorityRepository?: PriorityRepository,
   ) {}
 
   create(input: z.infer<typeof createTenantSchema>) {
@@ -318,6 +320,7 @@ export class TenantService {
     this.flowRepository.deleteByTenantId(id);
     this.queueRepository.deleteByTenantId(id);
     this.labelRepository?.deleteByTenantId(id);
+    this.priorityRepository?.deleteByTenantId(id);
     return this.tenantRepository.deleteById(id);
   }
 

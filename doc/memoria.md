@@ -1,3 +1,24 @@
+## 2026-05-18 - Prioridades no Master Console (etapa 4)
+
+- API: CRUD `/api/master/tenants/:tenantId/priorities`; persistência `tenant-priorities.json`.
+- Padrões na 1ª listagem: **Alta**, **Média**, **Baixa** (`isDefault: true`); editar e adicionar novas.
+- Admin: `TenantPrioritiesStep.tsx` — input + Adicionar, lista com Editar/Remover.
+- **Deploy:** API + painel.
+
+## 2026-05-18 - Menu bloqueado até Master Console completo
+
+- `apps/admin/src/masterWizardProgress.ts`: progresso das etapas 2–5 em `master-wizard-confirmed-by-tenant` (migra legado `master-step2-confirmed-by-tenant`).
+- `isMasterConsoleFullyConfigured`: etapas 1–2 OK + fluxos na biblioteca + confirmação explícita das etapas 3, 4 e 5 (Continuar).
+- Assinante master: `allowedScreens` só `master` até concluir; menu Kanban/Fila/Agendamento/Clientes visível mas `menu-btn--locked` até liberar; redirect se tentar outra tela.
+- Wizard avança sequencialmente 1→6; banners no Master Console (pendente / concluído).
+- **Deploy:** só **painel-typebot-crm** (sem API).
+
+## 2026-05-18 - Etiquetas: nome + cor (API + Master Console)
+
+- CRUD `/api/master/tenants/:tenantId/labels`; ficheiro `tenant-labels.json` no volume da API.
+- Etapa 3: `TenantLabelsStep` — `<input type="color">` + hex livre + prévia.
+- **Push:** `ebe7cc6` — deploy **API** e **painel**.
+
 ## 2026-05-18 - Push `d9835d6` — deploy só painel
 
 - **Commit:** `d9835d6` — `feat(admin): Master Console 6 etapas e menu Kanban/Agendamento`
