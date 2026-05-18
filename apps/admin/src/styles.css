@@ -1353,7 +1353,7 @@ button:disabled {
 
 .tenant-labels-inline-cell input,
 .tenant-labels-inline-cell .label-color-picker-wrap--inline,
-.tenant-labels-inline-cell .label-preview-chip--inline {
+.tenant-labels-inline-cell .label-tag--inline {
   width: 100%;
   min-height: 40px;
   box-sizing: border-box;
@@ -1376,19 +1376,6 @@ button:disabled {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-}
-
-.label-preview-chip--inline {
-  display: flex;
-  width: 100%;
-  min-height: 40px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 @media (max-width: 1100px) {
@@ -1478,28 +1465,44 @@ button:disabled {
   max-width: 110px;
 }
 
-.label-preview-chip {
+.label-tag {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 700;
-  border: 1px solid rgba(15, 23, 42, 0.2);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid #3d4f66;
+  background: #060b14;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.label-preview-chip--table {
-  min-height: 28px;
-  padding: 4px 12px;
-  font-size: 12px;
+.label-tag__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.label-tag__text {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.label-tag--inline {
+  width: 100%;
+  min-height: 40px;
 }
 
 .tenant-labels-table .tenant-labels-header,
 .tenant-labels-table .tenant-labels-row {
-  grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.4fr) minmax(160px, auto);
+  grid-template-columns: minmax(160px, 1.2fr) minmax(90px, 0.8fr) minmax(160px, auto);
 }
 
 .tenant-labels-row--edit {

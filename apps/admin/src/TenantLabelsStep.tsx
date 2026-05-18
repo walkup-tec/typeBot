@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { LabelTag } from "./LabelTag";
 import { normalizeLabelColorInput, toColorPickerValue } from "./labelColor";
 
 export type TenantLabelRow = {
@@ -231,15 +232,11 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
 
           <div className="tenant-labels-inline-cell tenant-labels-inline-cell--preview">
             <span className="field-label field-label--primary">Prévia</span>
-            <span
-              className="label-preview-chip label-preview-chip--inline"
-              style={{
-                backgroundColor: toColorPickerValue(draftColor),
-                color: "#0f172a",
-              }}
-            >
-              {draftName.trim() || "Prévia"}
-            </span>
+            <LabelTag
+              name={draftName.trim() || "Prévia"}
+              color={toColorPickerValue(draftColor)}
+              className="label-tag--inline"
+            />
           </div>
         </div>
 
@@ -262,8 +259,8 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
         ) : (
           <div className="saved-flows-table tenant-labels-table">
             <div className="saved-flows-header tenant-labels-header">
-              <span>Cor</span>
-              <span>Nome</span>
+              <span>Etiqueta</span>
+              <span>Código cor</span>
               <span>Ações</span>
             </div>
             {labels.map((row) =>
@@ -315,13 +312,10 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
               ) : (
                 <div key={row.id} className="saved-flows-row tenant-labels-row">
                   <span>
-                    <span className="label-swatch-dot" style={{ backgroundColor: row.color }} title={row.color} />
-                    <code className="label-hex-code">{row.color}</code>
+                    <LabelTag name={row.name} color={row.color} />
                   </span>
                   <span>
-                    <span className="label-preview-chip label-preview-chip--table" style={{ backgroundColor: row.color }}>
-                      {row.name}
-                    </span>
+                    <code className="label-hex-code">{row.color}</code>
                   </span>
                   <span className="flow-row-actions">
                     <button
