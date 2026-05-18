@@ -1309,14 +1309,108 @@ button:disabled {
 
 .tenant-labels-form {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin-top: 14px;
-  max-width: 640px;
 }
 
-.tenant-labels-form input[type="text"],
-.tenant-labels-form input:not([type]) {
+.tenant-labels-inline-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+  width: 50%;
+  min-width: min(100%, 560px);
+}
+
+.tenant-labels-inline-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tenant-labels-inline-cell--name {
+  grid-column: span 2;
+}
+
+.tenant-labels-inline-cell--color {
+  grid-column: span 1;
+}
+
+.tenant-labels-inline-cell--hex {
+  grid-column: span 1;
+}
+
+.tenant-labels-inline-cell--preview {
+  grid-column: span 2;
+}
+
+.tenant-labels-inline-cell .field-label {
+  margin: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tenant-labels-inline-cell input,
+.tenant-labels-inline-cell .label-color-picker-wrap--inline,
+.tenant-labels-inline-cell .label-preview-chip--inline {
   width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+}
+
+.label-color-picker-wrap--inline {
+  justify-content: center;
+  padding: 4px;
+  min-height: 40px;
+}
+
+.label-color-picker-wrap--inline .label-color-picker-swatch {
+  width: 100%;
+  max-width: 40px;
+  height: 32px;
+  margin: 0 auto;
+}
+
+.label-color-hex-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.label-preview-chip--inline {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1100px) {
+  .tenant-labels-inline-row {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tenant-labels-inline-cell--name,
+  .tenant-labels-inline-cell--color,
+  .tenant-labels-inline-cell--hex,
+  .tenant-labels-inline-cell--preview {
+    grid-column: span 1;
+  }
+
+  .tenant-labels-inline-cell--name {
+    grid-column: span 2;
+  }
+
+  .tenant-labels-inline-cell--preview {
+    grid-column: span 2;
+  }
 }
 
 .label-color-picker-row {

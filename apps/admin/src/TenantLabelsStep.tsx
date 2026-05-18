@@ -182,36 +182,44 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
       </p>
 
       <div className="tenant-labels-form">
-        <label className="field-label field-label--primary" htmlFor="label-name-new">
-          Nome da etiqueta
-        </label>
-        <input
-          id="label-name-new"
-          placeholder="Ex.: Urgente, Retorno, VIP"
-          value={draftName}
-          onChange={(event) => setDraftName(event.target.value)}
-          maxLength={48}
-        />
-
-        <span className="field-label field-label--primary">Cor da etiqueta</span>
-        <div className="label-color-picker-row">
-          <label className="label-color-picker-wrap" title="Abrir seletor de cores">
+        <div className="tenant-labels-inline-row">
+          <div className="tenant-labels-inline-cell tenant-labels-inline-cell--name">
+            <label className="field-label field-label--primary" htmlFor="label-name-new">
+              Nome da etiqueta
+            </label>
             <input
-              type="color"
-              className="label-color-picker-input"
-              value={toColorPickerValue(draftColor)}
-              onChange={(event) => applyDraftColor(event.target.value)}
-              aria-label="Seletor de cor da etiqueta"
+              id="label-name-new"
+              placeholder="Ex.: Urgente, Retorno, VIP"
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              maxLength={48}
             />
-            <span className="label-color-picker-swatch" style={{ backgroundColor: toColorPickerValue(draftColor) }} />
-            <span className="label-color-picker-hint">Escolher cor</span>
-          </label>
-          <div className="label-color-hex-field">
-            <label className="sr-only" htmlFor="label-color-hex-new">
-              Código hexadecimal
+          </div>
+
+          <div className="tenant-labels-inline-cell tenant-labels-inline-cell--color">
+            <span className="field-label field-label--primary">Cor</span>
+            <label className="label-color-picker-wrap label-color-picker-wrap--inline" title="Escolher cor">
+              <input
+                type="color"
+                className="label-color-picker-input"
+                value={toColorPickerValue(draftColor)}
+                onChange={(event) => applyDraftColor(event.target.value)}
+                aria-label="Seletor de cor da etiqueta"
+              />
+              <span
+                className="label-color-picker-swatch"
+                style={{ backgroundColor: toColorPickerValue(draftColor) }}
+              />
+            </label>
+          </div>
+
+          <div className="tenant-labels-inline-cell tenant-labels-inline-cell--hex">
+            <label className="field-label field-label--primary" htmlFor="label-color-hex-new">
+              Hex
             </label>
             <input
               id="label-color-hex-new"
+              className="label-color-hex-input"
               value={draftColor}
               onChange={(event) => setDraftColor(event.target.value)}
               onBlur={() => applyDraftColor(draftColor)}
@@ -220,15 +228,19 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
               maxLength={9}
             />
           </div>
-          <span
-            className="label-preview-chip"
-            style={{
-              backgroundColor: toColorPickerValue(draftColor),
-              color: "#0f172a",
-            }}
-          >
-            {draftName.trim() || "Prévia"}
-          </span>
+
+          <div className="tenant-labels-inline-cell tenant-labels-inline-cell--preview">
+            <span className="field-label field-label--primary">Prévia</span>
+            <span
+              className="label-preview-chip label-preview-chip--inline"
+              style={{
+                backgroundColor: toColorPickerValue(draftColor),
+                color: "#0f172a",
+              }}
+            >
+              {draftName.trim() || "Prévia"}
+            </span>
+          </div>
         </div>
 
         <button type="button" onClick={() => void createLabel()} disabled={isSaving || isLoading}>
@@ -282,10 +294,20 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
                   </span>
                   <input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={48} />
                   <span className="flow-row-actions">
-                    <button type="button" className="compact-action-btn compact-action-btn-success" onClick={() => void saveEdit(row.id)} disabled={isSaving}>
+                    <button
+                      type="button"
+                      className="compact-action-btn compact-action-btn-success"
+                      onClick={() => void saveEdit(row.id)}
+                      disabled={isSaving}
+                    >
                       Salvar
                     </button>
-                    <button type="button" className="compact-action-btn compact-action-btn-secondary" onClick={cancelEdit} disabled={isSaving}>
+                    <button
+                      type="button"
+                      className="compact-action-btn compact-action-btn-secondary"
+                      onClick={cancelEdit}
+                      disabled={isSaving}
+                    >
                       Cancelar
                     </button>
                   </span>
@@ -302,7 +324,12 @@ export function TenantLabelsStep({ apiBase, tenantId, onStatusMessage, onBack, o
                     </span>
                   </span>
                   <span className="flow-row-actions">
-                    <button type="button" className="compact-action-btn compact-action-btn-secondary" onClick={() => startEdit(row)} disabled={isSaving}>
+                    <button
+                      type="button"
+                      className="compact-action-btn compact-action-btn-secondary"
+                      onClick={() => startEdit(row)}
+                      disabled={isSaving}
+                    >
                       Editar
                     </button>
                     <button
