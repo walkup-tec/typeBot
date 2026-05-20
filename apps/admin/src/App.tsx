@@ -1046,11 +1046,16 @@ export function App() {
       const syncPayload = (await syncResponse.json().catch(() => ({}))) as {
         message?: string;
         imported?: number;
+        pruned?: number;
       };
       if (!syncResponse.ok) {
         setStatusMessage(syncPayload.message ?? "Falha ao sincronizar fluxos do Typebot.");
         return;
       }
+      const parts: string[] = [];
+      if (syncPayload.imported && syncPayload.imported > 0) parts.push(`${syncPayload.imported} importado(s)`);
+      if (syncPayload.pruned && syncPayload.pruned > 0) parts.push(`${syncPayload.pruned} removido(s)`);
+      if (parts.length > 0) setStatusMessage(`Lista atualizada: ${parts.join("; ")}.`);
       await loadFlows(tenantId);
       const imported = Number(syncPayload.imported ?? 0);
       setStatusMessage(
@@ -1155,6 +1160,7 @@ export function App() {
   /** Na etapa Biblioteca de Fluxos, inclui automaticamente cada fluxo padrão da Biblioteca Master. */
   useEffect(() => {
     if (masterWizardStep !== MASTER_WIZARD_FLOWS_STEP || !selectedTenant || masterProfile !== "subscriber_master") return;
+    if (selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject)) return;
     const defaultIds = systemMasterLibrary.filter((item) => item.isSystemDefault).map((item) => item.id);
     if (defaultIds.length === 0) return;
     const flows = savedFlowsByTenant[selectedTenant] ?? [];
@@ -2702,10 +2708,21 @@ export function App() {
                   </button>
                 </div>
                 <p className="muted muted-subtle">
-                  Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
-                  <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
+                  {selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject) ? (
+                    <>
+                      Nesta conta, a lista reflete <strong>somente os typebots do workspace Typebot</strong> vinculado ao assinante.
+                      Use <strong>Atualizar lista</strong> após criar ou publicar um fluxo no builder.
+                    </>
+                  ) : (
+                    <>
+                      Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
+                      <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
+                    </>
+                  )}
                 </p>
-                {selectableFlowLibrary.some((item) => !systemDefaultLibraryIds.has(item.id)) ? (
+                {selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject) ? null : selectableFlowLibrary.some(
+                    (item) => !systemDefaultLibraryIds.has(item.id),
+                  ) ? (
                   <div className="grid-form">
                     <select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)}>
                       <option value="">Selecionar</option>
@@ -2722,6 +2739,7 @@ export function App() {
                     </button>
                   </div>
                 ) : null}
+                {selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject) ? null : (
                 <div className="tenant-profile-card">
                   <h4>Fluxos ativos na biblioteca</h4>
                   {visibleLibraryFlowRows.length === 0 ? (
@@ -2796,8 +2814,9 @@ export function App() {
                     </div>
                   )}
                 </div>
+                )}
                 <div className="tenant-profile-card">
-                  <h4>Fluxos do workspace</h4>
+                  <h4>Fluxos do workspace Typebot</h4>
                   <p className="muted muted-subtle">
                     Inclui fluxos criados no builder Typebot e fluxos adicionados por URL (sem item na Biblioteca Master). Copie o link público abaixo.
                   </p>

@@ -263,22 +263,41 @@ const extractTypebotArray = (payload: unknown): TypebotListRow[] => {
   return [];
 };
 
-const fetchTypebotPublicIdById = async (typebotId: string): Promise<string | null> => {
-  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return null;
+const fetchTypebotDetailById = async (
+  typebotId: string,
+): Promise<{ publicId: string | null; workspaceId: string | null }> => {
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return { publicId: null, workspaceId: null };
   for (const root of builderApiRoots()) {
     const url = `${root.replace(/\/$/, "")}/v1/typebots/${encodeURIComponent(typebotId)}`;
     const response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
     if (!response.ok) continue;
-    const body = (await response.json()) as { typebot?: { publicId?: string | null } };
-    const raw = body?.typebot?.publicId;
-    const p = typeof raw === "string" ? raw.trim() : "";
-    if (p) return p;
+    const body = (await response.json()) as {
+      typebot?: { publicId?: string | null; workspaceId?: string | null };
+    };
+    const publicIdRaw = body?.typebot?.publicId;
+    const workspaceIdRaw = body?.typebot?.workspaceId;
+    const publicId = typeof publicIdRaw === "string" ? publicIdRaw.trim() : "";
+    const workspaceId = typeof workspaceIdRaw === "string" ? workspaceIdRaw.trim() : "";
+    return {
+      publicId: publicId || null,
+      workspaceId: workspaceId || null,
+    };
   }
-  return null;
+  return { publicId: null, workspaceId: null };
 };
 
-const listWorkspaceTypebots = async (workspaceId: string): Promise<TypebotListRow[]> => {
-  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return [];
+const fetchTypebotPublicIdById = async (typebotId: string): Promise<string | null> => {
+  const detail = await fetchTypebotDetailById(typebotId);
+  return detail.publicId;
+};
+
+type WorkspaceTypebotListResult = {
+  rows: TypebotListRow[];
+  listOk: boolean;
+};
+
+const listWorkspaceTypebotsRaw = async (workspaceId: string): Promise<WorkspaceTypebotListResult> => {
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return { rows: [], listOk: false };
   const qs = `workspaceId=${encodeURIComponent(workspaceId)}&limit=200`;
   const qsShort = `workspaceId=${encodeURIComponent(workspaceId)}`;
   for (const root of builderApiRoots()) {
@@ -294,10 +313,64 @@ const listWorkspaceTypebots = async (workspaceId: string): Promise<TypebotListRo
         continue;
       }
       const list = extractTypebotArray(await response.json());
-      if (list.length > 0) return list;
+      return { rows: list, listOk: true };
     }
   }
-  return [];
+  return { rows: [], listOk: false };
+};
+
+/** Lista typebots confirmando `workspaceId` no detalhe (evita vazar bots de outros workspaces). */
+const listWorkspaceTypebots = async (workspaceId: string): Promise<TypebotListRow[]> => {
+  const normalizedWorkspaceId = String(workspaceId ?? "").trim();
+  if (!normalizedWorkspaceId) return [];
+  const raw = await listWorkspaceTypebotsRaw(normalizedWorkspaceId);
+  if (!raw.listOk) return [];
+
+  const filtered: TypebotListRow[] = [];
+  for (const row of raw.rows) {
+    const id = String(row.id ?? "").trim();
+    if (!id) continue;
+    const detail = await fetchTypebotDetailById(id);
+    if (detail.workspaceId === normalizedWorkspaceId) {
+      filtered.push(row);
+    }
+  }
+  return filtered;
+};
+
+const resolveWorkspaceTypebotRemoteIds = async (workspaceId: string): Promise<{ remoteIds: Set<string>; listOk: boolean }> => {
+  const normalizedWorkspaceId = String(workspaceId ?? "").trim();
+  if (!normalizedWorkspaceId) return { remoteIds: new Set(), listOk: false };
+
+  const raw = await listWorkspaceTypebotsRaw(normalizedWorkspaceId);
+  if (!raw.listOk) return { remoteIds: new Set(), listOk: false };
+
+  const remoteIds = new Set<string>();
+  for (const row of raw.rows) {
+    const id = String(row.id ?? "").trim();
+    if (!id) continue;
+    const detail = await fetchTypebotDetailById(id);
+    if (detail.workspaceId === normalizedWorkspaceId) remoteIds.add(id);
+  }
+  return { remoteIds, listOk: true };
+};
+
+/** Resposta da API: só fluxos cujo typebot está no workspace vinculado ao assinante. */
+export const filterTenantFlowsForWorkspace = async (
+  tenantId: string,
+  flows: SavedFlow[],
+): Promise<SavedFlow[]> => {
+  const tenant = tenantRepository.getById(tenantId);
+  const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
+  if (!workspaceId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) return flows;
+
+  const { remoteIds, listOk } = await resolveWorkspaceTypebotRemoteIds(workspaceId);
+  if (!listOk) return flows;
+
+  return flows.filter((flow) => {
+    const remoteId = String(flow.typebotRemoteId ?? "").trim();
+    return Boolean(remoteId && remoteIds.has(remoteId));
+  });
 };
 
 const resolveMasterCatalogViewerUrl = (flow: SavedFlow): string => {
@@ -513,9 +586,15 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
 
   if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return empty("builder_api_token_missing");
 
+  const linkedTenantEarly = tenantRepository.getById(tenantId);
+  const persistedWorkspaceId = String(linkedTenantEarly?.typebotWorkspaceId ?? "").trim();
+
   const workspaceProbe = await listTargetWorkspacesWithProbe();
   const workspaceCandidates = excludeMasterWorkspace(workspaceProbe.workspaces);
-  const workspaceId = await resolveTenantWorkspaceId(tenantId, workspaceCandidates);
+  let workspaceId = await resolveTenantWorkspaceId(tenantId, workspaceCandidates);
+  if (!workspaceId && persistedWorkspaceId) {
+    workspaceId = persistedWorkspaceId;
+  }
   if (!workspaceId) {
     return empty(
       workspaceCandidates.length === 0 ? "workspaces_list_empty" : "workspace_not_matched",
@@ -543,7 +622,30 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     };
   }
 
-  const rows = await listWorkspaceTypebots(workspaceId);
+  const rawList = await listWorkspaceTypebotsRaw(workspaceId);
+  if (!rawList.listOk) {
+    return {
+      imported: 0,
+      pruned: 0,
+      workspaceId,
+      workspaceName,
+      workspaceCandidates: workspaceCandidates.length,
+      typebotsScanned: 0,
+      skipReason: "typebot_list_failed",
+      builderApiBaseUrl: workspaceProbe.builderApiBaseUrl,
+      workspaceListHttpStatus: workspaceProbe.lastHttpStatus,
+      workspaceNames: workspaceProbe.workspaces.map((workspace) => workspace.name),
+    };
+  }
+
+  const rows: TypebotListRow[] = [];
+  for (const row of rawList.rows) {
+    const id = String(row.id ?? "").trim();
+    if (!id) continue;
+    const detail = await fetchTypebotDetailById(id);
+    if (detail.workspaceId === workspaceId) rows.push(row);
+  }
+
   let pruned = await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
   const existingFlows = [...flowRepository.listByTenant(tenantId)];
   let imported = 0;
