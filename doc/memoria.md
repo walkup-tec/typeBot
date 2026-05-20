@@ -1,9 +1,36 @@
+## 2026-05-20 - Biblioteca Master vazia (sync bloqueante + painel antigo)
+
+- **Sintoma:** painel sem botão Atualizar/Sincronizar; lista vazia; mensagem UI antiga em produção.
+- **API:** `GET source-flows` aguardava sync Typebot (sem timeout) → timeout no browser; corrigido sync em background + `POST sync-source` + fetch 12s.
+- **Painel:** botões Sincronizar/Atualizar na Biblioteca Master; timeouts e statusMessage.
+- **Deploy:** rebuild `api-typebot-crm` + `painel-typebot-crm`. Viewer 500 ainda marca fluxos como Inativo.
+- **Log:** `doc/LOG-2026-05-20__110800__fix-biblioteca-master-sync-background.md`
+
+## 2026-05-19 - MinIO + Typebot upload/avatar resolvido (Easypanel)
+
+- **MinIO** reinstalado: imagem `minio/minio:RELEASE.2025-02-03T21-03-04Z-cpuv1`; domínio API `typebot-minio` porta **9000**; console `console-typebot-minio`.
+- **Bucket** `typebot`; access key gerada (ex. `uW8cuKbPHx1LvDLCRed7`); **Anonymous** prefixo `public/` readonly; bucket Access Public.
+- **Builder/viewer:** `S3_ENDPOINT=typebot-minio.achpyp.easypanel.host`, `S3_PORT=443`, `S3_SSL=true`, `S3_ACCESS_KEY` + `S3_SECRET_KEY` da key MinIO, `S3_BUCKET=typebot`.
+- **Não usar** `S3_PUBLIC_CUSTOM_DOMAIN` se igual ao endpoint (causou **500** no builder); remover corrigiu `/signin`.
+- **Viewer:** `PORT=3000`, `HOSTNAME=0.0.0.0`.
+- **Status final:** utilizador confirmou tudo resolvido (login, upload avatar, builder OK).
+- **Docs:** `doc/FIX-MINIO-EASYPANEL-502.md`, `doc/REINSTALAR-MINIO-EASYPANEL.md`, `scripts/test-typebot-easypanel.ps1`.
+
+## 2026-05-18 - Snapshot encerramento: Typebot Easypanel (login OK, imagens pendente)
+
+- **Chat:** diagnóstico passo a passo builder/viewer após migração `soma` → `typebot`.
+- **Resolvido:** `PORT=3000` + `HOSTNAME=0.0.0.0` (fim do 502); Redis `redis://:senha@typebot_typebot-walkup-redis:6379`; login via **SMTP Gmail** (`smtp.gmail.com` + senha de app) — caixa `walkup@` é Google Workspace, não cPanel.
+- **Pendente:** upload imagens/avatar — erro `generateUploadUrl` / `invalid hostname`; criar `S3_ACCESS_KEY` **sem `@`** (ex. `typebotstorage`) em builder/viewer + bucket `typebot` no MinIO.
+- **Docs retomada:** `doc/LOG-2026-05-18__205226__snapshot-encerramento-typebot-easypanel.md`, `doc/EASYPANEL-TYPEBOT-ENV-REFERENCIA.md`.
+- **Git pushed nesta sessão:** `6e75171` (prioridades), `c78a876` (kanban). **Local não commitado:** `masterWizardProgress.ts` (menu bloqueado wizard).
+
 ## 2026-05-18 - Kanban: parametrização e prévia (etapa 5 + menu)
 
 - API: `GET/PUT /api/master/tenants/:tenantId/kanban-config` → `tenant-kanban-config.json`.
 - `organizeBy`: `priority` | `labels` | `custom`; colunas personalizadas (2–12) com nomes únicos.
 - Admin: `TenantKanbanStep` (wizard), `KanbanScreen` (menu Kanban), `KanbanBoardPreview`.
 - **Deploy:** API + painel.
+- **Push:** `c78a876` — redeploy **api-typebot-crm** e **painel-typebot-crm**.
 
 ## 2026-05-18 - Prioridades no Master Console (etapa 4)
 
