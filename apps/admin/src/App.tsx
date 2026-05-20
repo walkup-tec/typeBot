@@ -778,12 +778,33 @@ export function App() {
       .sort()
       .join("\n");
 
+  function applyFlowStatusesFromList(flows: SavedFlow[]) {
+    if (flows.length === 0) return;
+    setFlowStatuses((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const flow of flows) {
+        const status: FlowStatus = flow.viewerUrlActive !== false ? "active" : "inactive";
+        if (next[flow.id] !== status) {
+          next[flow.id] = status;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }
+
   async function refreshFlowStatuses(flows: SavedFlow[]) {
     if (flows.length === 0) return;
     const results = await Promise.all(
       flows.map(async (flow) => {
         try {
-          const response = await fetch(`${apiBase}/api/typebot/flow-status?url=${encodeURIComponent(flow.url)}`);
+          const params = new URLSearchParams({ url: flow.url });
+          const remoteId = flow.typebotRemoteId?.trim();
+          const publicId = flow.typebotPublicId?.trim();
+          if (remoteId) params.set("typebotRemoteId", remoteId);
+          if (publicId) params.set("typebotPublicId", publicId);
+          const response = await fetch(`${apiBase}/api/typebot/flow-status?${params.toString()}`);
           const data = (await response.json()) as { status: "active" | "inactive" };
           return { flowId: flow.id, status: data.status as FlowStatus };
         } catch {
@@ -849,7 +870,11 @@ export function App() {
       }
       return { ...current, [tenantId]: data };
     });
-    await refreshFlowStatuses(data);
+    applyFlowStatusesFromList(data);
+    const needsProbe = data.some((flow) => flow.viewerUrlActive === undefined);
+    if (needsProbe) {
+      await refreshFlowStatuses(data);
+    }
   }
 
   async function loadAttendants(tenantId: string) {

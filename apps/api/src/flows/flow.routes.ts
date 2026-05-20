@@ -21,6 +21,7 @@ import {
   updateFlowDisplayLabelSchema,
 } from "./flow.service";
 import { isFlowUrlActive, probeFlowUrlStatus } from "../lib/flow-url-health";
+import { attachFlowActiveStatus } from "../lib/typebot-flow-publish-status";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   importManualWorkspaceTypebotsIntoTenantFlows,
@@ -331,7 +332,8 @@ export const registerFlowRoutes = (app: Express) => {
       // auto-heal best-effort: não bloqueia listagem de fluxos
     }
     const flows = flowService.listByTenant(tenantId).map(applyTenantLogoAsBotAvatar);
-    return res.status(200).json(flows);
+    const withStatus = await attachFlowActiveStatus(flows);
+    return res.status(200).json(withStatus);
   });
 
   app.post("/api/master/tenants/:tenantId/flows", (req, res) => {
