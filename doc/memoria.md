@@ -1,3 +1,10 @@
+## 2026-05-20 - Tela do lead (handoff-view) não abria
+
+- **Causa:** `HANDOFF_PUBLIC_BASE_URL=https://api.chattypebot.com` (DNS inativo); chat do lead só liberava em `in_service` sem estado inicial.
+- **Correção:** canonicaliza `api.*` → `app.chattypebot.com`; tenantId da fila prioriza contato; libera chat se `in_service` ou `waiting`+atendente; POST handoff usa Host da requisição.
+- **Env:** `HANDOFF_PUBLIC_BASE_URL=https://app.chattypebot.com`
+- **Deploy:** rebuild `api-typebot-crm`.
+
 ## 2026-05-20 - Chat Fila ao vivo / Lead: iframe bloqueado (X-Frame-Options)
 
 - **Sintoma:** ícone de imagem quebrada no painel (Fila ao vivo); lead sem chat.

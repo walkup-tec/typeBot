@@ -397,6 +397,21 @@ export const registerQueueRoutes = (app: Express) => {
     }, z.string().min(2).max(max).optional());
 
   /**
+   * Host público canônico do handoff (links do Typebot → tela do lead).
+   * `api.chattypebot.com` costuma não ter DNS; o serviço ativo é `app.chattypebot.com`.
+   */
+  const canonicalizeHandoffPublicBase = (base: string): string => {
+    const normalized = base.trim().replace(/\/$/, "");
+    if (!normalized) return normalized;
+    const override = String(process.env.HANDOFF_CANONICAL_BASE_URL ?? "").trim().replace(/\/$/, "");
+    const lower = normalized.toLowerCase();
+    if (lower === "https://api.chattypebot.com" || lower === "http://api.chattypebot.com") {
+      return override || "https://app.chattypebot.com";
+    }
+    return normalized;
+  };
+
+  /**
    * URL pública da API usada em links do handoff (evita localhost quando o Typebot
    * chama via túnel e o Host não é o domínio real).
    */
@@ -404,10 +419,10 @@ export const registerQueueRoutes = (app: Express) => {
     const proto = req.header("x-forwarded-proto") ?? req.protocol;
     const host = req.header("x-forwarded-host") ?? req.header("host");
     const requestBase = host ? `${proto}://${host}`.replace(/\/$/, "") : "";
-    if (preferRequestHost && requestBase) return requestBase;
+    if (preferRequestHost && requestBase) return canonicalizeHandoffPublicBase(requestBase);
     const fixedBase = String(process.env.HANDOFF_PUBLIC_BASE_URL ?? "").trim().replace(/\/$/, "");
-    if (fixedBase) return fixedBase;
-    return requestBase || "http://localhost:3333";
+    if (fixedBase) return canonicalizeHandoffPublicBase(fixedBase);
+    return canonicalizeHandoffPublicBase(requestBase || "http://localhost:3333");
   };
 
   const mergeHandoffRequestInput = (req: Request): unknown => {
@@ -1257,8 +1272,9 @@ export const registerQueueRoutes = (app: Express) => {
   </div>`
   }
   <script>
-    const tenantId = ${JSON.stringify(tenantId)};
+    let tenantId = ${JSON.stringify(tenantId)};
     const contactId = ${JSON.stringify(contactId)};
+    let visitorChatEnabled = ${JSON.stringify(initialVisitorChatEnabled)};
     const senderRole = ${JSON.stringify(senderRole)};
     const isAgentMode = ${JSON.stringify(isAgentMode)};
     const sessionAgentId = ${JSON.stringify(agentId)};
@@ -1279,8 +1295,6 @@ export const registerQueueRoutes = (app: Express) => {
     const initialLeadContext = ${JSON.stringify(leadContextJson)};
     const whatsappPhone = ${JSON.stringify(tenantWhatsapp || "5551997462102")};
     const cacheStorageKey = ["wabaLeadContext", tenantId, ${JSON.stringify(flow)}, ${JSON.stringify(contactName)}].join(":");
-    let visitorChatEnabled = isAgentMode;
-
     function escapeHtml(value) {
       return String(value)
         .replace(/&/g, "&amp;")
@@ -1379,15 +1393,25 @@ export const registerQueueRoutes = (app: Express) => {
       }
     }
 
+    function shouldEnableVisitorLiveChat(contact) {
+      if (!contact) return false;
+      if (contact.status === "in_service") return true;
+      const assigned = String(contact.assignedAgentId || "").trim();
+      return contact.status === "waiting" && assigned.length > 0;
+    }
+
     async function syncVisitorSessionState() {
       if (isAgentMode) return;
+      const headers = tenantId ? { "x-tenant-id": tenantId } : {};
       const response = await fetch("/api/chat/queue/" + contactId + "?t=" + Date.now(), {
         cache: "no-store",
-        headers: { "x-tenant-id": tenantId }
+        headers,
       });
       if (!response.ok) return;
+      const resolvedTenantHeader = String(response.headers.get("x-resolved-tenant-id") || "").trim();
+      if (resolvedTenantHeader) tenantId = resolvedTenantHeader;
       const data = await response.json();
-      setVisitorChatEnabled(data.status === "in_service");
+      setVisitorChatEnabled(shouldEnableVisitorLiveChat(data));
     }
 
     function roleLabel(sender) {
@@ -2211,7 +2235,11 @@ export const registerQueueRoutes = (app: Express) => {
     }
 
     loadAndPersistLeadCache();
-    setVisitorChatEnabled(isAgentMode);
+    if (isAgentMode) {
+      setVisitorChatEnabled(true);
+    } else {
+      setVisitorChatEnabled(visitorChatEnabled);
+    }
     syncVisitorSessionState();
     loadMessages();
     setInterval(() => {
@@ -2353,7 +2381,7 @@ export const registerQueueRoutes = (app: Express) => {
           content: payload.initialMessage,
         });
       }
-      const publicBaseUrl = getPublicBaseUrl(req, req.method === "GET");
+      const publicBaseUrl = getPublicBaseUrl(req, req.method === "GET" || Boolean(req.header("host")));
       const typebotViewerUrlFromBody = resolvedViewerUrlFromPayload;
       const typebotViewerUrl = typebotViewerUrlFromBody || inferredFlow?.url;
       const visualConfigFromFlow = inferredFlow?.redirectTheme;

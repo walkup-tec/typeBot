@@ -31,10 +31,10 @@ NODE_ENV=production
 PORT=3333
 
 # Links que o handoff e redirects geram (HTTPS + host público).
-HANDOFF_PUBLIC_BASE_URL=https://api.chattypebot.com
+HANDOFF_PUBLIC_BASE_URL=https://app.chattypebot.com
 
 # URL que o builder usa ao aplicar webhooks nos fluxos Typebot (se usas esta env).
-TYPEBOT_HANDOFF_WEBHOOK_URL=https://api.chattypebot.com/api/typebot/handoff
+TYPEBOT_HANDOFF_WEBHOOK_URL=https://app.chattypebot.com/api/typebot/handoff
 
 # Widget embed / links internos do painel (se usares estes fluxos).
 WIDGET_BASE_URL=https://widget.chattypebot.com
