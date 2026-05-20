@@ -48,6 +48,23 @@ Deploy no VPS com domínio próprio: `doc/DEPLOY-VPS-chattypebot-com.md`.
 
 Easypanel mostra o **último commit** como título do deploy; para não repetir o mesmo nome: `doc/EASYPANEL-deploy-mensagens-unicas.md` e `npm run easypanel:deploy-empty -- "descrição"`.
 
+## Deploy seguro (obrigatorio)
+
+Runbook completo: `doc/RUNBOOK-DEPLOY-SEGURO.md`
+
+Comandos principais:
+
+```bash
+npm run backup:predeploy
+npm run smoke:prod -- -ApiBaseUrl "https://SEU_HOST_API" -TenantId "TENANT_ID" -FlowPublicId "PUBLIC_ID_DO_FLUXO"
+```
+
+Se o smoke falhar:
+
+```bash
+npm run rollback:data -- -SnapshotPath "backups/predeploy-YYYYMMDD-HHMMSS"
+```
+
 5. Rode o widget de chat:
 
 ```bash
@@ -63,7 +80,7 @@ Exemplo:
 ```bash
 VITE_API_BASE_URL=http://localhost:3333
 VITE_TENANT_ID=demo-tenant
-VITE_TYPEBOT_PUBLIC_URL=https://soma-typebot-walkup-viewer.achpyp.easypanel.host/fluxo-teste-8mewtqh
+VITE_TYPEBOT_PUBLIC_URL=https://typebot-walkup-viewer.achpyp.easypanel.host/fluxo-teste-8mewtqh
 ```
 
 `VITE_TYPEBOT_PUBLIC_URL` deve ser o link público do bot no seu viewer Typebot.

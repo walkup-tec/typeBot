@@ -110,12 +110,51 @@ server {
 }
 ```
 
-## 8. Nginx — Admin estático (`chattypebot.com`)
+## 8. Nginx — Página de vendas (`chattypebot.com`)
+
+Servir o app TanStack Start em `apps/sales` (SSR Node). O painel admin fica em `painel.chattypebot.com`.
+
+Build (no serviço Easypanel da landing, pasta `apps/sales`, **sem** workspace npm da raiz):
+
+```bash
+export VITE_API_BASE_URL=https://api.chattypebot.com
+export VITE_PAINEL_URL=https://painel.chattypebot.com
+npm ci
+npm run build
+```
+
+Arranque:
+
+```bash
+export PORT=3000
+node scripts/serve-production.mjs
+```
+
+Proxy reverso (porta interna 3000):
 
 ```nginx
 server {
   listen 443 ssl http2;
   server_name chattypebot.com www.chattypebot.com;
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+  }
+}
+```
+
+## 9. Nginx — Admin estático (`painel.chattypebot.com`)
+
+```nginx
+server {
+  listen 443 ssl http2;
+  server_name painel.chattypebot.com;
   root /var/www/chattypebot-admin/dist;
   index index.html;
 
@@ -127,14 +166,15 @@ server {
 
 (`root` = caminho onde envias `apps/admin/dist`.)
 
-## 9. Widget
+## 10. Widget
 
 Servir `apps/widget/dist` num hostname à parte ou subpath; respeitar `VITE_*` usados no build.
 
-## 10. Depois do deploy
+## 11. Depois do deploy
 
 1. `curl -sS https://api.chattypebot.com/health`
-2. Abrir `https://chattypebot.com` e confirmar login/chamadas à API (DevTools → Network).
+2. Abrir `https://chattypebot.com` e confirmar checkout/assinatura contra a API (DevTools → Network).
+3. Abrir `https://painel.chattypebot.com` e confirmar login/chamadas à API.
 3. No Typebot, webhook do handoff → URL **`https://api.chattypebot.com/api/typebot/handoff`** (sem túnel).
 
 ## Palavras-chave

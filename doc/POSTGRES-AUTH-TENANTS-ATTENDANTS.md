@@ -17,6 +17,10 @@ Evitar perda de **utilizadores e assinantes** quando o contentor Docker da API �
 
 Fluxos salvos, fila, bibliotecas, etc. continuam em `apps/api/data/` até haver migração explícita. Para não perder esses dados entre deploys, mantém **volume** em `apps/api/data` ou backups.
 
+### Atenção (causa típica de “fluxos sumiram depois do deploy”)
+
+Ter `DATABASE_URL` **não** grava fluxos no Postgres. Se o volume Docker/Easypanel **não** estiver montado na pasta `data` da API, cada redeploy pode **apagar** `saved-flows.json` novo/vazio → biblioteca no painel fica em branco. Guia: `doc/EASYPANEL-VOLUME-FLUXOS-FILA.md`.
+
 ## Variáveis úteis
 
 | Variável | Efeito |
