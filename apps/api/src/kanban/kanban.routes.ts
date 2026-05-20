@@ -11,7 +11,12 @@ export const registerKanbanRoutes = (app: Express) => {
     if (!ensureTenantExists(req.params.tenantId)) {
       return res.status(404).json({ message: "Tenant not found" });
     }
-    return res.status(200).json(kanbanService.getByTenant(req.params.tenantId));
+    const tenantId = req.params.tenantId;
+    const persisted = kanbanRepository.getByTenantId(tenantId);
+    return res.status(200).json({
+      ...kanbanService.getByTenant(tenantId),
+      isPersisted: Boolean(persisted),
+    });
   });
 
   app.put("/api/master/tenants/:tenantId/kanban-config", (req, res) => {

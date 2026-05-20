@@ -66,6 +66,31 @@ export function confirmMasterWizardStep(
   };
 }
 
+export type MasterWizardStepIndex = 1 | 2 | 3 | 4 | 5 | 6;
+
+export type MasterWizardStepCompletion = {
+  step1: boolean;
+  step2: boolean;
+  step3: boolean;
+  step4: boolean;
+  step5: boolean;
+  step6: boolean;
+};
+
+/** Primeira etapa ainda não concluída (etapa “atual” de trabalho). */
+export function resolveFirstIncompleteWizardStep(completion: MasterWizardStepCompletion): MasterWizardStepIndex {
+  const order: MasterWizardStepIndex[] = [1, 2, 3, 4, 5, 6];
+  for (const step of order) {
+    if (!completion[`step${step}` as keyof MasterWizardStepCompletion]) return step;
+  }
+  return 6;
+}
+
+/** Até qual etapa o usuário pode navegar (inclui a etapa atual incompleta). */
+export function resolveWizardUnlockedStep(completion: MasterWizardStepCompletion): MasterWizardStepIndex {
+  return resolveFirstIncompleteWizardStep(completion);
+}
+
 export function isMasterConsoleFullyConfigured(input: {
   tenantId: string;
   step1Completed: boolean;

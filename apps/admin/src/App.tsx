@@ -7,6 +7,15 @@ import { TenantKanbanStep } from "./TenantKanbanStep";
 import { KanbanScreen } from "./KanbanScreen";
 import { LeadDetailModal } from "./LeadDetailModal";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
+import {
+  confirmMasterWizardStep,
+  loadMasterWizardConfirmedByTenant,
+  persistMasterWizardConfirmedByTenant,
+  resolveFirstIncompleteWizardStep,
+  resolveWizardUnlockedStep,
+  type MasterWizardStepCompletion,
+  type MasterWizardStepIndex,
+} from "./masterWizardProgress";
 
 type TenantDefaultChatTheme = {
   templateName?: string;
@@ -524,6 +533,16 @@ export function App() {
   const [profileImageUploadedInStep, setProfileImageUploadedInStep] = useState(false);
   /** Etapa 2 só conclui quando usuário clica em "Continuar". */
   const [step2ConfirmedByTenant, setStep2ConfirmedByTenant] = useState<Record<string, true>>({});
+  const [masterWizardConfirmedByTenant, setMasterWizardConfirmedByTenant] = useState(() =>
+    loadMasterWizardConfirmedByTenant(),
+  );
+  const [wizardWorkspaceSnapshot, setWizardWorkspaceSnapshot] = useState({
+    labelsCount: 0,
+    prioritiesCount: 0,
+    kanbanPersisted: false,
+    loaded: false,
+  });
+  const wizardStepUserPinnedRef = useRef(false);
   const lastPendingCountRef = useRef(0);
   const isPendingCountBootstrappedRef = useRef(false);
 
@@ -695,6 +714,28 @@ export function App() {
       (step2ConfirmedByTenant[selectedTenant] === true || selectedTenantObject?.noSeparateAttendants === true),
   );
   const isFlowsWizardStepCompleted = selectedTenantFlows.length > 0;
+  const wizardStepCompletion = useMemo((): MasterWizardStepCompletion => {
+    const confirmed = selectedTenant ? masterWizardConfirmedByTenant[selectedTenant] : undefined;
+    return {
+      step1: isStep1Completed,
+      step2: isStep2Completed,
+      step3: wizardWorkspaceSnapshot.labelsCount > 0 || Boolean(confirmed?.step3),
+      step4: wizardWorkspaceSnapshot.prioritiesCount > 0 || Boolean(confirmed?.step4),
+      step5: wizardWorkspaceSnapshot.kanbanPersisted || Boolean(confirmed?.step5),
+      step6: isFlowsWizardStepCompleted,
+    };
+  }, [
+    isStep1Completed,
+    isStep2Completed,
+    isFlowsWizardStepCompleted,
+    masterWizardConfirmedByTenant,
+    selectedTenant,
+    wizardWorkspaceSnapshot,
+  ]);
+  const firstIncompleteWizardStep = useMemo(
+    () => resolveFirstIncompleteWizardStep(wizardStepCompletion),
+    [wizardStepCompletion],
+  );
   const pendingQueueCount = useMemo(
     () => queueItems.filter((item) => item.status === "waiting").length,
     [queueItems],
@@ -758,6 +799,48 @@ export function App() {
       assignedAgentName: resolveQueueItemAssignedAgentName(item, attendants),
     }));
     setQueueItems(normalized);
+  }
+
+  async function loadWizardWorkspaceSnapshot(tenantId: string) {
+    if (!tenantId) {
+      setWizardWorkspaceSnapshot({ labelsCount: 0, prioritiesCount: 0, kanbanPersisted: false, loaded: false });
+      return;
+    }
+    try {
+      const [labelsRes, prioritiesRes, kanbanRes] = await Promise.all([
+        fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/labels`),
+        fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/priorities`),
+        fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/kanban-config`),
+      ]);
+      let labelsCount = 0;
+      let prioritiesCount = 0;
+      let kanbanPersisted = false;
+      if (labelsRes.ok) {
+        const rows = (await labelsRes.json()) as unknown[];
+        labelsCount = Array.isArray(rows) ? rows.length : 0;
+      }
+      if (prioritiesRes.ok) {
+        const rows = (await prioritiesRes.json()) as unknown[];
+        prioritiesCount = Array.isArray(rows) ? rows.length : 0;
+      }
+      if (kanbanRes.ok) {
+        const payload = (await kanbanRes.json()) as { isPersisted?: boolean };
+        kanbanPersisted = Boolean(payload.isPersisted);
+      }
+      setWizardWorkspaceSnapshot({ labelsCount, prioritiesCount, kanbanPersisted, loaded: true });
+    } catch {
+      setWizardWorkspaceSnapshot({ labelsCount: 0, prioritiesCount: 0, kanbanPersisted: false, loaded: true });
+    }
+  }
+
+  function goToWizardStep(step: MasterWizardStepIndex, options?: { userPinned?: boolean }) {
+    if (options?.userPinned !== false) {
+      wizardStepUserPinnedRef.current = true;
+    }
+    const unlocked = resolveWizardUnlockedStep(wizardStepCompletion);
+    if (step > unlocked) return;
+    setMasterWizardStep(step);
+    setMasterWizardUnlocked(unlocked);
   }
 
   async function loadMasterClientDirectory() {
@@ -1019,16 +1102,15 @@ export function App() {
   }, [authSession]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("master-step2-confirmed-by-tenant");
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, true>;
-      if (parsed && typeof parsed === "object") {
-        setStep2ConfirmedByTenant(parsed);
+    setStep2ConfirmedByTenant((current) => {
+      const fromWizard = loadMasterWizardConfirmedByTenant();
+      const merged = { ...current };
+      for (const [tenantId, steps] of Object.entries(fromWizard)) {
+        if (steps.step2) merged[tenantId] = true;
       }
-    } catch {
-      // ignore localStorage parsing errors
-    }
+      return merged;
+    });
+    setMasterWizardConfirmedByTenant(loadMasterWizardConfirmedByTenant());
   }, []);
 
   useEffect(() => {
@@ -1106,9 +1188,11 @@ export function App() {
   }, [selectedTenantObject]);
 
   useEffect(() => {
-    setMasterWizardStep(1);
-    setMasterWizardUnlocked(1);
+    if (!selectedTenant) return;
+    wizardStepUserPinnedRef.current = false;
     setProfileImageUploadedInStep(false);
+    setWizardWorkspaceSnapshot({ labelsCount: 0, prioritiesCount: 0, kanbanPersisted: false, loaded: false });
+    void loadWizardWorkspaceSnapshot(selectedTenant);
   }, [selectedTenant]);
 
   useEffect(() => {
@@ -1118,25 +1202,12 @@ export function App() {
   }, [statusMessage]);
 
   useEffect(() => {
-    if (!selectedTenant) return;
-    if (!isStep1Completed) {
-      setMasterWizardUnlocked(1);
-      setMasterWizardStep(1);
-      return;
-    }
-    if (!isStep2Completed) {
-      setMasterWizardUnlocked(2);
-      setMasterWizardStep(2);
-      return;
-    }
-    setMasterWizardUnlocked(MASTER_WIZARD_FLOWS_STEP);
-    if (!isFlowsWizardStepCompleted) {
-      setMasterWizardStep((current) =>
-        current < 3 ? 3 : current > MASTER_WIZARD_FLOWS_STEP ? MASTER_WIZARD_FLOWS_STEP : current,
-      );
-      return;
-    }
-  }, [selectedTenant, isStep1Completed, isStep2Completed, isFlowsWizardStepCompleted]);
+    if (!selectedTenant || !wizardWorkspaceSnapshot.loaded) return;
+    const unlocked = resolveWizardUnlockedStep(wizardStepCompletion);
+    setMasterWizardUnlocked(unlocked);
+    if (wizardStepUserPinnedRef.current) return;
+    setMasterWizardStep(resolveFirstIncompleteWizardStep(wizardStepCompletion));
+  }, [selectedTenant, wizardWorkspaceSnapshot.loaded, wizardStepCompletion]);
 
   useEffect(() => {
     if (!selectedTenant || masterProfile === "system_master") return;
@@ -1155,6 +1226,13 @@ export function App() {
     }, QUEUE_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [authSession, masterProfile, activeScreen]);
+
+  useEffect(() => {
+    if (!selectedTenant || activeScreen !== "master") return;
+    if (masterWizardStep === 3 || masterWizardStep === 4 || masterWizardStep === 5) {
+      void loadWizardWorkspaceSnapshot(selectedTenant);
+    }
+  }, [selectedTenant, activeScreen, masterWizardStep]);
 
   useEffect(() => {
     if (!selectedTenant || activeScreen !== "master" || masterWizardStep !== MASTER_WIZARD_FLOWS_STEP) return;
@@ -1556,14 +1634,14 @@ export function App() {
   }
 
   function goToAttendantsStepFromProfile() {
-    setMasterWizardUnlocked((previous) => Math.max(previous, 2));
-    setMasterWizardStep(2);
+    goToWizardStep(2, { userPinned: true });
     void saveLeadChatDisplayName();
     void saveShareMetadata();
   }
 
-  function continueMasterWizard(fromStep: number) {
-    if (fromStep === 2 && selectedTenant) {
+  function continueMasterWizard(fromStep: MasterWizardStepIndex) {
+    if (!selectedTenant) return;
+    if (fromStep === 2) {
       setStep2ConfirmedByTenant((current) => {
         const nextMap = { ...current, [selectedTenant]: true as const };
         try {
@@ -1573,10 +1651,24 @@ export function App() {
         }
         return nextMap;
       });
+      setMasterWizardConfirmedByTenant((current) => {
+        const next = confirmMasterWizardStep(current, selectedTenant, 2);
+        persistMasterWizardConfirmedByTenant(next);
+        return next;
+      });
     }
-    const next = fromStep + 1;
+    if (fromStep === 3 || fromStep === 4 || fromStep === 5) {
+      setMasterWizardConfirmedByTenant((current) => {
+        const next = confirmMasterWizardStep(current, selectedTenant, fromStep);
+        persistMasterWizardConfirmedByTenant(next);
+        return next;
+      });
+      void loadWizardWorkspaceSnapshot(selectedTenant);
+    }
+    const next = (fromStep + 1) as MasterWizardStepIndex;
     if (next > MASTER_WIZARD_FLOWS_STEP) return;
-    setMasterWizardUnlocked((previous) => Math.max(previous, next));
+    wizardStepUserPinnedRef.current = true;
+    setMasterWizardUnlocked(resolveWizardUnlockedStep(wizardStepCompletion));
     setMasterWizardStep(next);
   }
 
@@ -2198,14 +2290,16 @@ export function App() {
                   <button
                     key={step}
                     type="button"
-                    className={`wizard-step-chip ${masterWizardStep === step ? "active" : ""} ${step < masterWizardUnlocked ? "done" : ""}`}
+                    className={`wizard-step-chip ${masterWizardStep === step ? "active" : ""} ${
+                      wizardStepCompletion[`step${step}` as keyof MasterWizardStepCompletion] ? "done" : ""
+                    }`}
                     disabled={step > masterWizardUnlocked}
                     onClick={() => {
-                      if (step <= masterWizardUnlocked) setMasterWizardStep(step);
+                      if (step <= masterWizardUnlocked) goToWizardStep(step as MasterWizardStepIndex);
                     }}
                   >
                     <span className="wizard-step-num" aria-hidden="true">
-                      {step < masterWizardUnlocked ? "✓" : step}
+                      {wizardStepCompletion[`step${step}` as keyof MasterWizardStepCompletion] ? "✓" : step}
                     </span>
                     {label}
                   </button>
@@ -2547,7 +2641,7 @@ export function App() {
                   <p className="muted muted-subtle">Nenhum atendente cadastrado para este assinante.</p>
                 )}
                 <div className="wizard-step-actions">
-                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(1)}>
+                  <button type="button" className="ghost-btn" onClick={() => goToWizardStep(1)}>
                     Voltar
                   </button>
                   <button type="button" onClick={() => continueMasterWizard(2)}>
@@ -2562,7 +2656,7 @@ export function App() {
                 apiBase={apiBase}
                 tenantId={selectedTenant}
                 onStatusMessage={setStatusMessage}
-                onBack={() => setMasterWizardStep(2)}
+                onBack={() => goToWizardStep(2)}
                 onContinue={() => continueMasterWizard(3)}
               />
             ) : null}
@@ -2572,7 +2666,7 @@ export function App() {
                 apiBase={apiBase}
                 tenantId={selectedTenant}
                 onStatusMessage={setStatusMessage}
-                onBack={() => setMasterWizardStep(3)}
+                onBack={() => goToWizardStep(3)}
                 onContinue={() => continueMasterWizard(4)}
               />
             ) : null}
@@ -2582,7 +2676,7 @@ export function App() {
                 apiBase={apiBase}
                 tenantId={selectedTenant}
                 onStatusMessage={setStatusMessage}
-                onBack={() => setMasterWizardStep(4)}
+                onBack={() => goToWizardStep(4)}
                 onContinue={() => continueMasterWizard(5)}
               />
             ) : null}
@@ -2791,7 +2885,7 @@ export function App() {
                   </p>
                 ) : null}
                 <div className="wizard-step-actions">
-                  <button type="button" className="ghost-btn" onClick={() => setMasterWizardStep(5)}>
+                  <button type="button" className="ghost-btn" onClick={() => goToWizardStep(5)}>
                     Voltar
                   </button>
                 </div>
