@@ -502,9 +502,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     const viewerUrl = buildViewerUrl(viewerBase, publicId);
     if (flowAlreadyLinkedToWorkspaceTypebot(existingFlows, typebotId, publicId, viewerUrl)) continue;
 
-    const active = await isViewerUrlActive(viewerUrl);
-    if (!active) continue;
-
+    // Inclui mesmo com viewer temporariamente fora (502); o painel mostra status Inativo até o viewer voltar.
     const nickname = deriveUniqueFlowNickname(existingFlows, displayName, typebotId);
     const created = flowRepository.create({
       id: randomUUID(),

@@ -1,19 +1,35 @@
-const buildViewerAlternateUrl = (url: string): string => {
+const configuredViewerBase = (): string =>
+  String(process.env.TYPEBOT_TARGET_VIEWER_BASE_URL ?? process.env.TYPEBOT_SOURCE_VIEWER_BASE_URL ?? "")
+    .trim()
+    .replace(/\/$/, "");
+
+/** Gera URLs alternativas (migração soma → typebot → typebot-typebot-walkup-viewer). */
+const buildViewerAlternateUrls = (url: string): string[] => {
+  const out: string[] = [];
   try {
     const parsed = new URL(url);
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}` || "/";
     const host = parsed.host;
-    if (host.startsWith("soma-typebot-")) {
-      parsed.host = host.replace(/^soma-typebot-/, "typebot-");
-      return parsed.toString();
+
+    const targetBase = configuredViewerBase();
+    if (targetBase) {
+      out.push(`${targetBase}${path}`);
     }
-    if (host.startsWith("typebot-")) {
-      parsed.host = host.replace(/^typebot-/, "soma-typebot-");
-      return parsed.toString();
+
+    if (host.includes("soma-typebot-walkup-viewer")) {
+      const migrated = new URL(url);
+      migrated.host = host.replace("soma-typebot-walkup-viewer", "typebot-typebot-walkup-viewer");
+      out.push(migrated.toString());
+    } else if (host.startsWith("typebot-walkup-viewer.")) {
+      const migrated = new URL(url);
+      migrated.host = host.replace(/^typebot-walkup-viewer/, "typebot-typebot-walkup-viewer");
+      out.push(migrated.toString());
     }
-    return "";
   } catch {
-    return "";
+    // ignore invalid URL
   }
+  const trimmed = String(url ?? "").trim();
+  return [...new Set(out.filter((candidate) => candidate && candidate !== trimmed))];
 };
 
 const fetchHttpStatus = async (url: string): Promise<number | null> => {
@@ -61,24 +77,16 @@ export const probeFlowUrlStatus = async (url: string): Promise<{
     };
   }
 
-  const alternate = buildViewerAlternateUrl(trimmed);
-  if (!alternate || alternate === trimmed) {
-    return {
-      status: "inactive",
-      httpStatus: primaryStatus,
-      resolvedUrl: trimmed,
-      fallbackUrl: null,
-    };
-  }
-
-  const fallbackStatus = await fetchHttpStatus(alternate);
-  if (fallbackStatus !== null && fallbackStatus >= 200 && fallbackStatus < 400) {
-    return {
-      status: "active",
-      httpStatus: fallbackStatus,
-      resolvedUrl: alternate,
-      fallbackUrl: alternate,
-    };
+  for (const alternate of buildViewerAlternateUrls(trimmed)) {
+    const fallbackStatus = await fetchHttpStatus(alternate);
+    if (fallbackStatus !== null && fallbackStatus >= 200 && fallbackStatus < 400) {
+      return {
+        status: "active",
+        httpStatus: fallbackStatus,
+        resolvedUrl: alternate,
+        fallbackUrl: alternate,
+      };
+    }
   }
 
   return {
@@ -91,7 +99,7 @@ export const probeFlowUrlStatus = async (url: string): Promise<{
 
 /**
  * Verifica se a URL pública do fluxo (viewer) responde com HTTP ativo.
- * Também testa fallback automático entre domínios `typebot-` e `soma-typebot-`.
+ * Também testa fallback (env `TYPEBOT_TARGET_VIEWER_BASE_URL` e hosts legados soma/typebot).
  */
 export const isFlowUrlActive = async (url: string): Promise<boolean> => {
   const probe = await probeFlowUrlStatus(url);
