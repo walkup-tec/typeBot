@@ -2767,8 +2767,9 @@ export function App() {
             <h3>Biblioteca Master</h3>
 
             <p className="muted muted-subtle">
-              Fluxos da conta matriz (<strong>walkup@walkuptec.com.br</strong>) no Typebot. Corrija o viewer (HTTP 200) para status{" "}
-              <strong>Ativo</strong>.
+              Somente fluxos do workspace matriz Typebot (<code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code>), conta{" "}
+              <strong>walkup@walkuptec.com.br</strong>. Status <strong>Ativo</strong> = publicado no builder; se o viewer HTTP
+              falhar, o fluxo ainda pode aparecer ativo.
             </p>
             <div className="wizard-step-actions flow-sync-actions">
               <button type="button" className="ghost-btn" onClick={() => void syncMasterMatrixFromTypebot()}>
@@ -2854,8 +2855,8 @@ export function App() {
               })}
               {unpublishedSourceMasterFlows.length === 0 ? (
                 <p className="muted">
-                  Nenhum fluxo na matriz. Confira na API: token do builder,{" "}
-                  <code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code>, viewer em 500 e volume <code>saved-flows.json</code>.
+                  Nenhum fluxo no workspace matriz. Confira token do builder e{" "}
+                  <code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code> na API (Easypanel).
                 </p>
               ) : null}
             </div>

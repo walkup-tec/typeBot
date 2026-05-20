@@ -1,7 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { loadFlowLibrary } from "./flow-library.repository";
-import { syncSourceWorkspaceFlowsToMasterTenant } from "./source-master-sync.service";
+import {
+  listMasterLibrarySourceFlows,
+  syncSourceWorkspaceFlowsToMasterTenant,
+} from "./source-master-sync.service";
 import { flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
 import {
   getSystemMasterLibraryById,
@@ -192,48 +195,23 @@ const removeSystemDefaultFlowFromAllTenants = async (payload: {
 
 export const registerFlowRoutes = (app: Express) => {
   const handleSourceFlowsRequest = async (_req: Request, res: Response) => {
-    // Sync em background: await no Typebot deixava o GET pendurado e o painel sem lista.
-    void syncSourceWorkspaceFlowsToMasterTenant().catch(() => undefined);
-    const tenants = tenantRepository.list();
-    const sourceTenant = tenants.find((tenant) => normalizeText(tenant.ownerEmail) === MASTER_SOURCE_EMAIL);
-    if (!sourceTenant?.id) {
+    try {
+      const withTypebotAlias = await listMasterLibrarySourceFlows();
+
+      // Regra operacional: todo fluxo ativo da matriz deve ser importado para workspaces dos assinantes.
+      try {
+        const tenants = tenantRepository.list();
+        const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+        const subscribers = tenants.filter((tenant) => normalizeText(tenant.ownerEmail) !== MASTER_SOURCE_EMAIL);
+        void Promise.allSettled(subscribers.map((tenant) => syncSystemDefaultsToRealTypebotWorkspace(tenant.id, defaults)));
+      } catch {
+        // Não impede a listagem dos fluxos da master.
+      }
+
+      return res.status(200).json(withTypebotAlias);
+    } catch {
       return res.status(200).json([]);
     }
-    const candidateFlows = flowService.listByTenant(sourceTenant.id);
-
-    const uniqueByUrl = new Map<string, (typeof candidateFlows)[number]>();
-    for (const flow of candidateFlows) {
-      const key = normalizeText(flow.url);
-      if (!key) continue;
-      if (!uniqueByUrl.has(key)) uniqueByUrl.set(key, flow);
-    }
-    const uniqueFlows = [...uniqueByUrl.values()];
-
-    const checks = await Promise.all(
-      uniqueFlows.map(async (flow) => ({
-        flow,
-        isActive: await isFlowUrlActive(flow.url),
-      })),
-    );
-
-    // Inclui fluxos inativos (ex.: viewer 502/500) para a Biblioteca Master não ficar vazia.
-    const withTypebotAlias = checks.map(({ flow, isActive }) => ({
-      ...flow,
-      typebotPublicId: typebotPublicIdFromViewerUrl(flow.url),
-      viewerUrlActive: isActive,
-    }));
-
-    // Regra operacional: todo fluxo ativo da matriz deve ser importado para workspaces dos assinantes.
-    // Dispara o sync ao atualizar a lista da Biblioteca Master (best-effort, sem bloquear resposta).
-    try {
-      const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
-      const subscribers = tenants.filter((tenant) => normalizeText(tenant.ownerEmail) !== MASTER_SOURCE_EMAIL);
-      void Promise.allSettled(subscribers.map((tenant) => syncSystemDefaultsToRealTypebotWorkspace(tenant.id, defaults)));
-    } catch {
-      // Não impede a listagem dos fluxos da master.
-    }
-
-    return res.status(200).json(withTypebotAlias);
   };
 
   app.get("/api/master/source-flows", handleSourceFlowsRequest);
