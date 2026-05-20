@@ -2211,6 +2211,10 @@ button:disabled {
   -webkit-backdrop-filter: blur(10px);
 }
 
+.master-library-table {
+  overflow-x: auto;
+}
+
 /* Biblioteca Master: linhas sem "box", apenas divisor inferior entre itens */
 .master-library-table .saved-flows-header,
 .master-library-table .saved-flows-row {
@@ -2317,9 +2321,67 @@ button:disabled {
   color: #ffffff !important;
 }
 
-.master-library-row,
-.master-library-published-row {
-  grid-template-columns: 1fr;
+.master-library-table .saved-flows-header.master-library-row,
+.master-library-table .saved-flows-row.master-library-row {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 1.1fr)
+    minmax(100px, 0.75fr)
+    minmax(72px, 0.5fr)
+    minmax(120px, 1fr)
+    minmax(148px, auto);
+  column-gap: 12px;
+  align-items: center;
+}
+
+.master-library-table .saved-flows-header.master-library-published-row,
+.master-library-table .saved-flows-row.master-library-published-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.1fr) minmax(120px, 1fr) minmax(100px, 0.7fr) minmax(120px, auto);
+  column-gap: 12px;
+  align-items: center;
+}
+
+.flow-list-toolbar {
+  display: flex;
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+.flow-list-refresh-btn {
+  flex: 1;
+  width: 100%;
+  max-width: 100%;
+  justify-content: center;
+  text-align: center;
+  padding: 10px 18px;
+}
+
+.master-title-display-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.master-title-display {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.master-library-action-cell {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.master-library-row .flow-status {
+  white-space: nowrap;
 }
 
 .master-promote-title-input {
@@ -3154,11 +3216,14 @@ button.danger-btn:not(.ghost-btn):hover {
 
   .saved-flows-header.master-library-row,
   .saved-flows-row.master-library-row {
-    display: grid;
-    grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 0.95fr) minmax(280px, 1.8fr) minmax(150px, auto);
+    grid-template-columns:
+      minmax(180px, 1.2fr)
+      minmax(120px, 0.8fr)
+      minmax(80px, 0.5fr)
+      minmax(200px, 1.2fr)
+      minmax(160px, auto);
     column-gap: 16px;
-    row-gap: 10px;
-    align-items: center;
+    row-gap: 0;
   }
 
   .saved-flows-row.master-library-row > span {

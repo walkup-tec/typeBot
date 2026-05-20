@@ -875,60 +875,73 @@ export function App() {
     setSelectedLibraryId((current) => (current && data.some((item) => item.id === current) ? current : ""));
   }
 
-  async function syncMasterMatrixFromTypebot() {
-    setStatusMessage("Sincronizando fluxos da matriz no Typebot…");
+  async function loadMasterLibrarySourceFlows(options?: { silent?: boolean }) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 45_000);
     try {
-      const response = await fetch(`${apiBase}/api/master/system-library/sync-source`, {
+      const syncResponse = await fetch(`${apiBase}/api/master/system-library/sync-source`, {
         method: "POST",
         signal: controller.signal,
       });
-      const payload = (await response.json().catch(() => ({}))) as {
-        message?: string;
-        created?: number;
-        active?: number;
-      };
-      if (!response.ok) {
-        setStatusMessage(payload.message ?? "Falha ao sincronizar matriz Typebot.");
+      if (!syncResponse.ok) {
+        const syncPayload = (await syncResponse.json().catch(() => ({}))) as { message?: string };
+        if (!options?.silent) {
+          setStatusMessage(syncPayload.message ?? "Falha ao sincronizar matriz Typebot.");
+        }
         return;
       }
-      const created = Number(payload.created ?? 0);
-      const active = Number(payload.active ?? 0);
-      setStatusMessage(
-        created > 0
-          ? `Matriz: ${created} fluxo(s) importado(s). Ativos no viewer: ${active}.`
-          : `Matriz atualizada. Ativos no viewer: ${active}.`,
-      );
-      await loadMasterLibrarySourceFlows();
-    } catch {
-      setStatusMessage("Timeout ou falha ao sincronizar matriz. Verifique token e workspace no Easypanel.");
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  }
 
-  async function loadMasterLibrarySourceFlows() {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 30_000);
-    try {
       const response = await fetch(`${apiBase}/api/master/system-library/source-flows`, {
         signal: controller.signal,
         cache: "no-store",
       });
       if (!response.ok) {
-        setStatusMessage("Falha ao carregar fluxos da matriz (API).");
+        if (!options?.silent) setStatusMessage("Falha ao carregar fluxos da matriz (API).");
         return;
       }
       const data = (await response.json()) as SavedFlow[];
       setSourceMasterFlows(data);
-      if (data.length === 0) {
-        setStatusMessage(
-          "Nenhum fluxo na matriz. Use Sincronizar do Typebot ou confira TYPEBOT_SOURCE_MASTER_WORKSPACE_ID e saved-flows.json.",
-        );
+      if (!options?.silent) {
+        if (data.length === 0) {
+          setStatusMessage("Nenhum fluxo no workspace matriz.");
+        } else {
+          setStatusMessage(`Lista atualizada: ${data.length} fluxo(s) na matriz.`);
+        }
       }
     } catch {
-      setStatusMessage("Timeout ao listar matriz. Redeploy da API com sync em background ou tente Sincronizar.");
+      if (!options?.silent) {
+        setStatusMessage("Falha ao atualizar lista. Verifique a API e o token do builder.");
+      }
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  async function refreshTenantFlowList(tenantId: string) {
+    if (!tenantId) return;
+    setStatusMessage("Atualizando lista de fluxos…");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    try {
+      const syncResponse = await fetch(`${apiBase}/api/master/tenants/${tenantId}/flows/sync-workspace`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+      const syncPayload = (await syncResponse.json().catch(() => ({}))) as {
+        message?: string;
+        imported?: number;
+      };
+      if (!syncResponse.ok) {
+        setStatusMessage(syncPayload.message ?? "Falha ao sincronizar fluxos do Typebot.");
+        return;
+      }
+      await loadFlows(tenantId);
+      const imported = Number(syncPayload.imported ?? 0);
+      setStatusMessage(
+        imported > 0 ? `Lista atualizada: ${imported} fluxo(s) importado(s).` : "Lista de fluxos atualizada.",
+      );
+    } catch {
+      setStatusMessage("Falha ao atualizar lista. Tente novamente.");
     } finally {
       window.clearTimeout(timeout);
     }
@@ -1004,13 +1017,13 @@ export function App() {
   useEffect(() => {
     if (!authSession) return;
     loadFlowLibrary().catch(() => undefined);
-    loadMasterLibrarySourceFlows().catch(() => undefined);
+    loadMasterLibrarySourceFlows({ silent: true }).catch(() => undefined);
     loadSystemMasterLibrary().catch(() => undefined);
   }, [authSession]);
 
   useEffect(() => {
     if (activeScreen !== "masterLibrary") return;
-    void loadMasterLibrarySourceFlows();
+    void loadMasterLibrarySourceFlows({ silent: true });
     void loadSystemMasterLibrary();
   }, [activeScreen]);
 
@@ -2556,11 +2569,12 @@ export function App() {
                   Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
                   <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
                 </p>
-                <div className="wizard-step-actions flow-sync-actions">
-                  <button type="button" className="ghost-btn" onClick={() => void syncFlowsFromTypebotWorkspace(selectedTenant)}>
-                    Sincronizar do Typebot
-                  </button>
-                  <button type="button" className="ghost-btn" onClick={() => void loadFlows(selectedTenant)}>
+                <div className="flow-list-toolbar">
+                  <button
+                    type="button"
+                    className="ghost-btn flow-list-refresh-btn"
+                    onClick={() => void refreshTenantFlowList(selectedTenant)}
+                  >
                     Atualizar lista
                   </button>
                 </div>
@@ -2748,8 +2762,7 @@ export function App() {
                 ) : null}
                 {!hasAnyFlowListedInStep6 && selectedTenantFlows.length === 0 ? (
                   <p className="muted muted-subtle flow-sync-hint">
-                    Nenhum fluxo na API para este assinante. Use <strong>Sincronizar do Typebot</strong> ou verifique{" "}
-                    <code>saved-flows.json</code> no volume da API.
+                    Nenhum fluxo na API para este assinante. Use <strong>Atualizar lista</strong> ou verifique o volume da API.
                   </p>
                 ) : null}
                 <div className="wizard-step-actions">
@@ -2766,17 +2779,9 @@ export function App() {
           <section className="card">
             <h3>Biblioteca Master</h3>
 
-            <p className="muted muted-subtle">
-              Somente fluxos do workspace matriz Typebot (<code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code>), conta{" "}
-              <strong>walkup@walkuptec.com.br</strong>. Status <strong>Ativo</strong> = publicado no builder; se o viewer HTTP
-              falhar, o fluxo ainda pode aparecer ativo.
-            </p>
-            <div className="wizard-step-actions flow-sync-actions">
-              <button type="button" className="ghost-btn" onClick={() => void syncMasterMatrixFromTypebot()}>
-                Sincronizar do Typebot
-              </button>
-              <button type="button" className="ghost-btn" onClick={() => void loadMasterLibrarySourceFlows()}>
-                Atualizar lista da matriz
+            <div className="flow-list-toolbar">
+              <button type="button" className="ghost-btn flow-list-refresh-btn" onClick={() => void loadMasterLibrarySourceFlows()}>
+                Atualizar lista
               </button>
             </div>
             <div className="saved-flows-table master-library-table">
@@ -2841,9 +2846,10 @@ export function App() {
                         {abbreviateUrlForDisplay(flow.url)}
                       </a>
                     </span>
-                    <span>
+                    <span className="master-library-action-cell">
                       <button
                         type="button"
+                        className="compact-action-btn compact-action-btn-success"
                         disabled={!canPromote}
                         onClick={() => void promoteFlowToSystemLibrary(flow, promoteTitle)}
                       >
