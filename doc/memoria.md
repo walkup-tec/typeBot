@@ -5,6 +5,14 @@
 - **Painel:** botões Sincronizar/Atualizar na Biblioteca Master; timeouts e statusMessage.
 - **Deploy:** rebuild `api-typebot-crm` + `painel-typebot-crm`. Viewer 500 ainda marca fluxos como Inativo.
 - **Log:** `doc/LOG-2026-05-20__110800__fix-biblioteca-master-sync-background.md`
+- **Commits (histórico Easypanel):**
+  - `06e30ec` deploy(api): biblioteca-master-sync-background-POST-sync-source-fluxos-inativos
+  - `182b376` deploy(api): viewer-url-fallback-migracao-hosts-typebot-walkup
+  - `18a2466` deploy(painel): biblioteca-master-botoes-sincronizar-etapa6-fluxos-inativos
+  - `9dfd04a` deploy(painel): menu-bloqueado-ate-wizard-master-console-etapas-2-5
+  - `73a7401` chore(env): TYPEBOT_SOURCE_MASTER_WORKSPACE_ID-e-viewer-base-url-exemplos
+  - `09afe0d` docs(deploy): runbook-biblioteca-master-typebot-minio-easypanel-2026-05
+  - `0af13b3` docs(deploy): README-DEPLOY-VPS-e-script-teste-typebot-easypanel
 
 ## 2026-05-19 - MinIO + Typebot upload/avatar resolvido (Easypanel)
 
