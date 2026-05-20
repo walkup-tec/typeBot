@@ -36,4 +36,4 @@ Write-Host "Tenant: $($master.name) ($($master.id))"
 $body = @{ profileImageUrl = $dataUrl } | ConvertTo-Json -Compress
 Invoke-RestMethod -Uri "$ApiBase/api/master/tenants/$($master.id)/profile-image" -Method Patch -ContentType "application/json" -Body $body | Out-Null
 
-Write-Host "OK — profileImageUrl atualizado no assinante matriz." -ForegroundColor Green
+Write-Host "OK - profileImageUrl atualizado no assinante matriz." -ForegroundColor Green
