@@ -1,10 +1,10 @@
-## 2026-05-20 - Biblioteca fluxos assinante = workspace Typebot (prune estrito)
+## 2026-05-20 - Biblioteca fluxos assinante = workspace Typebot (filtro por workspaceId)
 
-- **Sintoma:** Drax com 1 bot no builder; painel mostrava 4 fluxos (Type Bot, CLT, Drax duplicado).
-- **Causa:** registros antigos em `saved-flows.json` sem `typebotRemoteId` válido; prune anterior mantinha por `publicId`.
-- **Correção:** prune só por `typebotRemoteId` no workspace; prune antes do import; alinha nome/URL; sem `refreshTenantFlowViewerUrls` se já tem workspace.
-- **Commit sugerido:** `deploy(api): prune-estrito-fluxos-workspace-typebot-alinha-drax`
-- **Deploy:** `api-typebot-crm` (obrigatório); `painel-typebot-crm` (mensagem sync com removidos). Drax → Etapa 6 → **Atualizar lista**.
+- **Sintoma:** Drax 1 bot no builder; painel 4 fluxos + catálogo Master (CLT, Type Bot).
+- **Causa raiz:** listagem Typebot `?workspaceId=` devolvia bots de outros workspaces; catálogo Master na etapa 6.
+- **Correção:** confirma `workspaceId` no detalhe de cada typebot; prune estrito; GET filtra resposta; painel oculta biblioteca Master se assinante tem workspace.
+- **Commit:** `deploy(api+painel): filtra-typebots-por-workspace-remove-fluxos-antigos-drax`
+- **Deploy:** API + painel; Drax etapa 6 → Atualizar lista (deve mostrar 1 fluxo).
 
 ## 2026-05-20 - Importar fluxo Drax (`drax-sistemas-px5k4a3`) no Typebot
 
