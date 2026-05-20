@@ -165,12 +165,48 @@ registerAuthRoutes(app);
 registerQueueRoutes(app);
 registerTypebotRoutes(app);
 
-app.get("/r/:code", (req, res) => {
+const SOCIAL_CRAWLER_UA =
+  /facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|Googlebot/i;
+
+const escapeHtmlAttr = (value: string): string =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+app.get("/r/:code", async (req, res) => {
   const code = String(req.params.code ?? "").trim();
   if (!code) return res.status(404).send("Não encontrado");
   const flow = flowRepository.findByShortShareCode(code);
   if (!flow) return res.status(404).send("Link não encontrado ou expirado.");
-  return res.redirect(302, flow.url);
+  const targetUrl = String(flow.url ?? "").trim();
+  if (!targetUrl) return res.status(404).send("Destino indisponível.");
+
+  const userAgent = String(req.headers["user-agent"] ?? "");
+  if (SOCIAL_CRAWLER_UA.test(userAgent)) {
+    try {
+      const response = await fetch(targetUrl, {
+        method: "GET",
+        headers: { "user-agent": "facebookexternalhit/1.1" },
+        redirect: "follow",
+      });
+      const html = await response.text();
+      if (response.ok && html.includes("og:title")) {
+        res.setHeader("content-type", "text/html; charset=utf-8");
+        return res.status(200).send(html);
+      }
+    } catch {
+      // fallback HTML mínimo abaixo
+    }
+    const title = escapeHtmlAttr(flow.displayLabel ?? flow.nickname ?? "Chat");
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    return res.status(200).send(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title><meta property="og:title" content="${title}"/><meta http-equiv="refresh" content="0;url=${escapeHtmlAttr(targetUrl)}"/></head><body><a href="${escapeHtmlAttr(targetUrl)}">Abrir chat</a></body></html>`,
+    );
+  }
+
+  return res.redirect(302, targetUrl);
 });
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

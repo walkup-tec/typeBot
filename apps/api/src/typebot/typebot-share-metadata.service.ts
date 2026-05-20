@@ -132,18 +132,15 @@ const patchTypebotRecord = async (typebotId: string, typebot: Record<string, unk
   return response.ok;
 };
 
-/**
- * Preserva metadados definidos no builder; só normaliza URLs para HTTPS público e republica.
- */
-export const ensureTypebotShareMetadataPublished = async (typebotId: string): Promise<{ published: boolean; metadataPatched: boolean }> => {
-  const normalizedId = String(typebotId ?? "").trim();
-  if (!normalizedId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) {
-    return { published: false, metadataPatched: false };
-  }
+type ShareMetadataSnapshot = {
+  title: string;
+  description: string;
+  imageUrl: string;
+  favIconUrl: string;
+  allowIndexing: boolean;
+};
 
-  const typebot = await fetchTypebotRecord(normalizedId);
-  if (!typebot) return { published: false, metadataPatched: false };
-
+const readShareMetadataSnapshot = (typebot: Record<string, unknown>): ShareMetadataSnapshot => {
   const settingsRaw = typebot.settings;
   const settings =
     settingsRaw && typeof settingsRaw === "object"
@@ -155,25 +152,106 @@ export const ensureTypebotShareMetadataPublished = async (typebotId: string): Pr
       ? ({ ...(metadataRaw as Record<string, unknown>) } as Record<string, unknown>)
       : {};
 
-  let metadataPatched = false;
-  for (const key of ["imageUrl", "favIconUrl"] as const) {
-    const current = String(metadata[key] ?? "").trim();
-    if (!current) continue;
-    const normalized = normalizeShareAssetUrl(current);
-    if (normalized && normalized !== current) {
-      metadata[key] = normalized;
-      metadataPatched = true;
-    }
+  const title = String(metadata.title ?? typebot.title ?? "").trim();
+  const description = String(metadata.description ?? typebot.description ?? "").trim();
+  const imageUrl = String(metadata.imageUrl ?? "").trim();
+  const favIconUrl = String(metadata.favIconUrl ?? "").trim();
+  const allowIndexing = metadata.allowIndexing === true;
+
+  return { title, description, imageUrl, favIconUrl, allowIndexing };
+};
+
+const applyShareMetadataSnapshot = (
+  typebot: Record<string, unknown>,
+  snapshot: ShareMetadataSnapshot,
+): { typebot: Record<string, unknown>; changed: boolean } => {
+  const settingsRaw = typebot.settings;
+  const settings =
+    settingsRaw && typeof settingsRaw === "object"
+      ? ({ ...(settingsRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const metadata =
+    settings.metadata && typeof settings.metadata === "object"
+      ? ({ ...(settings.metadata as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+
+  let changed = false;
+
+  if (snapshot.title && String(typebot.title ?? "") !== snapshot.title) {
+    typebot.title = snapshot.title;
+    changed = true;
+  }
+  if (snapshot.description && String(typebot.description ?? "") !== snapshot.description) {
+    typebot.description = snapshot.description;
+    changed = true;
   }
 
-  if (metadataPatched) {
+  if (snapshot.title && String(metadata.title ?? "") !== snapshot.title) {
+    metadata.title = snapshot.title;
+    changed = true;
+  }
+  if (snapshot.description && String(metadata.description ?? "") !== snapshot.description) {
+    metadata.description = snapshot.description;
+    changed = true;
+  }
+
+  const normalizedImage = normalizeShareAssetUrl(snapshot.imageUrl);
+  if (normalizedImage && String(metadata.imageUrl ?? "") !== normalizedImage) {
+    metadata.imageUrl = normalizedImage;
+    changed = true;
+  }
+  const normalizedIcon = normalizeShareAssetUrl(snapshot.favIconUrl);
+  if (normalizedIcon && String(metadata.favIconUrl ?? "") !== normalizedIcon) {
+    metadata.favIconUrl = normalizedIcon;
+    changed = true;
+  }
+
+  // Sem isso o viewer injeta <meta name="robots" content="noindex"> e vários apps ignoram preview rico.
+  if (metadata.allowIndexing !== true) {
+    metadata.allowIndexing = true;
+    changed = true;
+  }
+
+  if (changed) {
     settings.metadata = metadata;
     typebot.settings = settings;
-    await patchTypebotRecord(normalizedId, typebot);
+  }
+
+  return { typebot, changed };
+};
+
+/** Lê metadados atuais do typebot no builder (diagnóstico / painel). */
+export const getTypebotShareMetadataSnapshot = async (
+  typebotId: string,
+): Promise<ShareMetadataSnapshot | null> => {
+  const typebot = await fetchTypebotRecord(String(typebotId ?? "").trim());
+  if (!typebot) return null;
+  return readShareMetadataSnapshot(typebot);
+};
+
+/**
+ * Garante título, descrição e imagem em settings.metadata + allowIndexing, depois republica.
+ */
+export const ensureTypebotShareMetadataPublished = async (
+  typebotId: string,
+): Promise<{ published: boolean; metadataPatched: boolean; snapshot: ShareMetadataSnapshot | null }> => {
+  const normalizedId = String(typebotId ?? "").trim();
+  if (!normalizedId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) {
+    return { published: false, metadataPatched: false, snapshot: null };
+  }
+
+  const typebot = await fetchTypebotRecord(normalizedId);
+  if (!typebot) return { published: false, metadataPatched: false, snapshot: null };
+
+  const snapshot = readShareMetadataSnapshot(typebot);
+  const { typebot: patched, changed } = applyShareMetadataSnapshot(typebot, snapshot);
+
+  if (changed) {
+    await patchTypebotRecord(normalizedId, patched);
   }
 
   await publishTypebotOnTarget(normalizedId);
-  return { published: true, metadataPatched };
+  return { published: true, metadataPatched: changed, snapshot };
 };
 
 /** Republica metadados de todos os typebots informados (workspace do assinante). */

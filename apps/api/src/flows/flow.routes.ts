@@ -30,7 +30,10 @@ import {
   refreshTenantFlowViewerUrls,
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
-import { ensureTypebotShareMetadataPublished } from "../typebot/typebot-share-metadata.service";
+import {
+  ensureTypebotShareMetadataPublished,
+  getTypebotShareMetadataSnapshot,
+} from "../typebot/typebot-share-metadata.service";
 import {
   removeSystemDefaultFromSubscriberWorkspaces,
   syncSystemDefaultsToRealTypebotWorkspace,
@@ -308,6 +311,61 @@ export const registerFlowRoutes = (app: Express) => {
         message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",
       });
     }
+  });
+
+  app.get("/api/master/flows/:flowId/share-preview", async (req, res) => {
+    const flow = flowRepository.getById(String(req.params.flowId ?? "").trim());
+    if (!flow) return res.status(404).json({ message: "Flow not found" });
+    const remoteId = String(flow.typebotRemoteId ?? "").trim();
+    const viewerUrl = String(flow.url ?? "").trim();
+
+    let builderMetadata: Awaited<ReturnType<typeof getTypebotShareMetadataSnapshot>> = null;
+    if (remoteId) {
+      try {
+        builderMetadata = await getTypebotShareMetadataSnapshot(remoteId);
+      } catch {
+        builderMetadata = null;
+      }
+    }
+
+    let viewerOg: Record<string, string> = {};
+    if (viewerUrl) {
+      try {
+        const response = await fetch(viewerUrl, {
+          method: "GET",
+          headers: { "user-agent": "facebookexternalhit/1.1" },
+          redirect: "follow",
+        });
+        const html = await response.text();
+        const pick = (prop: string): string => {
+          const re = new RegExp(`<meta[^>]+property="${prop}"[^>]+content="([^"]*)"`, "i");
+          const match = html.match(re);
+          return match?.[1] ? match[1].trim() : "";
+        };
+        viewerOg = {
+          httpStatus: String(response.status),
+          title: pick("og:title"),
+          description: pick("og:description"),
+          image: pick("og:image"),
+          robotsNoindex: /<meta[^>]+name="robots"[^>]+content="noindex"/i.test(html) ? "yes" : "no",
+        };
+      } catch (error) {
+        viewerOg = {
+          error: error instanceof Error ? error.message : "Falha ao ler viewer",
+        };
+      }
+    }
+
+    return res.status(200).json({
+      flowId: flow.id,
+      viewerUrl,
+      builderMetadata,
+      viewerOg,
+      hint:
+        builderMetadata && !builderMetadata.allowIndexing
+          ? "Ative 'Permitir indexação' no Typebot ou rode sync-workspace após deploy da API."
+          : undefined,
+    });
   });
 
   app.post("/api/master/flows/:flowId/publish-share-metadata", async (req, res) => {
