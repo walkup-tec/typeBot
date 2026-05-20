@@ -1,3 +1,9 @@
+## 2026-05-20 - Metadados compartilhamento Typebot (OG)
+
+- **Sintoma:** Metadados preenchidos no builder não aparecem ao compartilhar link.
+- **Correção:** `ensureTypebotShareMetadataPublished` — URLs HTTPS públicas em `settings.metadata` + republicar; sync-workspace chama por fluxo; não sobrescreve metadata do builder no sync tenant.
+- **Commit:** `deploy(api+painel): republica-metadados-typebot-compartilhamento-og-drax`
+
 ## 2026-05-20 - Viewer Typebot HTTP 500 — env ausente (confirmado)
 
 - **Log viewer:** `Invalid environment variables` → `DATABASE_URL`, `ENCRYPTION_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_VIEWER_URL` Required.
