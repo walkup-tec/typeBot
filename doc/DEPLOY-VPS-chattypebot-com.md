@@ -175,7 +175,10 @@ Servir `apps/widget/dist` num hostname à parte ou subpath; respeitar `VITE_*` u
 1. `curl -sS https://api.chattypebot.com/health`
 2. Abrir `https://chattypebot.com` e confirmar checkout/assinatura contra a API (DevTools → Network).
 3. Abrir `https://painel.chattypebot.com` e confirmar login/chamadas à API.
-3. No Typebot, webhook do handoff → URL **`https://api.chattypebot.com/api/typebot/handoff`** (sem túnel).
+3. Handoff Typebot:
+   - **Webhook (POST):** `TYPEBOT_HANDOFF_WEBHOOK_URL` → ex. `https://app.chattypebot.com/api/typebot/handoff` ou `https://api.chattypebot.com/api/typebot/handoff`
+   - **Redirect:** usar variável `{{url_direct}}` da resposta do webhook (não a URL do webhook).
+   - **GET** no mesmo path redireciona (302) para `/handoff-view` — necessário se o bloco Redirect apontar direto para `/api/typebot/handoff`.
 
 ## Palavras-chave
 

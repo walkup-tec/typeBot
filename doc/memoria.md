@@ -1,8 +1,17 @@
-## 2026-05-20 - Metadados compartilhamento Typebot (OG)
+## 2026-05-20 - Handoff: GET /api/typebot/handoff (Redirect Typebot)
 
-- **Sintoma:** Metadados preenchidos no builder não aparecem ao compartilhar link.
-- **Correção:** `ensureTypebotShareMetadataPublished` — URLs HTTPS públicas em `settings.metadata` + republicar; sync-workspace chama por fluxo; não sobrescreve metadata do builder no sync tenant.
-- **Commit:** `deploy(api+painel): republica-metadados-typebot-compartilhamento-og-drax`
+- **Causa:** bloco **Redirect** do Typebot abre URL no browser com **GET**; endpoint só tinha **POST** → 404 em `https://app.chattypebot.com/api/typebot/handoff`.
+- **Correção:** `GET` e `POST` no mesmo handler; GET faz **302** para `/handoff-view?...`; query params aceitos (`leadContext` JSON string).
+- **GET** usa host da requisição para `handoffUrl` (ex. `app.chattypebot.com`); **POST** mantém `HANDOFF_PUBLIC_BASE_URL`.
+- **Typebot ideal:** Webhook **POST** → mapear `url_direct`; Redirect **`{{url_direct}}`** (não a URL do webhook).
+- **Deploy:** rebuild `api-typebot-crm`.
+
+## 2026-05-20 - Metadados compartilhamento (título + descrição)
+
+- **Causa:** viewer com `<meta robots content="noindex">` quando `settings.metadata.allowIndexing` não está true; WhatsApp/FB ignoram ou cacheiam preview vazio.
+- **Teste URL Drax:** og:title, og:description e og:image **presentes** no HTML do viewer (servidor OK).
+- **Correção API:** sync força `allowIndexing: true`, alinha title/description, republica; `/r/:code` repassa HTML para crawlers; `GET .../flows/:id/share-preview` diagnóstico.
+- **Commit:** `fix(api): metadados-compartilhamento-allowIndexing-titulo-descricao-og`
 
 ## 2026-05-20 - Viewer Typebot HTTP 500 — env ausente (confirmado)
 

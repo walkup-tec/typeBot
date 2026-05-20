@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Express, Request } from "express";
+import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import type { SavedFlow } from "../flows/flow.repository";
 import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
@@ -400,12 +400,33 @@ export const registerQueueRoutes = (app: Express) => {
    * URL pública da API usada em links do handoff (evita localhost quando o Typebot
    * chama via túnel e o Host não é o domínio real).
    */
-  const getPublicBaseUrl = (req: Request) => {
-    const fixedBase = String(process.env.HANDOFF_PUBLIC_BASE_URL ?? "").trim().replace(/\/$/, "");
-    if (fixedBase) return fixedBase;
+  const getPublicBaseUrl = (req: Request, preferRequestHost = false) => {
     const proto = req.header("x-forwarded-proto") ?? req.protocol;
     const host = req.header("x-forwarded-host") ?? req.header("host");
-    return `${proto}://${host}`;
+    const requestBase = host ? `${proto}://${host}`.replace(/\/$/, "") : "";
+    if (preferRequestHost && requestBase) return requestBase;
+    const fixedBase = String(process.env.HANDOFF_PUBLIC_BASE_URL ?? "").trim().replace(/\/$/, "");
+    if (fixedBase) return fixedBase;
+    return requestBase || "http://localhost:3333";
+  };
+
+  const mergeHandoffRequestInput = (req: Request): unknown => {
+    if (req.method !== "GET") return req.body;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(req.query)) {
+      if (value === undefined) continue;
+      const normalized = Array.isArray(value) ? value[0] : value;
+      if (typeof normalized === "string" && (key === "leadContext" || key === "lead_context")) {
+        try {
+          out[key] = JSON.parse(normalized);
+          continue;
+        } catch {
+          // mantém string
+        }
+      }
+      out[key] = normalized;
+    }
+    return out;
   };
 
   const isSafeHttpUrl = (value: string) => {
@@ -2202,7 +2223,7 @@ export const registerQueueRoutes = (app: Express) => {
 </html>`);
   });
 
-  app.post("/api/typebot/handoff", async (req, res) => {
+  const handleTypebotHandoff = async (req: Request, res: Response) => {
     try {
       const payloadSchema = z
       .object({
@@ -2239,7 +2260,7 @@ export const registerQueueRoutes = (app: Express) => {
           .optional(),
       })
       .passthrough();
-      const payload = payloadSchema.parse(req.body);
+      const payload = payloadSchema.parse(mergeHandoffRequestInput(req));
       const allFlows = flowRepository.listAll();
       const sourceFlowLabelCandidate = String(
         payload.sourceFlowLabel ?? payload.source_flow_label ?? payload.flowAlias ?? "",
@@ -2332,7 +2353,7 @@ export const registerQueueRoutes = (app: Express) => {
           content: payload.initialMessage,
         });
       }
-      const publicBaseUrl = getPublicBaseUrl(req);
+      const publicBaseUrl = getPublicBaseUrl(req, req.method === "GET");
       const typebotViewerUrlFromBody = resolvedViewerUrlFromPayload;
       const typebotViewerUrl = typebotViewerUrlFromBody || inferredFlow?.url;
       const visualConfigFromFlow = inferredFlow?.redirectTheme;
@@ -2369,8 +2390,7 @@ export const registerQueueRoutes = (app: Express) => {
         payload.contactName,
       )}&flow=${encodeURIComponent(displayFlowLabel)}${typebotQuery}${leadContextQuery}${visualQuery}`;
 
-      // 200: alguns clientes HTTP do Typebot tratam melhor 200 do que 201 no fluxo síncrono.
-      return res.status(200).json({
+      const responsePayload = {
         ...item,
         tenantId: resolvedTenantId,
         handoffUrl,
@@ -2378,7 +2398,6 @@ export const registerQueueRoutes = (app: Express) => {
         url: handoffUrl,
         /** Alias para Redirect `{{url_direct}}` quando o mapeamento usa bodyPath `url_direct`. */
         url_direct: handoffUrl,
-        // Compatibilidade com mapeamentos de webhook no Typebot que leem em `data.*`.
         data: {
           handoffUrl,
           redirectUrl: handoffUrl,
@@ -2388,17 +2407,33 @@ export const registerQueueRoutes = (app: Express) => {
           urlFlat: handoffUrl,
           url_direct: handoffUrl,
         },
-        // Campos no nível raiz para integrações (Typebot) que expõem o JSON como `data`
-        // e tornam ambíguo acessar `data.url` quando também existe `data.data.url`.
         handoffUrlFlat: handoffUrl,
         redirectUrlFlat: handoffUrl,
         urlFlat: handoffUrl,
         resolvedTypebotViewerUrl: typebotViewerUrl ?? null,
-      });
+      };
+
+      if (req.method === "GET") {
+        return res.redirect(302, handoffUrl);
+      }
+
+      // 200: alguns clientes HTTP do Typebot tratam melhor 200 do que 201 no fluxo síncrono.
+      return res.status(200).json(responsePayload);
     } catch (error) {
-      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+      const message = error instanceof Error ? error.message : "Invalid request";
+      if (req.method === "GET") {
+        return res.status(400).send(`Handoff indisponível: ${message}`);
+      }
+      return res.status(400).json({ message });
     }
-  });
+  };
+
+  /**
+   * GET: bloco Redirect do Typebot abre o link no browser (não é POST como o Webhook).
+   * POST: Webhook/HTTP Request do Typebot — retorna JSON com url_direct para {{url_direct}}.
+   */
+  app.get("/api/typebot/handoff", handleTypebotHandoff);
+  app.post("/api/typebot/handoff", handleTypebotHandoff);
 
   app.post("/api/chat/queue", (req, res) => {
     try {
