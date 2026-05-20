@@ -12,7 +12,13 @@ const TYPEBOT_SOURCE_BUILDER_API_TOKEN = String(
   process.env.TYPEBOT_SOURCE_BUILDER_API_TOKEN ?? process.env.TYPEBOT_BUILDER_API_TOKEN ?? "",
 ).trim();
 const TYPEBOT_SOURCE_MASTER_WORKSPACE_ID = String(process.env.TYPEBOT_SOURCE_MASTER_WORKSPACE_ID ?? "").trim();
-const TYPEBOT_SOURCE_VIEWER_BASE_URL = String(process.env.TYPEBOT_SOURCE_VIEWER_BASE_URL ?? "").trim().replace(/\/$/, "");
+const TYPEBOT_SOURCE_VIEWER_BASE_URL = String(
+  process.env.TYPEBOT_SOURCE_VIEWER_BASE_URL ??
+    process.env.TYPEBOT_TARGET_VIEWER_BASE_URL ??
+    "",
+)
+  .trim()
+  .replace(/\/$/, "");
 
 type SourceTypebotRow = { id?: string; name?: string | null; publicId?: string | null };
 
@@ -20,6 +26,18 @@ const sourceHeaders = () => ({
   "content-type": "application/json",
   Authorization: `Bearer ${TYPEBOT_SOURCE_BUILDER_API_TOKEN}`,
 });
+
+const FETCH_TIMEOUT_MS = 12_000;
+
+const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
 
 const resolveSourceBuilderRoots = (): string[] => {
   const raw = TYPEBOT_SOURCE_BUILDER_API_BASE_URL.replace(/\/$/, "");
@@ -32,7 +50,7 @@ const listSourceWorkspaceTypebots = async (): Promise<SourceTypebotRow[]> => {
   if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_BUILDER_API_TOKEN) return [];
   for (const root of resolveSourceBuilderRoots()) {
     const url = `${root}/v1/typebots?workspaceId=${encodeURIComponent(TYPEBOT_SOURCE_MASTER_WORKSPACE_ID)}&limit=200`;
-    const response = await fetch(url, { method: "GET", headers: sourceHeaders() });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: sourceHeaders() });
     if (!response.ok) continue;
     const payload = (await response.json()) as { typebots?: SourceTypebotRow[]; results?: SourceTypebotRow[] };
     if (Array.isArray(payload.typebots) && payload.typebots.length > 0) return payload.typebots;
@@ -45,7 +63,7 @@ const fetchSourcePublicIdByTypebotId = async (typebotId: string): Promise<string
   if (!TYPEBOT_SOURCE_BUILDER_API_TOKEN) return "";
   for (const root of resolveSourceBuilderRoots()) {
     const url = `${root}/v1/typebots/${encodeURIComponent(typebotId)}?migrateToLatestVersion=true`;
-    const response = await fetch(url, { method: "GET", headers: sourceHeaders() });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: sourceHeaders() });
     if (!response.ok) continue;
     const payload = (await response.json()) as { typebot?: { publicId?: string | null } };
     const publicId = String(payload.typebot?.publicId ?? "").trim();

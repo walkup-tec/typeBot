@@ -192,12 +192,8 @@ const removeSystemDefaultFlowFromAllTenants = async (payload: {
 
 export const registerFlowRoutes = (app: Express) => {
   const handleSourceFlowsRequest = async (_req: Request, res: Response) => {
-    // Hotfix: never block/kill response on external sync instability.
-    try {
-      void syncSourceWorkspaceFlowsToMasterTenant();
-    } catch {
-      // best-effort: list endpoint must keep responding
-    }
+    // Sync em background: await no Typebot deixava o GET pendurado e o painel sem lista.
+    void syncSourceWorkspaceFlowsToMasterTenant().catch(() => undefined);
     const tenants = tenantRepository.list();
     const sourceTenant = tenants.find((tenant) => normalizeText(tenant.ownerEmail) === MASTER_SOURCE_EMAIL);
     if (!sourceTenant?.id) {
@@ -220,10 +216,11 @@ export const registerFlowRoutes = (app: Express) => {
       })),
     );
 
-    const activeFlows = checks.filter((item) => item.isActive).map((item) => item.flow);
-    const withTypebotAlias = activeFlows.map((flow) => ({
+    // Inclui fluxos inativos (ex.: viewer 502/500) para a Biblioteca Master não ficar vazia.
+    const withTypebotAlias = checks.map(({ flow, isActive }) => ({
       ...flow,
       typebotPublicId: typebotPublicIdFromViewerUrl(flow.url),
+      viewerUrlActive: isActive,
     }));
 
     // Regra operacional: todo fluxo ativo da matriz deve ser importado para workspaces dos assinantes.
@@ -241,6 +238,17 @@ export const registerFlowRoutes = (app: Express) => {
 
   app.get("/api/master/source-flows", handleSourceFlowsRequest);
   app.get("/api/master/system-library/source-flows", handleSourceFlowsRequest);
+
+  app.post("/api/master/system-library/sync-source", async (_req, res) => {
+    try {
+      const result = await syncSourceWorkspaceFlowsToMasterTenant();
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({
+        message: error instanceof Error ? error.message : "Falha ao sincronizar matriz Typebot.",
+      });
+    }
+  });
 
   app.get("/api/master/system-library", (_req, res) => {
     return res.status(200).json(listSystemMasterLibrary());
@@ -304,6 +312,21 @@ export const registerFlowRoutes = (app: Express) => {
 
   app.get("/api/master/flow-library", (_req, res) => {
     return res.status(200).json(loadFlowLibrary());
+  });
+
+  app.post("/api/master/tenants/:tenantId/flows/sync-workspace", async (req, res) => {
+    const tenantId = String(req.params.tenantId ?? "").trim();
+    if (!tenantId) {
+      return res.status(400).json({ message: "tenantId obrigatório." });
+    }
+    try {
+      const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({
+        message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",
+      });
+    }
   });
 
   app.get("/api/master/tenants/:tenantId/flows", async (req, res) => {
