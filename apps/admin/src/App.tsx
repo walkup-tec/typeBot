@@ -2564,20 +2564,20 @@ export function App() {
 
             {selectedTenant && masterWizardStep === 6 ? (
               <div className="tenant-profile-card">
-                <h4>Etapa 6 — Biblioteca de Fluxos</h4>
-                <p className="muted muted-subtle">
-                  Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
-                  <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
-                </p>
-                <div className="flow-list-toolbar">
+                <div className="card-section-heading card-section-heading--h4">
+                  <h4>Etapa 6 — Biblioteca de Fluxos</h4>
                   <button
                     type="button"
-                    className="ghost-btn flow-list-refresh-btn"
+                    className="ghost-btn flow-list-refresh-btn flow-list-refresh-btn--compact"
                     onClick={() => void refreshTenantFlowList(selectedTenant)}
                   >
                     Atualizar lista
                   </button>
                 </div>
+                <p className="muted muted-subtle">
+                  Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
+                  <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
+                </p>
                 {selectableFlowLibrary.some((item) => !systemDefaultLibraryIds.has(item.id)) ? (
                   <div className="grid-form">
                     <select value={selectedLibraryId} onChange={(event) => setSelectedLibraryId(event.target.value)}>
@@ -2777,10 +2777,13 @@ export function App() {
 
         {activeScreen === "masterLibrary" ? (
           <section className="card">
-            <h3>Biblioteca Master</h3>
-
-            <div className="flow-list-toolbar">
-              <button type="button" className="ghost-btn flow-list-refresh-btn" onClick={() => void loadMasterLibrarySourceFlows()}>
+            <div className="card-section-heading">
+              <h3>Biblioteca Master</h3>
+              <button
+                type="button"
+                className="ghost-btn flow-list-refresh-btn flow-list-refresh-btn--compact"
+                onClick={() => void loadMasterLibrarySourceFlows()}
+              >
                 Atualizar lista
               </button>
             </div>

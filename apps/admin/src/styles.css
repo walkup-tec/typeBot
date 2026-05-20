@@ -2342,19 +2342,32 @@ button:disabled {
   align-items: center;
 }
 
-.flow-list-toolbar {
+.card-section-heading {
   display: flex;
-  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   margin: 0 0 14px;
 }
 
-.flow-list-refresh-btn {
+.card-section-heading h3,
+.card-section-heading h4 {
+  margin: 0;
   flex: 1;
-  width: 100%;
-  max-width: 100%;
-  justify-content: center;
-  text-align: center;
-  padding: 10px 18px;
+  min-width: 0;
+}
+
+.card-section-heading--h4 {
+  margin-bottom: 10px;
+}
+
+.flow-list-refresh-btn--compact {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .master-title-display-row {
