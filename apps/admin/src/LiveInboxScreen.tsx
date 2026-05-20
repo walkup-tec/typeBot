@@ -27,6 +27,7 @@ type LiveInboxScreenProps = {
     agent: string,
     agentName?: string,
     contactName?: string,
+    sourceFlowLabel?: string,
   ) => string;
   onRefreshQueue: () => Promise<void>;
   onStatusMessage: (message: string) => void;
@@ -76,6 +77,7 @@ export function LiveInboxScreen({
       currentAgentId,
       authDisplayName || currentAgentId,
       selectedContact.contactName,
+      selectedContact.sourceFlowLabel,
     );
   }, [authDisplayName, buildAgentChatUrl, currentAgentId, selectedContact, tenantId]);
 
@@ -229,29 +231,12 @@ export function LiveInboxScreen({
 
         <main className="live-inbox-chat-pane">
           {selectedContact && selectedContact.status === "in_service" && chatUrl ? (
-            <>
-              <header className="live-inbox-chat-header">
-                <div>
-                  <h3>{selectedContact.contactName}</h3>
-                  <p className="muted muted-subtle">
-                    {selectedContact.sourceFlowLabel}
-                    {selectedContact.assignedAgentName
-                      ? ` · ${selectedContact.assignedAgentName}`
-                      : ""}
-                  </p>
-                </div>
-                <div className="live-inbox-chat-header__actions">
-                  <button type="button" className="ghost-btn" onClick={() => onOpenLeadDetail(selectedContact)}>
-                    Detalhes do lead
-                  </button>
-                </div>
-              </header>
-              <iframe
-                className="live-inbox-chat-frame"
-                title={`Chat com ${selectedContact.contactName}`}
-                src={chatUrl}
-              />
-            </>
+            <iframe
+              key={selectedContact.contactId}
+              className="live-inbox-chat-frame"
+              title={`Chat com ${selectedContact.contactName}`}
+              src={chatUrl}
+            />
           ) : (
             <div className="live-inbox-chat-empty">
               <h3>Selecione uma conversa</h3>

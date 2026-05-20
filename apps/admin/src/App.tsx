@@ -224,13 +224,17 @@ const buildHandoffAgentViewUrl = (
   agent: string,
   agentName?: string,
   contactName?: string,
+  sourceFlowLabel?: string,
 ) => {
   const encodedContactName = encodeURIComponent(contactName?.trim() || "Visitante");
-  return `${apiBase}/handoff-view?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
+  const flowQuery = sourceFlowLabel?.trim()
+    ? `&flow=${encodeURIComponent(sourceFlowLabel.trim())}`
+    : "";
+  return `${apiBase}/handoff-view?mode=agent&embed=inbox&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
     contactId,
   )}&contactName=${encodedContactName}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
     agentName?.trim() || agent,
-  )}`;
+  )}${flowQuery}`;
 };
 
 /** Fila ao vivo: iframe na API (frame-ancestors). Evita widget em host separado sem DNS/headers. */

@@ -512,6 +512,7 @@ export const registerQueueRoutes = (app: Express) => {
     const contactName = contactNameFromQuery || String(queuedContact?.contactName ?? "").trim() || "Visitante";
     const flow = String(req.query.flow ?? "Fluxo");
     const mode = String(req.query.mode ?? "visitor");
+    const embedInbox = String(req.query.embed ?? "").trim().toLowerCase() === "inbox";
     const senderRole = mode === "agent" ? "agent" : "visitor";
     const resolvedTenantIdForSession = String(queuedContact?.tenantId || tenantIdFromQuery || "").trim();
     const tenantId = resolvedTenantIdForSession;
@@ -639,8 +640,16 @@ export const registerQueueRoutes = (app: Express) => {
       --handoff-accent: ${themeUserBubbleBg};
     }
     body { margin:0; font-family: Inter, Arial, sans-serif; background:var(--handoff-page-bg); color:#111827; }
+    html, body { height:100%; }
     body.agent-screen { background:#0b1224; min-height:100vh; color:#f1f5f9; }
+    body.agent-screen.embed-inbox { background:#060b14; min-height:100%; height:100%; overflow:hidden; }
     body.agent-screen .agent-widget { width:min(500px,92vw); margin:20px auto; background:#111827; border:1px solid #1f2937; border-radius:12px; display:grid; gap:12px; padding:16px; box-sizing:border-box; }
+    body.agent-screen.embed-inbox .agent-widget { width:100%; max-width:none; height:100%; min-height:100%; margin:0; border:0; border-radius:0; padding:12px 14px 10px; display:flex; flex-direction:column; gap:10px; background:#0b1224; box-sizing:border-box; }
+    body.agent-screen.embed-inbox .widget-header { flex-shrink:0; padding-bottom:2px; border-bottom:1px solid #1e293b; }
+    body.agent-screen.embed-inbox .widget-chat { flex:1; min-height:0; max-height:none; border:0; border-radius:0; background:#0b1224; padding:10px 4px; }
+    body.agent-screen.embed-inbox .widget-input { flex-shrink:0; }
+    body.agent-screen.embed-inbox .session-meta { flex-shrink:0; margin-top:0; }
+    body.agent-screen.embed-inbox .lead-drawer-panel { height:100%; }
     body.agent-screen .widget-header { display:flex; flex-direction:row; align-items:flex-start; justify-content:space-between; gap:10px; }
     body.agent-screen .lead-header-main { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }
     body.agent-screen .lead-header-main strong { font-size:18px; line-height:1.25; word-break:break-word; }
@@ -1087,14 +1096,14 @@ export const registerQueueRoutes = (app: Express) => {
     }
   </style>
 </head>
-<body class="${isAgentMode ? "agent-screen" : ""}">
+<body class="${isAgentMode ? `agent-screen${embedInbox ? " embed-inbox" : ""}` : ""}">
   ${
     isAgentMode
       ? `<div class="agent-widget">
     <div class="widget-header">
       <div class="lead-header-main">
         <strong id="leadTitle">${escapedName}</strong>
-        <span>Você está conversando com o visitante em tempo real</span>
+        <span>${embedInbox ? `${escapedFlow} · ${tenantDisplayName.replace(/</g, "&lt;").replace(/>/g, "&gt;")}` : "Você está conversando com o visitante em tempo real"}</span>
       </div>
       <div class="lead-header-actions">
         <button type="button" id="leadAttachmentsHeaderButton" class="lead-info-button" title="Anexos do lead" aria-label="Abrir anexos do lead">
