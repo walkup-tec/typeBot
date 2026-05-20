@@ -161,11 +161,16 @@ const resolveQueueItemAssignedAgentName = (
   );
 };
 
+/** API pública quando o build não injetou VITE_API_BASE_URL (Easypanel). */
+const PRODUCTION_API_BASE_BY_PAINEL_HOST: Record<string, string> = {
+  "painel.chattypebot.com": "https://typebot-api-typebot-crm.achpyp.easypanel.host",
+};
+
 /**
  * Base da API usada pelo painel.
- * 1) Opcional em runtime (útil se o build Easypanel não injetou VITE_*): antes do bundle, define
- *    `window.__TYPEBOT_SAAS_API_BASE__ = "https://..."` (ex.: script inline no index.html servido).
- * 2) Build: `VITE_API_BASE_URL`
+ * 1) Runtime: `window.__TYPEBOT_SAAS_API_BASE__` (override no HTML servido).
+ * 2) Build: `VITE_API_BASE_URL` (obrigatório no Easypanel — fase de build do painel).
+ * 3) Host conhecido do painel em produção (fallback se o build ficou em localhost).
  */
 function resolveApiBase(): string {
   if (typeof window !== "undefined") {
@@ -176,6 +181,11 @@ function resolveApiBase(): string {
   }
   const fromVite = import.meta.env.VITE_API_BASE_URL?.trim();
   if (fromVite) return fromVite.replace(/\/$/, "");
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname.trim().toLowerCase();
+    const fromHost = PRODUCTION_API_BASE_BY_PAINEL_HOST[host];
+    if (fromHost) return fromHost.replace(/\/$/, "");
+  }
   return "http://localhost:3333";
 }
 
