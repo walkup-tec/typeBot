@@ -1,3 +1,9 @@
+## 2026-05-20 - Viewer Typebot HTTP 500 — env ausente (confirmado)
+
+- **Log viewer:** `Invalid environment variables` → `DATABASE_URL`, `ENCRYPTION_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_VIEWER_URL` Required.
+- **Correção:** copiar env do builder para `typebot-walkup-viewer`; `NEXTAUTH_URL` = URL do viewer; restart.
+- **Doc:** `doc/EASYPANEL-TYPEBOT-ENV-REFERENCIA.md` (bloco viewer completo).
+
 ## 2026-05-20 - Biblioteca fluxos assinante = workspace Typebot (filtro por workspaceId)
 
 - **Sintoma:** Drax 1 bot no builder; painel 4 fluxos + catálogo Master (CLT, Type Bot).

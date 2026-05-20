@@ -619,10 +619,11 @@ const applyTenantMetadataToTypebotSchema = (
       ? ({ ...(metadataRaw as Record<string, unknown>) } as Record<string, unknown>)
       : {};
 
-  if (title) metadata.title = title;
-  if (iconMetadata) metadata.favIconUrl = iconMetadata;
-  if (imageMetadata) metadata.imageUrl = imageMetadata;
-  if (description) metadata.description = description;
+  // Não sobrescreve metadados já definidos no builder (ex.: compartilhamento WhatsApp/OG).
+  if (title && !String(metadata.title ?? "").trim()) metadata.title = title;
+  if (iconMetadata && !String(metadata.favIconUrl ?? "").trim()) metadata.favIconUrl = iconMetadata;
+  if (imageMetadata && !String(metadata.imageUrl ?? "").trim()) metadata.imageUrl = imageMetadata;
+  if (description && !String(metadata.description ?? "").trim()) metadata.description = description;
 
   settings.metadata = metadata;
   next.settings = settings;

@@ -1047,6 +1047,7 @@ export function App() {
         message?: string;
         imported?: number;
         pruned?: number;
+        metadataRepublished?: number;
       };
       if (!syncResponse.ok) {
         setStatusMessage(syncPayload.message ?? "Falha ao sincronizar fluxos do Typebot.");
@@ -1055,6 +1056,9 @@ export function App() {
       const parts: string[] = [];
       if (syncPayload.imported && syncPayload.imported > 0) parts.push(`${syncPayload.imported} importado(s)`);
       if (syncPayload.pruned && syncPayload.pruned > 0) parts.push(`${syncPayload.pruned} removido(s)`);
+      if (syncPayload.metadataRepublished && syncPayload.metadataRepublished > 0) {
+        parts.push(`${syncPayload.metadataRepublished} republicado(s) para compartilhamento`);
+      }
       if (parts.length > 0) setStatusMessage(`Lista atualizada: ${parts.join("; ")}.`);
       await loadFlows(tenantId);
       const imported = Number(syncPayload.imported ?? 0);

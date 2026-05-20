@@ -30,6 +30,7 @@ import {
   refreshTenantFlowViewerUrls,
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
+import { ensureTypebotShareMetadataPublished } from "../typebot/typebot-share-metadata.service";
 import {
   removeSystemDefaultFromSubscriberWorkspaces,
   syncSystemDefaultsToRealTypebotWorkspace,
@@ -305,6 +306,23 @@ export const registerFlowRoutes = (app: Express) => {
     } catch (error) {
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",
+      });
+    }
+  });
+
+  app.post("/api/master/flows/:flowId/publish-share-metadata", async (req, res) => {
+    const flow = flowRepository.getById(String(req.params.flowId ?? "").trim());
+    if (!flow) return res.status(404).json({ message: "Flow not found" });
+    const remoteId = String(flow.typebotRemoteId ?? "").trim();
+    if (!remoteId) {
+      return res.status(400).json({ message: "Fluxo sem vínculo com typebot no workspace." });
+    }
+    try {
+      const result = await ensureTypebotShareMetadataPublished(remoteId);
+      return res.status(200).json({ flowId: flow.id, ...result });
+    } catch (error) {
+      return res.status(500).json({
+        message: error instanceof Error ? error.message : "Falha ao republicar metadados.",
       });
     }
   });

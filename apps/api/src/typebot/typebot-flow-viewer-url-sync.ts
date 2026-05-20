@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import { flowRepository, tenantRepository } from "../lib/repositories";
+import { ensureTypebotShareMetadataPublished } from "./typebot-share-metadata.service";
 import { getFlowLibraryItem } from "../flows/flow-library.repository";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
 import type { SavedFlow } from "../flows/flow.repository";
@@ -481,6 +482,7 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
 export type TenantWorkspaceFlowImportResult = {
   imported: number;
   pruned: number;
+  metadataRepublished: number;
   workspaceId: string;
   workspaceName?: string;
   workspaceCandidates: number;
@@ -575,6 +577,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   ): TenantWorkspaceFlowImportResult => ({
     imported: 0,
     pruned: 0,
+    metadataRepublished: 0,
     workspaceId: "",
     workspaceCandidates,
     typebotsScanned: 0,
@@ -611,6 +614,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     return {
       imported: 0,
       pruned: 0,
+      metadataRepublished: 0,
       workspaceId,
       workspaceName,
       workspaceCandidates: workspaceCandidates.length,
@@ -627,6 +631,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     return {
       imported: 0,
       pruned: 0,
+      metadataRepublished: 0,
       workspaceId,
       workspaceName,
       workspaceCandidates: workspaceCandidates.length,
@@ -654,6 +659,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     return {
       imported: 0,
       pruned,
+      metadataRepublished: 0,
       workspaceId,
       workspaceName,
       workspaceCandidates: workspaceCandidates.length,
@@ -698,9 +704,18 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   pruned += await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
   await alignTenantFlowsWithWorkspaceRows(tenantId, rows, viewerBase);
 
+  let metadataRepublished = 0;
+  for (const row of rows) {
+    const typebotId = String(row.id ?? "").trim();
+    if (!typebotId) continue;
+    const result = await ensureTypebotShareMetadataPublished(typebotId);
+    if (result.published) metadataRepublished += 1;
+  }
+
   return {
     imported,
     pruned,
+    metadataRepublished,
     workspaceId,
     workspaceName,
     workspaceCandidates: workspaceCandidates.length,
