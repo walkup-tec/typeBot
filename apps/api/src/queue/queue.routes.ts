@@ -513,8 +513,11 @@ export const registerQueueRoutes = (app: Express) => {
     const flow = String(req.query.flow ?? "Fluxo");
     const mode = String(req.query.mode ?? "visitor");
     const senderRole = mode === "agent" ? "agent" : "visitor";
-    const resolvedTenantIdForSession = tenantIdFromQuery || queuedContact?.tenantId || "";
+    const resolvedTenantIdForSession = String(queuedContact?.tenantId || tenantIdFromQuery || "").trim();
     const tenantId = resolvedTenantIdForSession;
+    const initialVisitorChatEnabled =
+      mode !== "agent" &&
+      (queuedContact?.status === "in_service" || Boolean(String(queuedContact?.assignedAgentId ?? "").trim()));
     const tenant = tenantRepository.getById(tenantId);
     const tenantTheme = tenant?.defaultChatTheme;
     const tenantDisplayName =
