@@ -407,6 +407,7 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
 
 export type TenantWorkspaceFlowImportResult = {
   imported: number;
+  pruned: number;
   workspaceId: string;
   workspaceName?: string;
   workspaceCandidates: number;
@@ -415,6 +416,76 @@ export type TenantWorkspaceFlowImportResult = {
   builderApiBaseUrl?: string;
   workspaceListHttpStatus?: number;
   workspaceNames?: string[];
+};
+
+/**
+ * Biblioteca local do assinante = espelho estrito do workspace Typebot.
+ * Mantém só registros cujo `typebotRemoteId` existe no builder; remove o resto (fila, URL antiga, duplicata).
+ */
+const pruneTenantFlowsToMatchWorkspace = async (
+  tenantId: string,
+  rows: TypebotListRow[],
+): Promise<number> => {
+  const remoteIds = new Set<string>();
+  for (const row of rows) {
+    const id = String(row.id ?? "").trim();
+    if (id) remoteIds.add(id);
+  }
+
+  const flows = flowRepository.listByTenant(tenantId);
+  const keptRemoteIds = new Set<string>();
+  const toRemove: string[] = [];
+
+  for (const flow of flows) {
+    const remoteId = String(flow.typebotRemoteId ?? "").trim();
+    if (!remoteId || !remoteIds.has(remoteId)) {
+      toRemove.push(flow.id);
+      continue;
+    }
+    if (keptRemoteIds.has(remoteId)) {
+      toRemove.push(flow.id);
+    } else {
+      keptRemoteIds.add(remoteId);
+    }
+  }
+
+  for (const id of toRemove) {
+    flowRepository.removeById(id);
+  }
+  return toRemove.length;
+};
+
+/** Atualiza nome/URL/publicId dos fluxos locais a partir do workspace Typebot. */
+const alignTenantFlowsWithWorkspaceRows = async (
+  tenantId: string,
+  rows: TypebotListRow[],
+  viewerBase: string,
+): Promise<void> => {
+  for (const row of rows) {
+    const typebotId = String(row.id ?? "").trim();
+    const displayName = String(row.name ?? "").trim();
+    if (!typebotId || !displayName) continue;
+
+    let publicId = (await resolvePublicIdForRow(row)) ?? "";
+    if (!publicId) publicId = derivePublicIdFromRowName(row);
+    if (!publicId) continue;
+
+    const viewerUrl = buildViewerUrl(viewerBase, publicId);
+    const match = flowRepository.listByTenant(tenantId).find((f) => String(f.typebotRemoteId ?? "").trim() === typebotId);
+    if (!match) continue;
+
+    const patch: Partial<SavedFlow> = {
+      displayLabel: displayName,
+      url: viewerUrl,
+      typebotPublicId: publicId,
+    };
+    const sameLabel = normalizeText(match.displayLabel ?? "") === normalizeText(displayName);
+    const sameUrl = normalizeText(match.url) === normalizeText(viewerUrl);
+    const samePid = normalizeText(match.typebotPublicId ?? "") === normalizeText(publicId);
+    if (!sameLabel || !sameUrl || !samePid) {
+      flowRepository.updateById(match.id, patch);
+    }
+  }
 };
 
 /**
@@ -430,6 +501,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     probe?: WorkspaceListProbe,
   ): TenantWorkspaceFlowImportResult => ({
     imported: 0,
+    pruned: 0,
     workspaceId: "",
     workspaceCandidates,
     typebotsScanned: 0,
@@ -459,6 +531,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   if (!viewerBase) {
     return {
       imported: 0,
+      pruned: 0,
       workspaceId,
       workspaceName,
       workspaceCandidates: workspaceCandidates.length,
@@ -471,9 +544,14 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   }
 
   const rows = await listWorkspaceTypebots(workspaceId);
+  let pruned = await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
+  const existingFlows = [...flowRepository.listByTenant(tenantId)];
+  let imported = 0;
+
   if (rows.length === 0) {
     return {
       imported: 0,
+      pruned,
       workspaceId,
       workspaceName,
       workspaceCandidates: workspaceCandidates.length,
@@ -484,9 +562,6 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
       workspaceNames: workspaceProbe.workspaces.map((workspace) => workspace.name),
     };
   }
-
-  const existingFlows = [...flowRepository.listByTenant(tenantId)];
-  let imported = 0;
 
   for (const row of rows) {
     const typebotId = String(row.id ?? "").trim();
@@ -518,13 +593,17 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     imported += 1;
   }
 
+  pruned += await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
+  await alignTenantFlowsWithWorkspaceRows(tenantId, rows, viewerBase);
+
   return {
     imported,
+    pruned,
     workspaceId,
     workspaceName,
     workspaceCandidates: workspaceCandidates.length,
     typebotsScanned: rows.length,
-    skipReason: imported === 0 ? "no_new_active_typebots" : undefined,
+    skipReason: imported === 0 && pruned === 0 ? "no_new_active_typebots" : undefined,
     builderApiBaseUrl: workspaceProbe.builderApiBaseUrl,
     workspaceListHttpStatus: workspaceProbe.lastHttpStatus,
     workspaceNames: workspaceProbe.workspaces.map((workspace) => workspace.name),

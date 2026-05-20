@@ -1,3 +1,19 @@
+## 2026-05-20 - Biblioteca fluxos assinante = workspace Typebot (prune estrito)
+
+- **Sintoma:** Drax com 1 bot no builder; painel mostrava 4 fluxos (Type Bot, CLT, Drax duplicado).
+- **Causa:** registros antigos em `saved-flows.json` sem `typebotRemoteId` válido; prune anterior mantinha por `publicId`.
+- **Correção:** prune só por `typebotRemoteId` no workspace; prune antes do import; alinha nome/URL; sem `refreshTenantFlowViewerUrls` se já tem workspace.
+- **Commit sugerido:** `deploy(api): prune-estrito-fluxos-workspace-typebot-alinha-drax`
+- **Deploy:** `api-typebot-crm` (obrigatório); `painel-typebot-crm` (mensagem sync com removidos). Drax → Etapa 6 → **Atualizar lista**.
+
+## 2026-05-20 - Importar fluxo Drax (`drax-sistemas-px5k4a3`) no Typebot
+
+- **Pedido:** importar viewer `.../drax-sistemas-px5k4a3` para workspace Drax `cmohgh7ll0014ru1cwhg90xnp` (builder vazio).
+- **Registro SaaS (backup):** `typebotRemoteId` `cmopzmivk0025ru1czpx5k4a3`, `publicId` `drax-sistemas-px5k4a3`.
+- **Script:** `scripts/import-typebot-fluxo-para-drax.ps1` — GET schema → POST `/v1/typebots/import` → PATCH `publicId` → publish → opcional `sync-workspace` no tenant Drax.
+- **Execução:** requer `TYPEBOT_TOKEN` (mesmo `TYPEBOT_BUILDER_API_TOKEN` da API). Não rodado nesta sessão (token ausente no shell).
+- **Log:** `doc/LOG-2026-05-20__import-fluxo-drax-typebot.md`
+
 ## 2026-05-20 - Biblioteca Master vazia (sync bloqueante + painel antigo)
 
 - **Sintoma:** painel sem botão Atualizar/Sincronizar; lista vazia; mensagem UI antiga em produção.

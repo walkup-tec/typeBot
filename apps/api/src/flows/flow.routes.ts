@@ -320,12 +320,18 @@ export const registerFlowRoutes = (app: Express) => {
     } catch {
       // realinha publicId após renomear bot no Typebot
     }
-    try {
-      await refreshTenantFlowViewerUrls(tenantId);
-    } catch {
-      // listagem ainda entrega; URLs podem ser corrigidas no "Copiar link" ou após sync
+    const tenant = tenantRepository.getById(tenantId);
+    const hasTypebotWorkspace = Boolean(String(tenant?.typebotWorkspaceId ?? "").trim());
+    if (!hasTypebotWorkspace) {
+      try {
+        await refreshTenantFlowViewerUrls(tenantId);
+      } catch {
+        // listagem ainda entrega; URLs podem ser corrigidas no "Copiar link" ou após sync
+      }
     }
-    ensureTenantFlowLibraryFromQueue(tenantId);
+    if (!hasTypebotWorkspace) {
+      ensureTenantFlowLibraryFromQueue(tenantId);
+    }
     try {
       await selfHealTenantFlowViewerUrls(tenantId);
     } catch {

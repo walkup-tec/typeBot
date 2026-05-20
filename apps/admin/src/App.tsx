@@ -923,18 +923,26 @@ export function App() {
     const payload = (await response.json().catch(() => ({}))) as {
       message?: string;
       imported?: number;
+      pruned?: number;
       skipReason?: string;
     };
     if (!response.ok) {
       setStatusMessage(payload.message ?? "Falha ao sincronizar fluxos do Typebot.");
       return;
     }
+    const parts: string[] = [];
     if (payload.imported && payload.imported > 0) {
-      setStatusMessage(`${payload.imported} fluxo(s) importado(s) do workspace Typebot.`);
+      parts.push(`${payload.imported} importado(s)`);
+    }
+    if (payload.pruned && payload.pruned > 0) {
+      parts.push(`${payload.pruned} removido(s) (fora do workspace)`);
+    }
+    if (parts.length > 0) {
+      setStatusMessage(`Sincronização: ${parts.join("; ")}.`);
     } else if (payload.skipReason) {
-      setStatusMessage(`Nenhum fluxo novo importado (${payload.skipReason}).`);
+      setStatusMessage(`Nenhuma alteração (${payload.skipReason}).`);
     } else {
-      setStatusMessage("Sincronização concluída. Nenhum fluxo novo no workspace.");
+      setStatusMessage("Sincronização concluída. Lista alinhada ao workspace Typebot.");
     }
     await loadFlows(tenantId);
   }
