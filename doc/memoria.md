@@ -1,3 +1,10 @@
+## 2026-05-20 - Chat Fila ao vivo / Lead: iframe bloqueado (X-Frame-Options)
+
+- **Sintoma:** ícone de imagem quebrada no painel (Fila ao vivo); lead sem chat.
+- **Causa:** `X-Frame-Options: SAMEORIGIN` na API — painel `painel.*` embute `app.*/handoff-view` (origem diferente). Opcional: `VITE_WIDGET_BASE_URL` → `widget.chattypebot.com` sem DNS.
+- **Correção:** `/handoff-view` usa CSP `frame-ancestors` (painel, app, api); Fila ao vivo sempre `apiBase/handoff-view`; fallback API painel → `https://app.chattypebot.com`.
+- **Deploy:** rebuild **api-typebot-crm** + **painel-typebot-crm** (commit handoff iframe).
+
 ## 2026-05-20 - Handoff: GET /api/typebot/handoff (Redirect Typebot)
 
 - **Causa:** bloco **Redirect** do Typebot abre URL no browser com **GET**; endpoint só tinha **POST** → 404 em `https://app.chattypebot.com/api/typebot/handoff`.

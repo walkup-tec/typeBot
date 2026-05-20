@@ -38,6 +38,9 @@ TYPEBOT_HANDOFF_WEBHOOK_URL=https://api.chattypebot.com/api/typebot/handoff
 
 # Widget embed / links internos do painel (se usares estes fluxos).
 WIDGET_BASE_URL=https://widget.chattypebot.com
+
+# Iframe do painel (Fila ao vivo) embute /handoff-view — hosts permitidos:
+FRAME_ANCESTORS=https://painel.chattypebot.com https://app.chattypebot.com
 ```
 
 Mantém o resto (`TYPEBOT_BUILDER_API_*`, SMTP, etc.) como já configuraste para ambiente real.

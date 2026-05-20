@@ -172,7 +172,7 @@ const resolveQueueItemAssignedAgentName = (
 
 /** API pública quando o build não injetou VITE_API_BASE_URL (Easypanel). */
 const PRODUCTION_API_BASE_BY_PAINEL_HOST: Record<string, string> = {
-  "painel.chattypebot.com": "https://typebot-api-typebot-crm.achpyp.easypanel.host",
+  "painel.chattypebot.com": "https://app.chattypebot.com",
 };
 
 /**
@@ -218,7 +218,7 @@ const widgetBaseUrl =
   !/localhost|127\.0\.0\.1|loca\.lt/i.test(widgetBaseUrlFromEnv)
     ? widgetBaseUrlFromEnv.replace(/\/$/, "")
     : "";
-const getAgentViewUrl = (
+const buildHandoffAgentViewUrl = (
   tenantId: string,
   contactId: string,
   agent: string,
@@ -226,17 +226,33 @@ const getAgentViewUrl = (
   contactName?: string,
 ) => {
   const encodedContactName = encodeURIComponent(contactName?.trim() || "Visitante");
-  return widgetBaseUrl
-    ? `${widgetBaseUrl}/?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
-        contactId,
-      )}&contactName=${encodedContactName}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
-        agentName?.trim() || agent,
-      )}&apiBase=${encodeURIComponent(apiBase)}`
-    : `${apiBase}/handoff-view?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
-        contactId,
-      )}&contactName=${encodedContactName}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
-        agentName?.trim() || agent,
-      )}`;
+  return `${apiBase}/handoff-view?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
+    contactId,
+  )}&contactName=${encodedContactName}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
+    agentName?.trim() || agent,
+  )}`;
+};
+
+/** Fila ao vivo: iframe na API (frame-ancestors). Evita widget em host separado sem DNS/headers. */
+const getAgentViewUrl = buildHandoffAgentViewUrl;
+
+/** Nova aba: pode usar widget público quando configurado. */
+const getAgentViewUrlNewTab = (
+  tenantId: string,
+  contactId: string,
+  agent: string,
+  agentName?: string,
+  contactName?: string,
+) => {
+  const encodedContactName = encodeURIComponent(contactName?.trim() || "Visitante");
+  if (widgetBaseUrl) {
+    return `${widgetBaseUrl}/?mode=agent&tenantId=${encodeURIComponent(tenantId)}&contactId=${encodeURIComponent(
+      contactId,
+    )}&contactName=${encodedContactName}&agentId=${encodeURIComponent(agent)}&agentName=${encodeURIComponent(
+      agentName?.trim() || agent,
+    )}&apiBase=${encodeURIComponent(apiBase)}`;
+  }
+  return buildHandoffAgentViewUrl(tenantId, contactId, agent, agentName, contactName);
 };
 const getTenantUserTypeLabel = (ownerEmail: string): "Master do Sistema" | "Master Assinante" =>
   ownerEmail.trim().toLowerCase() === SYSTEM_MASTER_EMAIL ? "Master do Sistema" : "Master Assinante";
@@ -1456,7 +1472,7 @@ export function App() {
 
     setStatusMessage("Atendimento assumido com sucesso");
     window.open(
-      getAgentViewUrl(selectedTenant, contactId, resolvedAgentId, loggedAgentName, contactName),
+      getAgentViewUrlNewTab(selectedTenant, contactId, resolvedAgentId, loggedAgentName, contactName),
       "_blank",
     );
     await loadQueue(selectedTenant);

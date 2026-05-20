@@ -97,15 +97,44 @@ app.use(
   }),
 );
 
+const DEFAULT_FRAME_ANCESTORS = [
+  "'self'",
+  "https://painel.chattypebot.com",
+  "https://app.chattypebot.com",
+  "https://api.chattypebot.com",
+  "https://chattypebot.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+const resolveFrameAncestorsDirective = (): string => {
+  const fromEnv = String(process.env.FRAME_ANCESTORS ?? process.env.HANDOFF_FRAME_ANCESTORS ?? "").trim();
+  const list = fromEnv
+    ? fromEnv.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean)
+    : DEFAULT_FRAME_ANCESTORS;
+  return list.join(" ");
+};
+
+/** Rotas embutidas no iframe do painel (Fila ao vivo). */
+const isEmbeddableChatSurface = (path: string) => path === "/handoff-view";
+
 /**
  * Reforço HTTPS no browser: HSTS (após visita HTTPS válida), CSP upgrade-insecure-requests,
  * cabeçalhos básicos. Não substitui certificado TLS nem remove avisos de conteúdo misto no HTML de outros hosts.
  */
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Content-Security-Policy", "upgrade-insecure-requests");
+  const embeddable = isEmbeddableChatSurface(req.path);
+  if (embeddable) {
+    res.setHeader(
+      "Content-Security-Policy",
+      `frame-ancestors ${resolveFrameAncestorsDirective()}; upgrade-insecure-requests`,
+    );
+  } else {
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Content-Security-Policy", "upgrade-insecure-requests");
+  }
 
   const forwardedProto = String(req.headers["x-forwarded-proto"] ?? "")
     .split(",")[0]
