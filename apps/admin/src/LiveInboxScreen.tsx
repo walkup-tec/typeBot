@@ -74,7 +74,9 @@ export function LiveInboxScreen({
   const chatUrl = useMemo(() => {
     if (!selectedContact) return "";
     const canOpenChat =
-      selectedContact.status === "in_service" || pendingChatContactId === selectedContact.contactId;
+      selectedContact.status === "in_service" ||
+      selectedContact.status === "closed" ||
+      pendingChatContactId === selectedContact.contactId;
     if (!canOpenChat) return "";
     return buildAgentChatUrl(
       tenantId,
@@ -310,13 +312,6 @@ export function LiveInboxScreen({
               title={`Chat com ${selectedContact.contactName}`}
               src={chatUrl}
             />
-          ) : selectedContact && selectedContact.status === "closed" ? (
-            <div className="live-inbox-chat-empty">
-              <h3>Atendimento finalizado</h3>
-              <p className="muted">
-                Este lead foi encerrado. O histórico permanece na conversa; novas mensagens não são aceitas.
-              </p>
-            </div>
           ) : (
             <div className="live-inbox-chat-empty">
               <h3>Selecione uma conversa</h3>

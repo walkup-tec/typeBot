@@ -1198,7 +1198,7 @@ export const registerQueueRoutes = (app: Express) => {
   ${
     isAgentMode
       ? `<div class="agent-widget${contactClosed ? " is-ended" : ""}" id="agentWidgetRoot">
-    <p class="agent-ended-banner" id="agentEndedBanner">Este atendimento foi encerrado. O lead saiu da fila ao vivo.</p>
+    <p class="agent-ended-banner" id="agentEndedBanner">Atendimento encerrado. Histórico e dados do lead permanecem disponíveis; o envio de mensagens está desativado.</p>
     <div class="widget-header">
       <div class="lead-header-main">
         <div class="lead-header-top">
@@ -1758,6 +1758,7 @@ export const registerQueueRoutes = (app: Express) => {
         imagePicker.value = "";
         if (!file || !String(file.type || "").startsWith("image/")) return;
         if (!isAgentMode && !visitorChatEnabled) return;
+        if (isAgentMode && agentWidgetRoot && agentWidgetRoot.classList.contains("is-ended")) return;
         try {
           const raw = await readFileAsDataUrl(file);
           const compressed = await compressImageDataUrl(raw);
@@ -1770,6 +1771,7 @@ export const registerQueueRoutes = (app: Express) => {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!isAgentMode && !visitorChatEnabled) return;
+      if (isAgentMode && agentWidgetRoot && agentWidgetRoot.classList.contains("is-ended")) return;
       const content = messageInput.value.trim();
       if (!content) return;
       await sendMessageContent(content);

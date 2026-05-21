@@ -1,3 +1,8 @@
+## 2026-05-20 - Chat abre em lead finalizado (somente leitura)
+
+- Fila ao vivo: iframe do handoff abre também para `status: closed`.
+- Handoff: banner de encerrado; input/anexo bloqueados; histórico e drawer do lead ativos.
+
 ## 2026-05-20 - Aba Hoje na Fila ao vivo
 
 - Nova aba **Hoje** antes de Minhas: leads com `scheduledAt` no dia atual (America/Sao_Paulo).
