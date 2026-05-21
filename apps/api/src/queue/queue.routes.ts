@@ -637,6 +637,15 @@ export const registerQueueRoutes = (app: Express) => {
     const isAgentMode = mode === "agent";
     const tenantPrioritiesJson = isAgentMode && tenantId ? JSON.stringify(priorityService.listByTenant(tenantId)) : "[]";
     const tenantLabelsJson = isAgentMode && tenantId ? JSON.stringify(labelService.listByTenant(tenantId)) : "[]";
+    const initialQueueContactForHeader = JSON.stringify(
+      queuedContact
+        ? {
+            contactName: queuedContact.contactName,
+            leadWhatsapp: queuedContact.leadWhatsapp,
+            leadContext: queuedContact.leadContext ?? {},
+          }
+        : null,
+    );
     const initialLeadMetaJson = JSON.stringify({
       priorityId: queuedContact?.priorityId ?? null,
       priorityName: queuedContact?.priorityName ?? null,
@@ -704,6 +713,9 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-meta-icon-btn { width:34px; height:34px; min-width:34px; border-radius:999px; border:1px solid #334155; background:#0f172a; color:#cbd5e1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
     body.agent-screen .lead-meta-icon-btn:hover, body.agent-screen .lead-meta-icon-btn:focus-visible { border-color:#14b8a6; color:#5eead4; outline:none; }
     body.agent-screen .lead-meta-icon-btn.is-active { border-color:#14b8a6; background:rgba(20,184,166,.14); color:#5eead4; }
+    body.agent-screen .lead-meta-icon-btn.lead-whatsapp-btn { border-color:#15803d; background:rgba(34,197,94,.18); color:#4ade80; text-decoration:none; }
+    body.agent-screen .lead-meta-icon-btn.lead-whatsapp-btn:hover, body.agent-screen .lead-meta-icon-btn.lead-whatsapp-btn:focus-visible { border-color:#22c55e; background:rgba(34,197,94,.32); color:#bbf7d0; outline:none; }
+    body.agent-screen .lead-meta-icon-btn.is-hidden { display:none !important; }
     body.agent-screen .lead-meta-icon-btn svg { width:17px; height:17px; fill:currentColor; }
     body.agent-screen .lead-meta-badge { display:inline-flex; align-items:center; gap:6px; max-width:160px; border:1px solid #334155; border-radius:999px; padding:4px 10px; font-size:11px; font-weight:600; color:#e2e8f0; background:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     body.agent-screen .lead-meta-badge.is-hidden { display:none; }
@@ -1217,6 +1229,9 @@ export const registerQueueRoutes = (app: Express) => {
               <button type="button" id="leadScheduleBtn" class="lead-meta-icon-btn" title="Agendar retorno" aria-label="Agendar data com o lead" aria-haspopup="dialog" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h2v2H7V3Zm8 0h2v2h-2V3ZM5 7h14v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7Zm2 2v10h10V9H7Zm2 2h2v2H9v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H9v-2Zm4 0h2v2h-2v-2Z"/></svg>
               </button>
+              <a id="leadWhatsappHeaderButton" class="lead-meta-icon-btn lead-whatsapp-btn is-hidden" href="#" target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp Web" aria-label="Iniciar conversa no WhatsApp Web">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              </a>
               <span id="leadScheduleBadge" class="lead-meta-badge is-hidden" title="Agendamento"></span>
               <div id="leadScheduleMenu" class="lead-meta-menu lead-meta-menu--schedule" role="dialog" aria-label="Agendamento">
                 <label class="lead-field" style="margin:0;"><span style="color:#94a3b8;font-size:12px;font-weight:600;">Data e hora do retorno</span>
@@ -2181,6 +2196,7 @@ export const registerQueueRoutes = (app: Express) => {
       );
       sessionMeta.textContent = formatSessionMetaLabel(startedAt, agentLabel);
       applyLeadMetaFromContact(contact);
+      updateLeadWhatsappHeaderButton(contact);
     }
 
     function getLeadInitials(value) {
@@ -2216,6 +2232,36 @@ export const registerQueueRoutes = (app: Express) => {
       const direct = String(leadWhatsapp || "").trim();
       if (direct) return direct;
       return pickLeadWhatsappFromContext(context);
+    }
+
+    function normalizeWhatsappPhoneDigits(value) {
+      let digits = String(value || "").replace(/\\D/g, "");
+      if (!digits) return "";
+      if (digits.startsWith("00")) digits = digits.slice(2);
+      if (digits.length >= 10 && digits.length <= 11 && !digits.startsWith("55")) {
+        digits = "55" + digits;
+      }
+      return digits.length >= 10 ? digits : "";
+    }
+
+    function buildLeadWhatsappWebUrl(phoneDigits, contactName) {
+      const greeting = "Olá" + (contactName ? " " + contactName : "") + "!";
+      return "https://web.whatsapp.com/send?phone=" + encodeURIComponent(phoneDigits) + "&text=" + encodeURIComponent(greeting);
+    }
+
+    function updateLeadWhatsappHeaderButton(contact) {
+      const button = document.getElementById("leadWhatsappHeaderButton");
+      if (!button) return;
+      const raw = resolveLeadWhatsappDisplay(contact?.leadWhatsapp, contact?.leadContext);
+      const digits = normalizeWhatsappPhoneDigits(raw);
+      if (!digits) {
+        button.classList.add("is-hidden");
+        button.setAttribute("href", "#");
+        return;
+      }
+      const name = String(contact?.contactName || leadTitle?.textContent || "").trim();
+      button.href = buildLeadWhatsappWebUrl(digits, name);
+      button.classList.remove("is-hidden");
     }
 
     function isLeadCpfContextKey(key) {
@@ -2480,6 +2526,7 @@ export const registerQueueRoutes = (app: Express) => {
 
     function applyLeadContactToDrawer(contact) {
       leadDrawerContact = contact;
+      updateLeadWhatsappHeaderButton(contact);
       if (leadNameInput) leadNameInput.value = String(contact?.contactName || "");
       if (leadWhatsappInput) {
         leadWhatsappInput.value = resolveLeadWhatsappDisplay(contact?.leadWhatsapp, contact?.leadContext);
@@ -2737,6 +2784,10 @@ export const registerQueueRoutes = (app: Express) => {
     if (isAgentMode) {
       setVisitorChatEnabled(true);
       initLeadMetaControls();
+      const initialQueueContactForHeader = ${initialQueueContactForHeader};
+      if (initialQueueContactForHeader) {
+        updateLeadWhatsappHeaderButton(initialQueueContactForHeader);
+      }
     } else {
       setVisitorChatEnabled(visitorChatEnabled);
     }
