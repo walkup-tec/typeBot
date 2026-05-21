@@ -649,6 +649,8 @@ export const registerQueueRoutes = (app: Express) => {
         ? `<img class="avatar" src="${profileImageUrl.replace(/"/g, "&quot;")}" alt="Bot" />`
         : `<div class="avatar-fallback">bot</div>`;
 
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     return res.status(200).send(`<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -681,8 +683,10 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .widget-header span { color:#94a3b8; font-size:14px; }
     body.agent-screen .lead-info-button { width:38px; height:38px; min-width:38px; flex-shrink:0; border-radius:999px; border:1px solid #334155; background:#0f172a; color:#cbd5e1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
     body.agent-screen .lead-info-button--active { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
-    body.agent-screen .lead-info-button.lead-end-service-button:hover, body.agent-screen .lead-info-button.lead-end-service-button:focus-visible { border-color:#ef4444; background:rgba(239,68,68,.14); color:#fca5a5; }
+    body.agent-screen .lead-info-button.lead-end-service-button { border-color:#7f1d1d; color:#f87171; }
+    body.agent-screen .lead-info-button.lead-end-service-button:hover, body.agent-screen .lead-info-button.lead-end-service-button:focus-visible { border-color:#ef4444; background:rgba(239,68,68,.18); color:#fecaca; }
     body.agent-screen .lead-info-button svg { width:18px; height:18px; fill:currentColor; }
+    body.agent-screen .lead-end-service-button svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
     body.agent-screen .agent-widget.is-ended .widget-chat, body.agent-screen .agent-widget.is-ended .widget-input { opacity:.55; pointer-events:none; }
     body.agent-screen .agent-ended-banner { display:none; margin:0 0 8px; padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#94a3b8; font-size:13px; }
     body.agent-screen .agent-widget.is-ended .agent-ended-banner { display:block; }
@@ -1191,9 +1195,6 @@ export const registerQueueRoutes = (app: Express) => {
         ${embedInbox ? "" : '<span class="lead-header-sub">Você está conversando com o visitante em tempo real</span>'}
       </div>
       <div class="lead-header-actions">
-        <button type="button" id="leadEndServiceButton" class="lead-info-button lead-end-service-button" title="Encerrar atendimento" aria-label="Encerrar atendimento">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10zm-1.41 14.41 6.59-6.58L17 11.83l-6.58 6.59-1.41-1.42L14.17 12l-4.58-4.59 1.41-1.41L12 10.59l4.59-4.58 1.41 1.41L13.41 12l4.58 4.59z"/></svg>
-        </button>
         <button type="button" id="leadAttachmentsHeaderButton" class="lead-info-button" title="Anexos do lead" aria-label="Abrir anexos do lead">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5v9a4.5 4.5 0 0 1-9 0v-10a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V7h-1.5v8.5a3 3 0 0 0 6 0v-10a4.5 4.5 0 0 0-9 0v10a6 6 0 0 0 12 0V6.5h-1.5Z"/></svg>
         </button>
@@ -1202,6 +1203,9 @@ export const registerQueueRoutes = (app: Express) => {
         </button>
         <button type="button" id="leadInfoButton" class="lead-info-button" title="Dados do lead" aria-label="Abrir dados do lead">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+        </button>
+        <button type="button" id="leadEndServiceButton" class="lead-info-button lead-end-service-button" title="Encerrar atendimento" aria-label="Encerrar atendimento">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
         </button>
       </div>
     </div>

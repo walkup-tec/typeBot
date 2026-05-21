@@ -1,3 +1,11 @@
+## 2026-05-20 - Ícone encerrar atendimento (Fila ao vivo)
+
+- **UI:** botão `#leadEndServiceButton` no header (último à direita), ícone `call_end` (telefone desligar), tom vermelho, confirmação.
+- **Fix visual:** SVG antigo (círculo+X quebrado) substituído por path Material limpo.
+- **API:** `POST /api/chat/queue/:contactId/complete` → `status: closed`, mensagem de sistema, some da fila ativa.
+- **Painel:** `postMessage` `chattypebot-queue-ended` → `LiveInboxScreen` limpa seleção e atualiza lista.
+- **Commit:** `264a5b1` — deploy **api-typebot-crm** + **painel-typebot-crm**.
+
 ## 2026-05-20 - Tela do lead (handoff-view) não abria
 
 - **Causa:** `HANDOFF_PUBLIC_BASE_URL=https://api.chattypebot.com` (DNS inativo); chat do lead só liberava em `in_service` sem estado inicial.
