@@ -246,6 +246,7 @@ export class QueueRepository {
       status: "closed",
       updatedAt: new Date().toISOString(),
     };
+    delete updated.isPinned;
     waitingQueue.set(contactId, updated);
 
     const history = liveMessages.get(contactId) ?? [];
