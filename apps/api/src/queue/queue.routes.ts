@@ -1690,7 +1690,26 @@ export const registerQueueRoutes = (app: Express) => {
     const attachButton = document.getElementById("attachButton");
     const MAX_IMAGE_SIDE = 900;
     const IMAGE_JPEG_QUALITY = 0.78;
-    const MAX_IMAGE_PAYLOAD_LENGTH = 260000;
+    const MAX_IMAGE_PAYLOAD_LENGTH = 280000;
+    const MAX_DOCUMENT_BYTES = 4194304;
+    const MAX_DOCUMENT_PAYLOAD_LENGTH = 6000000;
+
+    function resolveLeadAttachmentMimeType(file) {
+      const direct = String(file?.type || "").trim();
+      if (direct && direct !== "application/octet-stream") return direct;
+      const name = String(file?.name || "").trim().toLowerCase();
+      if (name.endsWith(".pdf")) return "application/pdf";
+      if (name.endsWith(".doc")) return "application/msword";
+      if (name.endsWith(".docx")) {
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      }
+      if (name.endsWith(".xls")) return "application/vnd.ms-excel";
+      if (name.endsWith(".xlsx")) {
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      }
+      if (name.endsWith(".txt")) return "text/plain";
+      return "application/octet-stream";
+    }
 
     function readFileAsDataUrl(file) {
       return new Promise((resolve, reject) => {
@@ -2524,10 +2543,28 @@ export const registerQueueRoutes = (app: Express) => {
       }
     }
 
+    function resolveLeadContactNameDisplay(contact) {
+      if (!contact || typeof contact !== "object") return "";
+      const direct = String(contact.contactName || "").trim();
+      const context = contact.leadContext && typeof contact.leadContext === "object" ? contact.leadContext : {};
+      const override = String(
+        context.contactNameOverride || context.nome_contato || context["nome contato"] || "",
+      ).trim();
+      if (override) return override;
+      if (direct && !["lead", "visitante", "-"].includes(direct.toLowerCase())) return direct;
+      const preferredKeys = ["nome_completo", "Nome", "nome", "name"];
+      for (const key of preferredKeys) {
+        const value = String(context[key] || "").trim();
+        if (value && !["lead", "visitante", "-"].includes(value.toLowerCase())) return value;
+      }
+      return direct || "Visitante";
+    }
+
     function applyLeadContactToDrawer(contact) {
       leadDrawerContact = contact;
       updateLeadWhatsappHeaderButton(contact);
-      if (leadNameInput) leadNameInput.value = String(contact?.contactName || "");
+      const displayName = resolveLeadContactNameDisplay(contact);
+      if (leadNameInput) leadNameInput.value = displayName;
       if (leadWhatsappInput) {
         leadWhatsappInput.value = resolveLeadWhatsappDisplay(contact?.leadWhatsapp, contact?.leadContext);
       }
@@ -2535,7 +2572,7 @@ export const registerQueueRoutes = (app: Express) => {
         leadCpfInput.value = resolveLeadCpfFromContext(contact?.leadContext || {});
       }
       if (leadNotesInput) leadNotesInput.value = "";
-      if (leadTitle) leadTitle.textContent = String(contact?.contactName || leadTitle.textContent || "Visitante");
+      if (leadTitle) leadTitle.textContent = displayName || "Visitante";
       syncLeadProfilePreview();
       rememberLeadInlineFieldValue(leadNameInput);
       rememberLeadInlineFieldValue(leadWhatsappInput);
@@ -2660,6 +2697,7 @@ export const registerQueueRoutes = (app: Express) => {
         return false;
       }
       applyLeadContactToDrawer(await response.json());
+      notifyParentQueueUpdated();
       setLeadDrawerStatus("Dados do lead salvos.");
       return true;
     }
@@ -2667,32 +2705,42 @@ export const registerQueueRoutes = (app: Express) => {
     async function saveLeadProfile() {
       if (!isAgentMode) return;
       setLeadDrawerStatus("Salvando...");
-      const noteSaved = await registerLeadNote();
-      if (!noteSaved) return;
       const saved = await saveLeadContactFields();
       if (!saved) return;
+      const noteSaved = await registerLeadNote();
+      if (!noteSaved) return;
       setLeadDrawerStatus("Dados do lead salvos.");
     }
 
     async function uploadLeadAttachment(file) {
       const fileName = String(file?.name || "anexo").trim();
-      const mimeType = String(file?.type || "application/octet-stream").trim();
+      const mimeType = resolveLeadAttachmentMimeType(file);
       let content = "";
       if (mimeType.startsWith("image/")) {
         const raw = await readFileAsDataUrl(file);
         content = await compressImageDataUrl(raw);
         if (content.length > MAX_IMAGE_PAYLOAD_LENGTH) throw new Error("image too large");
       } else {
+        const rawSize = Number(file?.size || 0);
+        if (rawSize > MAX_DOCUMENT_BYTES) throw new Error("document too large");
         content = await readFileAsDataUrl(file);
-        if (content.length > MAX_IMAGE_PAYLOAD_LENGTH) throw new Error("file too large");
+        if (content.length > MAX_DOCUMENT_PAYLOAD_LENGTH) throw new Error("document too large");
       }
       const response = await fetch("/api/chat/queue/" + contactId + "/attachments", {
         method: "POST",
         headers: { "content-type": "application/json", "x-tenant-id": tenantId },
         body: JSON.stringify({ fileName, mimeType, content }),
       });
-      if (!response.ok) throw new Error("upload failed");
+      if (!response.ok) {
+        let detail = "";
+        try {
+          const payload = await response.json();
+          detail = String(payload?.message || "").trim();
+        } catch {}
+        throw new Error(detail || "upload failed");
+      }
       applyLeadContactToDrawer(await response.json());
+      notifyParentQueueUpdated();
     }
 
     if (isAgentMode) {
@@ -2774,8 +2822,15 @@ export const registerQueueRoutes = (app: Express) => {
             await uploadLeadAttachment(file);
           }
           setLeadDrawerStatus("Anexos enviados.");
-        } catch {
-          setLeadDrawerStatus("Falha ao enviar um ou mais anexos.");
+        } catch (error) {
+          const code = error && error.message ? String(error.message) : "";
+          if (code === "document too large" || code === "image too large") {
+            setLeadDrawerStatus("Arquivo muito grande. Imagens até ~200 KB após compressão; documentos até 4 MB.");
+          } else if (code && code !== "upload failed") {
+            setLeadDrawerStatus("Falha no envio: " + code);
+          } else {
+            setLeadDrawerStatus("Falha ao enviar um ou mais anexos.");
+          }
         }
       });
     }

@@ -1,3 +1,17 @@
+## 2026-05-20 - Anexos PDF/Word no detalhamento do lead
+
+- **Causa:** limite de 260 KB (base64) valia também para documentos; PDF/Word estouravam no cliente e na API (max 300 KB).
+- **Correção:** imagens ~280 KB comprimidas; documentos até 4 MB / 6 MB base64; MIME por extensão; mensagens de erro claras.
+- **Arquivos:** `lead-attachment-limits.ts`, `queue.service.ts`, `queue.routes.ts`, `WidgetApp.tsx`.
+
+## 2026-05-20 - Pill "Em atendimento" + salvar nome do lead
+
+- **Padding:** `.live-inbox-status-pill` — `padding: 5px 10px`, `line-height: 1.2`, `margin-top: 6px`.
+- **Nome do lead:** `contactNameOverride` + `nome_contato` com prioridade sobre `nome_completo`/variáveis Typebot; campo `contactName` do registro antes de fallback `nome`/`Nome`; chaves `nome contato` / `nomeContato` reconhecidas.
+- **Handoff drawer:** `resolveLeadContactNameDisplay` no preenchimento; **Salvar alterações** grava nome antes da nota (evita nota resetar input); `notifyParentQueueUpdated` após PATCH profile.
+- **Arquivos:** `lead-contact-name.ts`, `leadContactData.ts`, `queue.routes.ts`, `styles.css`.
+- **Build:** `build:api` OK.
+
 ## 2026-05-20 - Menu lead na Fila ao vivo (etiquetas, propriedade, atendente, fixar)
 
 - **Header chat:** menu (☰) + agendamento; submenus no hover.

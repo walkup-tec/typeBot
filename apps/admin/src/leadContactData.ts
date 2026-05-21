@@ -131,11 +131,22 @@ export const getLeadInitials = (label: string): string =>
 
 const PLACEHOLDER_CONTACT_NAMES = new Set(["-", "lead", "visitante", "lead typebot"]);
 
-const isNomeContatoKey = (key: string): boolean => normalizeLeadContextKey(key) === "nome_contato";
+export const LEAD_CONTACT_NAME_OVERRIDE_KEY = "contactNameOverride";
+export const LEAD_CONTACT_NAME_CONTEXT_KEY = "nome_contato";
+
+const compactLeadContextKey = (key: string): string => normalizeLeadContextKey(key).replace(/[_\s]/g, "");
+
+const isContactNameOverrideKey = (key: string): boolean =>
+  normalizeLeadContextKey(key) === normalizeLeadContextKey(LEAD_CONTACT_NAME_OVERRIDE_KEY);
+
+const isNomeContatoKey = (key: string): boolean => {
+  const compact = compactLeadContextKey(key);
+  return compact === "nomecontato" || compact === "contactnameoverride";
+};
 
 const isNomeCompletoKey = (key: string): boolean => {
-  const normalizedKey = normalizeLeadContextKey(key);
-  return normalizedKey === "nome_completo" || normalizedKey === "nome_competo" || normalizedKey === "nome completo";
+  const compact = compactLeadContextKey(key);
+  return compact === "nomecompleto" || compact === "nomecompeto";
 };
 
 const isMeaningfulLeadContactName = (value: unknown): boolean => {
@@ -190,14 +201,17 @@ export const resolveLeadContactName = (
   extraSources: Array<Record<string, unknown> | undefined> = [],
 ): string => {
   const sources = [...extraSources, leadContext];
+  const fromOverride = pickContactNameFromSources(sources, isContactNameOverrideKey);
+  if (fromOverride) return fromOverride;
+
   const fromNomeContato = pickContactNameFromSources(sources, isNomeContatoKey);
   if (fromNomeContato) return fromNomeContato;
 
-  const fromNomeCompleto = pickContactNameFromSources(sources, isNomeCompletoKey);
-  if (fromNomeCompleto) return fromNomeCompleto;
-
   const direct = String(contactName ?? "").trim();
   if (isMeaningfulLeadContactName(direct)) return direct;
+
+  const fromNomeCompleto = pickContactNameFromSources(sources, isNomeCompletoKey);
+  if (fromNomeCompleto) return fromNomeCompleto;
 
   const fallback = pickFallbackContactName(sources);
   if (fallback) return fallback;

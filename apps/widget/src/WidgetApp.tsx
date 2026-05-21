@@ -79,7 +79,22 @@ const buildTenantBubbleStyle = (bubbleColor: string, textColor: string): CSSProp
 const IMAGE_DATA_URL_PREFIX = "data:image/";
 const MAX_IMAGE_SIDE = 900;
 const IMAGE_JPEG_QUALITY = 0.78;
-const MAX_IMAGE_PAYLOAD_LENGTH = 260000;
+const MAX_IMAGE_PAYLOAD_LENGTH = 280000;
+const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
+const MAX_DOCUMENT_PAYLOAD_LENGTH = 6_000_000;
+
+const resolveLeadAttachmentMimeType = (file: File): string => {
+  const direct = String(file.type || "").trim();
+  if (direct && direct !== "application/octet-stream") return direct;
+  const name = String(file.name || "").trim().toLowerCase();
+  if (name.endsWith(".pdf")) return "application/pdf";
+  if (name.endsWith(".doc")) return "application/msword";
+  if (name.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (name.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (name.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (name.endsWith(".txt")) return "text/plain";
+  return "application/octet-stream";
+};
 
 const isImageMessage = (content: string): boolean => String(content ?? "").trim().startsWith(IMAGE_DATA_URL_PREFIX);
 
@@ -465,15 +480,17 @@ export function WidgetApp() {
 
   const uploadLeadAttachment = async (file: File) => {
     const fileName = String(file.name || "anexo").trim();
-    const mimeType = String(file.type || "application/octet-stream").trim();
+    const mimeType = resolveLeadAttachmentMimeType(file);
     let content = "";
     if (mimeType.startsWith("image/")) {
       const raw = await readFileAsDataUrl(file);
       content = await compressImageDataUrl(raw);
+      if (content.length > MAX_IMAGE_PAYLOAD_LENGTH) throw new Error("image too large");
     } else {
+      if (file.size > MAX_DOCUMENT_BYTES) throw new Error("document too large");
       content = await readFileAsDataUrl(file);
+      if (content.length > MAX_DOCUMENT_PAYLOAD_LENGTH) throw new Error("document too large");
     }
-    if (content.length > MAX_IMAGE_PAYLOAD_LENGTH) throw new Error("Arquivo grande demais.");
     const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(sessionContactId)}/attachments`, {
       method: "POST",
       headers: buildTenantHeaders(true),
@@ -494,8 +511,13 @@ export function WidgetApp() {
         await uploadLeadAttachment(file);
       }
       setLeadDrawerStatus("Anexos enviados.");
-    } catch {
-      setLeadDrawerStatus("Falha ao enviar um ou mais anexos.");
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      if (code === "document too large" || code === "image too large") {
+        setLeadDrawerStatus("Arquivo muito grande. Imagens até ~200 KB após compressão; documentos até 4 MB.");
+      } else {
+        setLeadDrawerStatus("Falha ao enviar um ou mais anexos.");
+      }
     }
   };
 

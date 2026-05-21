@@ -1,6 +1,7 @@
 import { pruneLeadContext } from "./lead-context";
 
 export const LEAD_CONTACT_NAME_CONTEXT_KEY = "nome_contato";
+export const LEAD_CONTACT_NAME_OVERRIDE_KEY = "contactNameOverride";
 
 const PLACEHOLDER_CONTACT_NAMES = new Set(["-", "lead", "visitante", "lead typebot"]);
 
@@ -11,11 +12,17 @@ const normalizeContactNameKey = (key: string): string =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const isNomeContatoKey = (key: string): boolean => normalizeContactNameKey(key) === "nome_contato";
+const isNomeContatoKey = (key: string): boolean => {
+  const normalizedKey = normalizeContactNameKey(key).replace(/[_\s]/g, "");
+  return normalizedKey === "nomecontato" || normalizedKey === "contactnameoverride";
+};
+
+const isContactNameOverrideKey = (key: string): boolean =>
+  normalizeContactNameKey(key) === normalizeContactNameKey(LEAD_CONTACT_NAME_OVERRIDE_KEY);
 
 const isNomeCompletoKey = (key: string): boolean => {
-  const normalizedKey = normalizeContactNameKey(key);
-  return normalizedKey === "nome_completo" || normalizedKey === "nome_competo" || normalizedKey === "nome completo";
+  const normalizedKey = normalizeContactNameKey(key).replace(/[_\s]/g, "");
+  return normalizedKey === "nomecompleto" || normalizedKey === "nomecompeto";
 };
 
 export const isMeaningfulLeadContactName = (value: unknown): boolean => {
@@ -70,14 +77,17 @@ export const resolveLeadContactName = (
   extraSources: Array<Record<string, unknown> | undefined> = [],
 ): string => {
   const sources = [...extraSources, leadContext];
+  const fromOverride = pickContactNameFromSources(sources, isContactNameOverrideKey);
+  if (fromOverride) return fromOverride;
+
   const fromNomeContato = pickContactNameFromSources(sources, isNomeContatoKey);
   if (fromNomeContato) return fromNomeContato;
 
-  const fromNomeCompleto = pickContactNameFromSources(sources, isNomeCompletoKey);
-  if (fromNomeCompleto) return fromNomeCompleto;
-
   const direct = String(contactName ?? "").trim();
   if (isMeaningfulLeadContactName(direct)) return direct;
+
+  const fromNomeCompleto = pickContactNameFromSources(sources, isNomeCompletoKey);
+  if (fromNomeCompleto) return fromNomeCompleto;
 
   const fallback = pickFallbackContactName(sources);
   if (fallback) return fallback;
@@ -94,10 +104,11 @@ export const mergeLeadContactNameIntoContext = (
   if (trimmed.length < 2) return pruneLeadContext(leadContext);
 
   const next: Record<string, string | number | boolean> = { ...(leadContext ?? {}) };
+  next[LEAD_CONTACT_NAME_OVERRIDE_KEY] = trimmed;
   next[LEAD_CONTACT_NAME_CONTEXT_KEY] = trimmed;
 
   for (const key of Object.keys(next)) {
-    if (isNomeCompletoKey(key)) next[key] = trimmed;
+    if (isNomeCompletoKey(key) || isNomeContatoKey(key)) next[key] = trimmed;
   }
 
   return pruneLeadContext(next);

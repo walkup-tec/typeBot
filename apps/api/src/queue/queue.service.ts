@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveLeadAgentNotes, withNormalizedQueueContact } from "../lib/lead-agent-notes";
 import { resolveAttendantDisplayName } from "../lib/agent-session-meta";
+import { LEAD_ATTACHMENT_DOCUMENT_MAX_CONTENT_LENGTH } from "../lib/lead-attachment-limits";
 import { mergeLeadContactNameIntoContext } from "../lib/lead-contact-name";
 import { mergeLeadCpfIntoContext } from "../lib/lead-cpf";
 import { pruneLeadContext } from "../lib/lead-context";
@@ -49,7 +50,7 @@ export const addAgentNoteSchema = z.object({
 export const addLeadAttachmentSchema = z.object({
   fileName: z.string().min(1).max(180),
   mimeType: z.string().min(3).max(120),
-  content: z.string().min(1).max(300000),
+  content: z.string().min(1).max(LEAD_ATTACHMENT_DOCUMENT_MAX_CONTENT_LENGTH),
 });
 
 export class QueueService {
