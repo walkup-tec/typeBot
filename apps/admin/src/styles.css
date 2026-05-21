@@ -3558,6 +3558,23 @@ button.danger-btn:not(.ghost-btn):hover {
   background: #102a2a;
 }
 
+.live-inbox-conversation--finished {
+  background: #151b28;
+  border-color: transparent;
+  opacity: 0.82;
+}
+
+.live-inbox-conversation--finished:hover {
+  border-color: #2a3448;
+  background: #171d2b;
+}
+
+.live-inbox-conversation--finished.active {
+  border-color: #334155;
+  background: #151b28;
+  opacity: 1;
+}
+
 .live-inbox-conversation__head {
   display: flex;
   gap: 10px;
@@ -3652,8 +3669,8 @@ button.danger-btn:not(.ghost-btn):hover {
 }
 
 .live-inbox-status-pill--resolved {
-  background: rgba(34, 197, 94, 0.22);
-  color: #86efac;
+  background: rgba(100, 116, 139, 0.24);
+  color: #94a3b8;
 }
 
 .live-inbox-preview {

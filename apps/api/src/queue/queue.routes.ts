@@ -2656,9 +2656,12 @@ export const registerQueueRoutes = (app: Express) => {
         void registerLeadNote();
       });
     }
-    function notifyParentQueueEnded() {
+    function notifyParentQueueEnded(contact) {
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: "chattypebot-queue-ended", contactId: contactId }, "*");
+        window.parent.postMessage(
+          { type: "chattypebot-queue-ended", contactId: contactId, contact: contact || null },
+          "*",
+        );
       }
     }
 
@@ -2674,18 +2677,16 @@ export const registerQueueRoutes = (app: Express) => {
         { username: sessionAgentId, displayName: sessionAgentName },
         { sessionAgentId, sessionAgentName },
       );
-      if (!window.confirm("Encerrar este atendimento? O lead sairá da fila ao vivo.")) return;
       const response = await fetch("/api/chat/queue/" + contactId + "/complete", {
         method: "POST",
         headers: { "content-type": "application/json", "x-tenant-id": tenantId },
         body: JSON.stringify({ agentName: agentLabel }),
       });
-      if (!response.ok) {
-        window.alert("Não foi possível encerrar o atendimento.");
-        return;
-      }
+      if (!response.ok) return;
+      const updated = await response.json();
+      applyLeadMetaFromContact(updated);
       setAgentServiceEndedUI(true);
-      notifyParentQueueEnded();
+      notifyParentQueueEnded(updated);
       await loadMessages();
     }
 
@@ -2987,7 +2988,7 @@ export const registerQueueRoutes = (app: Express) => {
         attendants.map((attendant) => [attendant.username.trim().toLowerCase(), attendant.displayName]),
       );
       queueService.backfillAssignedAgentNames(tenantId, (agentId) => attendantByUsername.get(agentId.trim().toLowerCase()));
-      const queue = queueService.list(tenantId).map((contact) => ({
+      const queue = queueService.listInbox(tenantId).map((contact) => ({
         ...contact,
         assignedAgentName: resolveQueueContactAssignedAgentName(contact, attendants),
       }));

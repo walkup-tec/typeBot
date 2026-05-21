@@ -59,7 +59,7 @@ type QueueContact = {
   sourceFlowLabel: string;
   leadContext?: Record<string, string | number | boolean>;
   leadWhatsapp?: string;
-  status: "waiting" | "in_service";
+  status: "waiting" | "in_service" | "closed";
   assignedAgentId?: string;
   assignedAgentName?: string;
   priorityName?: string;

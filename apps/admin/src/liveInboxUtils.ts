@@ -12,7 +12,7 @@ export type QueueListItem = {
   tenantName?: string;
   contactName: string;
   sourceFlowLabel: string;
-  status: "waiting" | "in_service";
+  status: "waiting" | "in_service" | "closed";
   assignedAgentId?: string;
   assignedAgentName?: string;
   priorityName?: string;
@@ -55,13 +55,14 @@ export function filterInboxContacts(
     return sortInboxByPinnedAndDate(items.filter((item) => item.status === "waiting"));
   }
   return sortInboxByPinnedAndDate(
-    items.filter(
-      (item) =>
-        item.status === "in_service" &&
+    items.filter((item) => {
+      const assignedToMe =
         String(item.assignedAgentId ?? "")
           .trim()
-          .toLowerCase() === agentKey,
-    ),
+          .toLowerCase() === agentKey;
+      if (!assignedToMe) return false;
+      return item.status === "in_service" || item.status === "closed";
+    }),
   );
 }
 
@@ -95,6 +96,7 @@ export function resolveInboxPreviewText(item: QueueListItem): string {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   if (item.status === "waiting") return "Aguardando atendimento na fila";
+  if (item.status === "closed") return "Atendimento finalizado";
   return "Conversa em andamento";
 }
 
@@ -111,6 +113,9 @@ export function resolveFlowLabelColor(label: string): string {
 export function resolveInboxStatus(item: QueueListItem): { label: string; tone: "open" | "active" | "resolved" } {
   if (item.status === "waiting") {
     return { label: "Aberta", tone: "open" };
+  }
+  if (item.status === "closed") {
+    return { label: "Finalizado", tone: "resolved" };
   }
   return { label: "Em atendimento", tone: "active" };
 }

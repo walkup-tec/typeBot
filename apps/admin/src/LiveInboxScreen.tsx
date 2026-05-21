@@ -90,13 +90,7 @@ export function LiveInboxScreen({
     const onMessage = (event: MessageEvent) => {
       const messageType = String(event.data?.type ?? "");
       if (messageType === "chattypebot-queue-ended") {
-        const endedId = String(event.data?.contactId ?? "").trim();
-        if (!endedId) return;
-        if (selectedContactId === endedId) {
-          setSelectedContactId(null);
-        }
         void onRefreshQueue();
-        onStatusMessage("Atendimento encerrado.");
         return;
       }
       if (messageType === "chattypebot-queue-updated") {
@@ -134,6 +128,10 @@ export function LiveInboxScreen({
   }
 
   async function handleSelectConversation(item: QueueListItem) {
+    if (item.status === "closed") {
+      setSelectedContactId(item.contactId);
+      return;
+    }
     if (item.status === "waiting") {
       await assignAndOpen(item);
       return;
@@ -206,12 +204,13 @@ export function LiveInboxScreen({
               filteredContacts.map((item) => {
                 const status = resolveInboxStatus(item);
                 const isSelected = item.contactId === selectedContactId;
+                const isFinished = item.status === "closed";
                 return (
                   <button
                     key={item.contactId}
                     type="button"
                     role="listitem"
-                    className={`live-inbox-conversation ${isSelected ? "active" : ""}`}
+                    className={`live-inbox-conversation${isFinished ? " live-inbox-conversation--finished" : ""}${isSelected ? " active" : ""}`}
                     onClick={() => void handleSelectConversation(item)}
                     disabled={isAssigning}
                   >
@@ -265,6 +264,13 @@ export function LiveInboxScreen({
               title={`Chat com ${selectedContact.contactName}`}
               src={chatUrl}
             />
+          ) : selectedContact && selectedContact.status === "closed" ? (
+            <div className="live-inbox-chat-empty">
+              <h3>Atendimento finalizado</h3>
+              <p className="muted">
+                Este lead foi encerrado. O histórico permanece na conversa; novas mensagens não são aceitas.
+              </p>
+            </div>
           ) : (
             <div className="live-inbox-chat-empty">
               <h3>Selecione uma conversa</h3>

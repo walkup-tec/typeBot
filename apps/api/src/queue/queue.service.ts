@@ -97,11 +97,16 @@ export class QueueService {
     return autoAssigned ?? created;
   }
 
-  list(tenantId: string) {
+  list(tenantId: string, options?: { includeClosed?: boolean }) {
     return this.queueRepository
-      .listByTenant(tenantId)
+      .listByTenant(tenantId, options)
       .map((contact) => withNormalizedQueueContact(contact))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
+  /** Fila ao vivo: inclui atendimentos encerrados para exibir status Finalizado no card. */
+  listInbox(tenantId: string) {
+    return this.list(tenantId, { includeClosed: true });
   }
 
   listAll() {
