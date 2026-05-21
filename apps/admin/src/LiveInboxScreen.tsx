@@ -49,6 +49,8 @@ export function LiveInboxScreen({
   const [activeTab, setActiveTab] = useState<LiveInboxTab>("mine");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
+  /** Mantém o iframe aberto entre o clique em "Não atribuídas" e o refresh da fila. */
+  const [pendingChatContactId, setPendingChatContactId] = useState<string | null>(null);
 
   const currentAgentId = useMemo(
     () => resolveCurrentAgentId(authUsername, agentId, noSeparateAttendants === true),
@@ -68,7 +70,10 @@ export function LiveInboxScreen({
   );
 
   const chatUrl = useMemo(() => {
-    if (!selectedContact || selectedContact.status !== "in_service") return "";
+    if (!selectedContact) return "";
+    const canOpenChat =
+      selectedContact.status === "in_service" || pendingChatContactId === selectedContact.contactId;
+    if (!canOpenChat) return "";
     return buildAgentChatUrl(
       tenantId,
       selectedContact.contactId,
@@ -77,14 +82,30 @@ export function LiveInboxScreen({
       selectedContact.contactName,
       selectedContact.sourceFlowLabel,
     );
-  }, [authDisplayName, buildAgentChatUrl, currentAgentId, selectedContact, tenantId]);
+  }, [authDisplayName, buildAgentChatUrl, currentAgentId, pendingChatContactId, selectedContact, tenantId]);
 
   useEffect(() => {
     if (!selectedContactId) return;
-    if (!filteredContacts.some((item) => item.contactId === selectedContactId)) {
+    if (filteredContacts.some((item) => item.contactId === selectedContactId)) return;
+
+    const selected = contacts.find((item) => item.contactId === selectedContactId);
+    if (!selected) {
       setSelectedContactId(filteredContacts[0]?.contactId ?? null);
+      return;
     }
-  }, [filteredContacts, selectedContactId]);
+
+    if (selected.status === "in_service") {
+      setActiveTab("mine");
+      return;
+    }
+    if (selected.status === "waiting") {
+      setActiveTab("unassigned");
+      return;
+    }
+    if (selected.status === "closed") {
+      setActiveTab("all");
+    }
+  }, [contacts, currentAgentId, filteredContacts, selectedContactId]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -103,6 +124,9 @@ export function LiveInboxScreen({
 
   async function assignAndOpen(item: QueueListItem) {
     const resolvedAgentName = authDisplayName?.trim() || currentAgentId;
+    setSelectedContactId(item.contactId);
+    setPendingChatContactId(item.contactId);
+    setActiveTab("mine");
     setIsAssigning(true);
     try {
       const response = await fetch(`${apiBase}/api/chat/queue/${encodeURIComponent(item.contactId)}/assign`, {
@@ -114,16 +138,17 @@ export function LiveInboxScreen({
         body: JSON.stringify({ agentId: currentAgentId, agentName: resolvedAgentName }),
       });
       if (!response.ok) {
+        setPendingChatContactId(null);
         onStatusMessage("Não foi possível assumir o atendimento.");
         return;
       }
-      setSelectedContactId(item.contactId);
-      onStatusMessage("Atendimento assumido.");
       await onRefreshQueue();
     } catch {
+      setPendingChatContactId(null);
       onStatusMessage("Não foi possível assumir o atendimento.");
     } finally {
       setIsAssigning(false);
+      setPendingChatContactId(null);
     }
   }
 
@@ -258,7 +283,7 @@ export function LiveInboxScreen({
         </aside>
 
         <main className="live-inbox-chat-pane">
-          {selectedContact && selectedContact.status === "in_service" && chatUrl ? (
+          {selectedContact && chatUrl ? (
             <iframe
               key={selectedContact.contactId}
               className="live-inbox-chat-frame"
