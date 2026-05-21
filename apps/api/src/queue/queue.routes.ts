@@ -1838,6 +1838,18 @@ export const registerQueueRoutes = (app: Express) => {
       );
     }
 
+    function datetimeLocalToIso(localValue) {
+      const raw = String(localValue || "").trim();
+      if (!raw) return null;
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) return null;
+      return date.toISOString();
+    }
+
+    function schedulePayloadFromInput() {
+      return datetimeLocalToIso(readLeadScheduleInputValue());
+    }
+
     function formatScheduleLabel(iso) {
       const raw = String(iso || "").trim();
       if (!raw) return "";
@@ -1863,7 +1875,7 @@ export const registerQueueRoutes = (app: Express) => {
       const raw = readLeadScheduleInputValue();
       const savedLocal = toDatetimeLocalValue(leadMetaState.scheduledAt);
       if (raw === savedLocal) return;
-      void patchLeadMeta({ scheduledAt: raw || null });
+      void patchLeadMeta({ scheduledAt: schedulePayloadFromInput() });
     }
 
     function closeLeadActionsMenu() {
@@ -2147,7 +2159,7 @@ export const registerQueueRoutes = (app: Express) => {
       }
       if (leadScheduleInput) {
         leadScheduleInput.addEventListener("change", () => {
-          void patchLeadMeta({ scheduledAt: readLeadScheduleInputValue() || null });
+          void patchLeadMeta({ scheduledAt: schedulePayloadFromInput() });
         });
       }
       if (leadScheduleSaveBtn) {

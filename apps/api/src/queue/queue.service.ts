@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveLeadAgentNotes, withNormalizedQueueContact } from "../lib/lead-agent-notes";
 import { resolveAttendantDisplayName } from "../lib/agent-session-meta";
 import { LEAD_ATTACHMENT_DOCUMENT_MAX_CONTENT_LENGTH } from "../lib/lead-attachment-limits";
+import { normalizeScheduledAtStorage } from "../lib/scheduled-at";
 import { mergeLeadContactNameIntoContext } from "../lib/lead-contact-name";
 import { mergeLeadCpfIntoContext } from "../lib/lead-cpf";
 import { pruneLeadContext } from "../lib/lead-context";
@@ -257,7 +258,7 @@ export class QueueService {
       if (raw === null || raw === "") {
         patch.scheduledAt = undefined;
       } else {
-        patch.scheduledAt = new Date(raw).toISOString();
+        patch.scheduledAt = normalizeScheduledAtStorage(raw);
       }
     }
     const updated = this.queueRepository.updateContact(tenantId, contactId, patch);

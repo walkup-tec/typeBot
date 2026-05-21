@@ -1,3 +1,8 @@
+## 2026-05-20 - Fix fuso agendamento lead (label vs input)
+
+- **Causa:** `datetime-local` enviado sem timezone; API em UTC gravava 11:03 como UTC → badge 08:03 no Brasil.
+- **Correção:** browser converte para ISO (`datetimeLocalToIso`); API `normalizeScheduledAtStorage` com fallback `-03:00` para datetime-local legado.
+
 ## 2026-05-20 - UI fila: margem etiquetas + baixar imagem anexo
 
 - `.live-inbox-tags` — `margin-top: 12px` (afasta do pill Em atendimento).
