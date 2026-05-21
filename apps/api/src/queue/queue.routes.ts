@@ -739,6 +739,7 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-actions-menu-pin { width:100%; border:0; border-radius:8px; background:transparent; color:#e2e8f0; text-align:left; padding:8px 10px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; }
     body.agent-screen .lead-actions-menu-pin:hover, body.agent-screen .lead-actions-menu-pin:focus-visible { background:#1e293b; outline:none; }
     body.agent-screen .lead-actions-menu-pin.is-active { color:#fde68a; }
+    body.agent-screen .lead-meta-badges { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
     body.agent-screen .lead-schedule-input { width:100%; border-radius:8px; border:1px solid #334155; background:#111827; color:#f1f5f9; padding:9px 10px; font:inherit; box-sizing:border-box; }
     body.agent-screen .lead-drawer-overlay { position:fixed; inset:0; background:transparent; z-index:80; display:none; pointer-events:none; }
     body.agent-screen .lead-drawer-overlay.open { display:block; }
@@ -1781,18 +1782,6 @@ export const registerQueueRoutes = (app: Express) => {
     const leadEndServiceButton = document.getElementById("leadEndServiceButton");
     const agentWidgetRoot = document.getElementById("agentWidgetRoot");
     const contactClosedInitially = ${JSON.stringify(contactClosed)};
-
-    function resolvePriorityTone(name) {
-      const normalized = String(name || "")
-        .trim()
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\\u0300-\\u036f]/g, "");
-      if (normalized.includes("alta")) return "high";
-      if (normalized.includes("media")) return "medium";
-      if (normalized.includes("baixa")) return "low";
-      return "neutral";
-    }
 
     function toDatetimeLocalValue(iso) {
       if (!iso) return "";
