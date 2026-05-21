@@ -1,4 +1,6 @@
-export type LiveInboxTab = "mine" | "unassigned" | "all";
+export type LiveInboxTab = "today" | "mine" | "unassigned" | "all";
+
+const BRAZIL_TIMEZONE = "America/Sao_Paulo";
 
 export type QueueLabelTag = {
   id: string;
@@ -22,8 +24,32 @@ export type QueueListItem = {
   labelName?: string;
   labelColor?: string;
   isPinned?: boolean;
+  scheduledAt?: string;
   updatedAt: string;
   leadContext?: Record<string, string | number | boolean>;
+};
+
+const toBrazilDateKey = (value: Date): string =>
+  value.toLocaleDateString("en-CA", { timeZone: BRAZIL_TIMEZONE });
+
+export const isScheduledForToday = (scheduledAt?: string): boolean => {
+  const raw = String(scheduledAt ?? "").trim();
+  if (!raw) return false;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return false;
+  return toBrazilDateKey(date) === toBrazilDateKey(new Date());
+};
+
+export const formatInboxScheduleTime = (scheduledAt?: string): string => {
+  const raw = String(scheduledAt ?? "").trim();
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("pt-BR", {
+    timeZone: BRAZIL_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const sortInboxByPinnedAndDate = (items: QueueListItem[]) =>
@@ -31,6 +57,17 @@ const sortInboxByPinnedAndDate = (items: QueueListItem[]) =>
     const leftPinned = left.isPinned === true ? 1 : 0;
     const rightPinned = right.isPinned === true ? 1 : 0;
     if (leftPinned !== rightPinned) return rightPinned - leftPinned;
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+
+const sortInboxByPinnedAndSchedule = (items: QueueListItem[]) =>
+  [...items].sort((left, right) => {
+    const leftPinned = left.isPinned === true ? 1 : 0;
+    const rightPinned = right.isPinned === true ? 1 : 0;
+    if (leftPinned !== rightPinned) return rightPinned - leftPinned;
+    const leftSchedule = new Date(left.scheduledAt ?? 0).getTime();
+    const rightSchedule = new Date(right.scheduledAt ?? 0).getTime();
+    if (leftSchedule !== rightSchedule) return leftSchedule - rightSchedule;
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
   });
 
@@ -51,6 +88,9 @@ export function filterInboxContacts(
 ): QueueListItem[] {
   const agentKey = currentAgentId.trim().toLowerCase();
 
+  if (tab === "today") {
+    return sortInboxByPinnedAndSchedule(items.filter((item) => isScheduledForToday(item.scheduledAt)));
+  }
   if (tab === "all") return sortInboxByPinnedAndDate(items);
   if (tab === "unassigned") {
     return sortInboxByPinnedAndDate(items.filter((item) => item.status === "waiting"));
@@ -69,6 +109,7 @@ export function filterInboxContacts(
 
 export function countInboxContacts(items: QueueListItem[], currentAgentId: string) {
   return {
+    today: filterInboxContacts(items, "today", currentAgentId).length,
     mine: filterInboxContacts(items, "mine", currentAgentId).length,
     unassigned: filterInboxContacts(items, "unassigned", currentAgentId).length,
     all: items.length,

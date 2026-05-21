@@ -4,6 +4,8 @@ import {
   countInboxContacts,
   filterInboxContacts,
   formatInboxRelativeTime,
+  formatInboxScheduleTime,
+  isScheduledForToday,
   resolveCurrentAgentId,
   resolveFlowLabelColor,
   resolveInboxPreviewText,
@@ -46,7 +48,7 @@ export function LiveInboxScreen({
   onStatusMessage,
   onOpenLeadDetail,
 }: LiveInboxScreenProps) {
-  const [activeTab, setActiveTab] = useState<LiveInboxTab>("mine");
+  const [activeTab, setActiveTab] = useState<LiveInboxTab>("today");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
   /** Mantém o iframe aberto entre o clique em "Não atribuídas" e o refresh da fila. */
@@ -94,6 +96,10 @@ export function LiveInboxScreen({
       return;
     }
 
+    if (isScheduledForToday(selected.scheduledAt)) {
+      setActiveTab("today");
+      return;
+    }
     if (selected.status === "in_service") {
       setActiveTab("mine");
       return;
@@ -197,6 +203,15 @@ export function LiveInboxScreen({
             <button
               type="button"
               role="tab"
+              aria-selected={activeTab === "today"}
+              className={`live-inbox-tab ${activeTab === "today" ? "active" : ""}`}
+              onClick={() => setActiveTab("today")}
+            >
+              Hoje <span className="live-inbox-tab-count">{tabCounts.today}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
               aria-selected={activeTab === "mine"}
               className={`live-inbox-tab ${activeTab === "mine" ? "active" : ""}`}
               onClick={() => setActiveTab("mine")}
@@ -257,7 +272,11 @@ export function LiveInboxScreen({
                             ) : null}
                             {item.contactName}
                           </strong>
-                          <span className="live-inbox-time">{formatInboxRelativeTime(item.updatedAt)}</span>
+                          <span className="live-inbox-time">
+                            {activeTab === "today" && isScheduledForToday(item.scheduledAt)
+                              ? formatInboxScheduleTime(item.scheduledAt)
+                              : formatInboxRelativeTime(item.updatedAt)}
+                          </span>
                         </div>
                         <span className={`live-inbox-status-pill live-inbox-status-pill--${status.tone}`}>
                           {status.label}

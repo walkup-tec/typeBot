@@ -69,6 +69,7 @@ type QueueContact = {
   labelName?: string;
   labelColor?: string;
   isPinned?: boolean;
+  scheduledAt?: string;
   updatedAt: string;
 };
 

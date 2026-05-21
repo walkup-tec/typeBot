@@ -1,3 +1,8 @@
+## 2026-05-20 - Aba Hoje na Fila ao vivo
+
+- Nova aba **Hoje** antes de Minhas: leads com `scheduledAt` no dia atual (America/Sao_Paulo).
+- Ordenação por horário do agendamento; na lista mostra hora do retorno em vez de "Xm".
+
 ## 2026-05-20 - Fix fuso agendamento lead (label vs input)
 
 - **Causa:** `datetime-local` enviado sem timezone; API em UTC gravava 11:03 como UTC → badge 08:03 no Brasil.
