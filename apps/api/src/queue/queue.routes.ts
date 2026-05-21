@@ -739,7 +739,6 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-actions-menu-pin { width:100%; border:0; border-radius:8px; background:transparent; color:#e2e8f0; text-align:left; padding:8px 10px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; }
     body.agent-screen .lead-actions-menu-pin:hover, body.agent-screen .lead-actions-menu-pin:focus-visible { background:#1e293b; outline:none; }
     body.agent-screen .lead-actions-menu-pin.is-active { color:#fde68a; }
-    body.agent-screen .lead-meta-badges { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
     body.agent-screen .lead-schedule-input { width:100%; border-radius:8px; border:1px solid #334155; background:#111827; color:#f1f5f9; padding:9px 10px; font:inherit; box-sizing:border-box; }
     body.agent-screen .lead-drawer-overlay { position:fixed; inset:0; background:transparent; z-index:80; display:none; pointer-events:none; }
     body.agent-screen .lead-drawer-overlay.open { display:block; }
@@ -1212,10 +1211,6 @@ export const registerQueueRoutes = (app: Express) => {
                     <span id="leadPinToggleLabel">Fixar conversa</span>
                   </button>
                 </div>
-              </div>
-              <div class="lead-meta-badges" id="leadMetaBadges">
-                <span id="leadPriorityBadge" class="lead-meta-badge is-hidden" title="Propriedade"></span>
-                <span id="leadLabelsBadges" class="lead-meta-badges"></span>
               </div>
               <button type="button" id="leadScheduleBtn" class="lead-meta-icon-btn" title="Agendar retorno" aria-label="Agendar data com o lead" aria-haspopup="dialog" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h2v2H7V3Zm8 0h2v2h-2V3ZM5 7h14v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7Zm2 2v10h10V9H7Zm2 2h2v2H9v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H9v-2Zm4 0h2v2h-2v-2Z"/></svg>
@@ -1776,8 +1771,6 @@ export const registerQueueRoutes = (app: Express) => {
     const leadAssignSubmenu = document.getElementById("leadAssignSubmenu");
     const leadPinToggleBtn = document.getElementById("leadPinToggleBtn");
     const leadPinToggleLabel = document.getElementById("leadPinToggleLabel");
-    const leadPriorityBadge = document.getElementById("leadPriorityBadge");
-    const leadLabelsBadges = document.getElementById("leadLabelsBadges");
     const leadScheduleBtn = document.getElementById("leadScheduleBtn");
     const leadScheduleBadge = document.getElementById("leadScheduleBadge");
     const leadScheduleMenu = document.getElementById("leadScheduleMenu");
@@ -1881,35 +1874,6 @@ export const registerQueueRoutes = (app: Express) => {
 
     function renderLeadMetaBadges() {
       if (!isAgentMode) return;
-      if (leadPriorityBadge) {
-        const name = String(leadMetaState.priorityName || "").trim();
-        if (!name) {
-          leadPriorityBadge.classList.add("is-hidden");
-          leadPriorityBadge.textContent = "";
-        } else {
-          leadPriorityBadge.classList.remove("is-hidden");
-          leadPriorityBadge.textContent = name;
-          leadPriorityBadge.className =
-            "lead-meta-badge lead-meta-badge--priority-" + resolvePriorityTone(name);
-        }
-      }
-      if (leadLabelsBadges) {
-        const labels = Array.isArray(leadMetaState.labels) ? leadMetaState.labels : [];
-        if (labels.length === 0) {
-          leadLabelsBadges.innerHTML = "";
-        } else {
-          leadLabelsBadges.innerHTML = labels
-            .map(
-              (item) =>
-                '<span class="lead-meta-badge" title="Etiqueta"><span class="lead-meta-badge__dot" style="background:' +
-                escapeHtml(String(item.color || "#64748b")) +
-                '"></span><span>' +
-                escapeHtml(String(item.name || "")) +
-                "</span></span>",
-            )
-            .join("");
-        }
-      }
       if (leadPinToggleBtn) {
         const pinned = leadMetaState.isPinned === true;
         leadPinToggleBtn.classList.toggle("is-active", pinned);
