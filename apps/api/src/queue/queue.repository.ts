@@ -32,6 +32,13 @@ export interface QueueContact {
   status: "waiting" | "in_service";
   assignedAgentId?: string;
   assignedAgentName?: string;
+  priorityId?: string;
+  priorityName?: string;
+  labelId?: string;
+  labelName?: string;
+  labelColor?: string;
+  /** Data/hora ISO do próximo agendamento com o lead. */
+  scheduledAt?: string;
   updatedAt: string;
 }
 
@@ -143,7 +150,18 @@ export class QueueRepository {
     patch: Partial<
       Pick<
         QueueContact,
-        "contactName" | "leadWhatsapp" | "agentNotes" | "agentNotesHistory" | "leadContext" | "attachments"
+        | "contactName"
+        | "leadWhatsapp"
+        | "agentNotes"
+        | "agentNotesHistory"
+        | "leadContext"
+        | "attachments"
+        | "priorityId"
+        | "priorityName"
+        | "labelId"
+        | "labelName"
+        | "labelColor"
+        | "scheduledAt"
       >
     >,
   ): QueueContact | null {
@@ -155,6 +173,18 @@ export class QueueRepository {
       ...patch,
       updatedAt: new Date().toISOString(),
     };
+    for (const key of [
+      "priorityId",
+      "priorityName",
+      "labelId",
+      "labelName",
+      "labelColor",
+      "scheduledAt",
+    ] as const) {
+      if (key in patch && patch[key] === undefined) {
+        delete updated[key];
+      }
+    }
     waitingQueue.set(contactId, updated);
     saveQueueState(waitingQueue, liveMessages);
     return updated;

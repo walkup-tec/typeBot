@@ -2,7 +2,16 @@ import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import type { SavedFlow } from "../flows/flow.repository";
-import { attendantRepository, flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
+import {
+  attendantRepository,
+  flowRepository,
+  labelRepository,
+  priorityRepository,
+  queueRepository,
+  tenantRepository,
+} from "../lib/repositories";
+import { LabelService } from "../labels/label.service";
+import { PriorityService } from "../priorities/priority.service";
 import {
   formatAgentSessionMeta,
   resolveAttendantDisplayName,
@@ -389,6 +398,9 @@ const attendantsForQueueRouting = (
 };
 
 export const registerQueueRoutes = (app: Express) => {
+  const priorityService = new PriorityService(priorityRepository);
+  const labelService = new LabelService(labelRepository);
+
   const asOptionalNonEmptyString = (max = 2048) =>
     z.preprocess((value) => {
       if (typeof value !== "string") return undefined;
@@ -620,6 +632,16 @@ export const registerQueueRoutes = (app: Express) => {
     );
 
     const isAgentMode = mode === "agent";
+    const tenantPrioritiesJson = isAgentMode && tenantId ? JSON.stringify(priorityService.listByTenant(tenantId)) : "[]";
+    const tenantLabelsJson = isAgentMode && tenantId ? JSON.stringify(labelService.listByTenant(tenantId)) : "[]";
+    const initialLeadMetaJson = JSON.stringify({
+      priorityId: queuedContact?.priorityId ?? null,
+      priorityName: queuedContact?.priorityName ?? null,
+      labelId: queuedContact?.labelId ?? null,
+      labelName: queuedContact?.labelName ?? null,
+      labelColor: queuedContact?.labelColor ?? null,
+      scheduledAt: queuedContact?.scheduledAt ?? null,
+    });
     const safeProfileImageTag =
       profileImageUrl && isSafeImageSrc(profileImageUrl)
         ? `<img class="avatar" src="${profileImageUrl.replace(/"/g, "&quot;")}" alt="Bot" />`
@@ -658,6 +680,33 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-info-button { width:38px; height:38px; min-width:38px; flex-shrink:0; border-radius:999px; border:1px solid #334155; background:#0f172a; color:#cbd5e1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
     body.agent-screen .lead-info-button--active { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
     body.agent-screen .lead-info-button svg { width:18px; height:18px; fill:currentColor; }
+    body.agent-screen .lead-header-top { display:flex; align-items:flex-start; gap:10px; width:100%; }
+    body.agent-screen .lead-header-identity { display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; flex:1; }
+    body.agent-screen .lead-header-identity > strong { font-size:18px; line-height:1.25; }
+    body.agent-screen .lead-header-sub { display:block; color:#94a3b8; font-size:13px; margin-top:4px; }
+    body.agent-screen .lead-inline-meta { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; position:relative; }
+    body.agent-screen .lead-meta-icon-btn { width:34px; height:34px; min-width:34px; border-radius:999px; border:1px solid #334155; background:#0f172a; color:#cbd5e1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
+    body.agent-screen .lead-meta-icon-btn:hover, body.agent-screen .lead-meta-icon-btn:focus-visible { border-color:#14b8a6; color:#5eead4; outline:none; }
+    body.agent-screen .lead-meta-icon-btn.is-active { border-color:#14b8a6; background:rgba(20,184,166,.14); color:#5eead4; }
+    body.agent-screen .lead-meta-icon-btn svg { width:17px; height:17px; fill:currentColor; }
+    body.agent-screen .lead-meta-badge { display:inline-flex; align-items:center; gap:6px; max-width:160px; border:1px solid #334155; border-radius:999px; padding:4px 10px; font-size:11px; font-weight:600; color:#e2e8f0; background:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    body.agent-screen .lead-meta-badge.is-hidden { display:none; }
+    body.agent-screen .lead-meta-badge--priority-high { border-color:#b91c1c; background:rgba(185,28,28,.18); color:#fecaca; }
+    body.agent-screen .lead-meta-badge--priority-medium { border-color:#b45309; background:rgba(180,83,9,.18); color:#fde68a; }
+    body.agent-screen .lead-meta-badge--priority-low { border-color:#15803d; background:rgba(21,128,61,.18); color:#bbf7d0; }
+    body.agent-screen .lead-meta-badge--priority-neutral { border-color:#334155; background:#0f172a; color:#cbd5e1; }
+    body.agent-screen .lead-meta-badge__dot { width:8px; height:8px; border-radius:999px; background:var(--label-dot, #64748b); flex-shrink:0; }
+    body.agent-screen .lead-meta-menu { position:absolute; top:calc(100% + 6px); left:0; min-width:200px; max-width:min(280px,92vw); background:#0f172a; border:1px solid #334155; border-radius:10px; padding:6px; z-index:140; box-shadow:0 14px 34px rgba(2,6,23,.45); display:none; gap:2px; }
+    body.agent-screen .lead-meta-menu.open { display:grid; }
+    body.agent-screen .lead-meta-menu--schedule { min-width:240px; padding:10px; gap:8px; }
+    body.agent-screen .lead-meta-menu-item { width:100%; border:0; border-radius:8px; background:transparent; color:#e2e8f0; text-align:left; padding:8px 10px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; }
+    body.agent-screen .lead-meta-menu-item:hover, body.agent-screen .lead-meta-menu-item:focus-visible { background:#1e293b; outline:none; }
+    body.agent-screen .lead-meta-menu-item small { color:#94a3b8; font-size:11px; }
+    body.agent-screen .lead-meta-menu-item__dot { width:10px; height:10px; border-radius:999px; flex-shrink:0; background:var(--label-dot, #64748b); }
+    body.agent-screen .lead-meta-menu-actions { display:flex; gap:8px; justify-content:flex-end; }
+    body.agent-screen .lead-meta-menu-actions button { border-radius:8px; border:1px solid #334155; background:#111827; color:#e2e8f0; padding:7px 10px; font-size:12px; font-weight:600; cursor:pointer; }
+    body.agent-screen .lead-meta-menu-actions button.primary { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
+    body.agent-screen .lead-schedule-input { width:100%; border-radius:8px; border:1px solid #334155; background:#111827; color:#f1f5f9; padding:9px 10px; font:inherit; box-sizing:border-box; }
     body.agent-screen .lead-drawer-overlay { position:fixed; inset:0; background:transparent; z-index:80; display:none; pointer-events:none; }
     body.agent-screen .lead-drawer-overlay.open { display:block; }
     body.agent-screen .lead-drawer-panel { position:fixed; top:0; right:0; width:min(380px,92vw); height:100dvh; background:#111827; border-left:1px solid #1f2937; box-shadow:-18px 0 40px rgba(2,6,23,.45); overflow:hidden; transform:translateX(100%); transition:transform .2s ease; z-index:90; padding:16px 16px 12px; box-sizing:border-box; pointer-events:auto; display:flex; flex-direction:column; }
@@ -1102,8 +1151,37 @@ export const registerQueueRoutes = (app: Express) => {
       ? `<div class="agent-widget">
     <div class="widget-header">
       <div class="lead-header-main">
-        <strong id="leadTitle">${escapedName}</strong>
-        <span>${embedInbox ? `${escapedFlow} · ${tenantDisplayName.replace(/</g, "&lt;").replace(/>/g, "&gt;")}` : "Você está conversando com o visitante em tempo real"}</span>
+        <div class="lead-header-top">
+          <div class="lead-header-identity">
+            <strong id="leadTitle">${escapedName}</strong>
+            <div class="lead-inline-meta" id="leadInlineMeta">
+              <button type="button" id="leadPriorityBtn" class="lead-meta-icon-btn" title="Definir prioridade" aria-label="Definir prioridade do lead" aria-haspopup="menu" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 2.5L18.5 10H14V5.5ZM8 13h8v1.5H8V13Zm0 3.5h5V18H8v-1.5Z"/></svg>
+              </button>
+              <span id="leadPriorityBadge" class="lead-meta-badge is-hidden" title="Prioridade"></span>
+              <div id="leadPriorityMenu" class="lead-meta-menu" role="menu" aria-label="Prioridades"></div>
+              <button type="button" id="leadLabelBtn" class="lead-meta-icon-btn" title="Definir etiqueta" aria-label="Definir etiqueta do lead" aria-haspopup="menu" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41 11.58 12.41 2.58a2 2 0 0 0-2.83 0L2.59 9.58A2 2 0 0 0 2 11.41V20a2 2 0 0 0 2 2h8.59a2 2 0 0 0 1.41-.59l9-9a2 2 0 0 0 0-2.83ZM7 7a2 2 0 1 1 2.83 2.83A2 2 0 0 1 7 7Z"/></svg>
+              </button>
+              <span id="leadLabelBadge" class="lead-meta-badge is-hidden" title="Etiqueta"><span class="lead-meta-badge__dot"></span><span id="leadLabelBadgeText"></span></span>
+              <div id="leadLabelMenu" class="lead-meta-menu" role="menu" aria-label="Etiquetas"></div>
+              <button type="button" id="leadScheduleBtn" class="lead-meta-icon-btn" title="Agendar retorno" aria-label="Agendar data com o lead" aria-haspopup="dialog" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h2v2H7V3Zm8 0h2v2h-2V3ZM5 7h14v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7Zm2 2v10h10V9H7Zm2 2h2v2H9v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H9v-2Zm4 0h2v2h-2v-2Z"/></svg>
+              </button>
+              <span id="leadScheduleBadge" class="lead-meta-badge is-hidden" title="Agendamento"></span>
+              <div id="leadScheduleMenu" class="lead-meta-menu lead-meta-menu--schedule" role="dialog" aria-label="Agendamento">
+                <label class="lead-field" style="margin:0;"><span style="color:#94a3b8;font-size:12px;font-weight:600;">Data e hora do retorno</span>
+                  <input id="leadScheduleInput" class="lead-schedule-input" type="datetime-local" />
+                </label>
+                <div class="lead-meta-menu-actions">
+                  <button type="button" id="leadScheduleClearBtn">Limpar</button>
+                  <button type="button" id="leadScheduleSaveBtn" class="primary">Salvar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="lead-header-sub">${embedInbox ? `${escapedFlow} · ${tenantDisplayName.replace(/</g, "&lt;").replace(/>/g, "&gt;")}` : "Você está conversando com o visitante em tempo real"}</span>
       </div>
       <div class="lead-header-actions">
         <button type="button" id="leadAttachmentsHeaderButton" class="lead-info-button" title="Anexos do lead" aria-label="Abrir anexos do lead">
@@ -1639,6 +1717,254 @@ export const registerQueueRoutes = (app: Express) => {
     const leadProfileName = document.getElementById("leadProfileName");
     const sessionMeta = document.getElementById("sessionMeta");
     const leadInlineFieldState = new Map();
+    const tenantPriorities = ${tenantPrioritiesJson};
+    const tenantLabels = ${tenantLabelsJson};
+    let leadMetaState = ${initialLeadMetaJson};
+    const leadPriorityBtn = document.getElementById("leadPriorityBtn");
+    const leadPriorityBadge = document.getElementById("leadPriorityBadge");
+    const leadPriorityMenu = document.getElementById("leadPriorityMenu");
+    const leadLabelBtn = document.getElementById("leadLabelBtn");
+    const leadLabelBadge = document.getElementById("leadLabelBadge");
+    const leadLabelBadgeText = document.getElementById("leadLabelBadgeText");
+    const leadLabelMenu = document.getElementById("leadLabelMenu");
+    const leadScheduleBtn = document.getElementById("leadScheduleBtn");
+    const leadScheduleBadge = document.getElementById("leadScheduleBadge");
+    const leadScheduleMenu = document.getElementById("leadScheduleMenu");
+    const leadScheduleInput = document.getElementById("leadScheduleInput");
+    const leadScheduleSaveBtn = document.getElementById("leadScheduleSaveBtn");
+    const leadScheduleClearBtn = document.getElementById("leadScheduleClearBtn");
+    const leadInlineMeta = document.getElementById("leadInlineMeta");
+
+    function resolvePriorityTone(name) {
+      const normalized = String(name || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\\u0300-\\u036f]/g, "");
+      if (normalized.includes("alta")) return "high";
+      if (normalized.includes("media")) return "medium";
+      if (normalized.includes("baixa")) return "low";
+      return "neutral";
+    }
+
+    function toDatetimeLocalValue(iso) {
+      if (!iso) return "";
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return "";
+      const pad = (value) => String(value).padStart(2, "0");
+      return (
+        date.getFullYear() +
+        "-" +
+        pad(date.getMonth() + 1) +
+        "-" +
+        pad(date.getDate()) +
+        "T" +
+        pad(date.getHours()) +
+        ":" +
+        pad(date.getMinutes())
+      );
+    }
+
+    function formatScheduleLabel(iso) {
+      try {
+        return new Date(iso).toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return "";
+      }
+    }
+
+    function closeLeadMetaMenus(exceptMenu) {
+      const menus = [leadPriorityMenu, leadLabelMenu, leadScheduleMenu];
+      const buttons = [leadPriorityBtn, leadLabelBtn, leadScheduleBtn];
+      menus.forEach((menu, index) => {
+        if (!menu) return;
+        const active = menu === exceptMenu;
+        menu.classList.toggle("open", active);
+        const button = buttons[index];
+        if (button) {
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-expanded", active ? "true" : "false");
+        }
+      });
+    }
+
+    function renderLeadMetaBadges() {
+      if (!isAgentMode) return;
+      if (leadPriorityBadge) {
+        const name = String(leadMetaState.priorityName || "").trim();
+        if (!name) {
+          leadPriorityBadge.classList.add("is-hidden");
+          leadPriorityBadge.textContent = "";
+        } else {
+          leadPriorityBadge.classList.remove("is-hidden");
+          leadPriorityBadge.textContent = name;
+          leadPriorityBadge.className =
+            "lead-meta-badge lead-meta-badge--priority-" + resolvePriorityTone(name);
+        }
+      }
+      if (leadLabelBadge && leadLabelBadgeText) {
+        const name = String(leadMetaState.labelName || "").trim();
+        const color = String(leadMetaState.labelColor || "#64748b").trim();
+        if (!name) {
+          leadLabelBadge.classList.add("is-hidden");
+          leadLabelBadgeText.textContent = "";
+        } else {
+          leadLabelBadge.classList.remove("is-hidden");
+          leadLabelBadge.className = "lead-meta-badge";
+          leadLabelBadgeText.textContent = name;
+          const dot = leadLabelBadge.querySelector(".lead-meta-badge__dot");
+          if (dot) dot.style.background = color;
+        }
+      }
+      if (leadScheduleBadge) {
+        const scheduledAt = String(leadMetaState.scheduledAt || "").trim();
+        const label = formatScheduleLabel(scheduledAt);
+        if (!label) {
+          leadScheduleBadge.classList.add("is-hidden");
+          leadScheduleBadge.textContent = "";
+        } else {
+          leadScheduleBadge.classList.remove("is-hidden");
+          leadScheduleBadge.textContent = label;
+          leadScheduleBadge.className = "lead-meta-badge lead-meta-badge--priority-neutral";
+        }
+      }
+      if (leadScheduleInput) {
+        leadScheduleInput.value = toDatetimeLocalValue(leadMetaState.scheduledAt);
+      }
+    }
+
+    function applyLeadMetaFromContact(contact) {
+      if (!contact || typeof contact !== "object") return;
+      leadMetaState = {
+        priorityId: contact.priorityId || null,
+        priorityName: contact.priorityName || null,
+        labelId: contact.labelId || null,
+        labelName: contact.labelName || null,
+        labelColor: contact.labelColor || null,
+        scheduledAt: contact.scheduledAt || null,
+      };
+      renderLeadMetaBadges();
+    }
+
+    async function patchLeadMeta(patch) {
+      const response = await fetch("/api/chat/queue/" + contactId + "/profile", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+        body: JSON.stringify(patch),
+      });
+      if (!response.ok) return null;
+      const updated = await response.json();
+      applyLeadMetaFromContact(updated);
+      return updated;
+    }
+
+    function buildLeadMetaMenus() {
+      if (!isAgentMode) return;
+      if (leadPriorityMenu) {
+        const clearItem =
+          '<button type="button" class="lead-meta-menu-item" data-priority-id=""><span>Sem prioridade</span></button>';
+        const items = (tenantPriorities || [])
+          .map(
+            (item) =>
+              '<button type="button" class="lead-meta-menu-item" data-priority-id="' +
+              escapeHtml(String(item.id || "")) +
+              '"><span>' +
+              escapeHtml(String(item.name || "")) +
+              "</span></button>",
+          )
+          .join("");
+        leadPriorityMenu.innerHTML = clearItem + items;
+      }
+      if (leadLabelMenu) {
+        const clearItem =
+          '<button type="button" class="lead-meta-menu-item" data-label-id=""><span>Sem etiqueta</span></button>';
+        const items = (tenantLabels || [])
+          .map(
+            (item) =>
+              '<button type="button" class="lead-meta-menu-item" data-label-id="' +
+              escapeHtml(String(item.id || "")) +
+              '"><span class="lead-meta-menu-item__dot" style="--label-dot:' +
+              escapeHtml(String(item.color || "#64748b")) +
+              ';background:' +
+              escapeHtml(String(item.color || "#64748b")) +
+              '"></span><span>' +
+              escapeHtml(String(item.name || "")) +
+              "</span></button>",
+          )
+          .join("");
+        leadLabelMenu.innerHTML = clearItem + items;
+      }
+    }
+
+    function initLeadMetaControls() {
+      if (!isAgentMode) return;
+      buildLeadMetaMenus();
+      renderLeadMetaBadges();
+      if (leadPriorityBtn && leadPriorityMenu) {
+        leadPriorityBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const willOpen = !leadPriorityMenu.classList.contains("open");
+          closeLeadMetaMenus(willOpen ? leadPriorityMenu : null);
+        });
+        leadPriorityMenu.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest("[data-priority-id]");
+          if (!button) return;
+          const priorityId = button.getAttribute("data-priority-id");
+          closeLeadMetaMenus(null);
+          void patchLeadMeta({ priorityId: priorityId || null });
+        });
+      }
+      if (leadLabelBtn && leadLabelMenu) {
+        leadLabelBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const willOpen = !leadLabelMenu.classList.contains("open");
+          closeLeadMetaMenus(willOpen ? leadLabelMenu : null);
+        });
+        leadLabelMenu.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest("[data-label-id]");
+          if (!button) return;
+          const labelId = button.getAttribute("data-label-id");
+          closeLeadMetaMenus(null);
+          void patchLeadMeta({ labelId: labelId || null });
+        });
+      }
+      if (leadScheduleBtn && leadScheduleMenu) {
+        leadScheduleBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const willOpen = !leadScheduleMenu.classList.contains("open");
+          closeLeadMetaMenus(willOpen ? leadScheduleMenu : null);
+        });
+      }
+      if (leadScheduleSaveBtn) {
+        leadScheduleSaveBtn.addEventListener("click", () => {
+          const raw = leadScheduleInput ? String(leadScheduleInput.value || "").trim() : "";
+          closeLeadMetaMenus(null);
+          void patchLeadMeta({ scheduledAt: raw || null });
+        });
+      }
+      if (leadScheduleClearBtn) {
+        leadScheduleClearBtn.addEventListener("click", () => {
+          if (leadScheduleInput) leadScheduleInput.value = "";
+          closeLeadMetaMenus(null);
+          void patchLeadMeta({ scheduledAt: null });
+        });
+      }
+      document.addEventListener("click", (event) => {
+        if (!leadInlineMeta) return;
+        const target = event.target;
+        if (target instanceof Node && leadInlineMeta.contains(target)) return;
+        closeLeadMetaMenus(null);
+      });
+    }
 
     function formatSessionMetaLabel(startedAt, agentLabel) {
       const formattedDate = formatCreatedAt(startedAt);
@@ -1681,6 +2007,7 @@ export const registerQueueRoutes = (app: Express) => {
         },
       );
       sessionMeta.textContent = formatSessionMetaLabel(startedAt, agentLabel);
+      applyLeadMetaFromContact(contact);
     }
 
     function getLeadInitials(value) {
@@ -2249,6 +2576,7 @@ export const registerQueueRoutes = (app: Express) => {
     loadAndPersistLeadCache();
     if (isAgentMode) {
       setVisitorChatEnabled(true);
+      initLeadMetaControls();
     } else {
       setVisitorChatEnabled(visitorChatEnabled);
     }

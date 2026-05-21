@@ -4,6 +4,7 @@ import { resolveLeadAgentNotes, withNormalizedQueueContact } from "../lib/lead-a
 import { resolveAttendantDisplayName } from "../lib/agent-session-meta";
 import { mergeLeadCpfIntoContext } from "../lib/lead-cpf";
 import { pruneLeadContext } from "../lib/lead-context";
+import { labelRepository, priorityRepository } from "../lib/repositories";
 import { QueueRepository } from "./queue.repository";
 import type { QueueDistributionMode } from "../tenants/tenant.repository";
 
@@ -25,10 +26,15 @@ export const sendLiveMessageSchema = z.object({
   content: z.string().min(1).max(300000),
 });
 
+const optionalUuidOrClear = z.union([z.string().uuid(), z.literal(""), z.null()]).optional();
+
 export const updateQueueContactSchema = z.object({
   contactName: z.string().min(2).max(120).optional(),
   leadWhatsapp: z.string().max(24).optional(),
   leadCpf: z.string().max(20).optional(),
+  priorityId: optionalUuidOrClear,
+  labelId: optionalUuidOrClear,
+  scheduledAt: z.union([z.string().min(1).max(40), z.literal(""), z.null()]).optional(),
 });
 
 export const addAgentNoteSchema = z.object({
@@ -156,11 +162,51 @@ export class QueueService {
       contactName: string;
       leadWhatsapp: string;
       leadContext: Record<string, string | number | boolean> | undefined;
+      priorityId: string;
+      priorityName: string;
+      labelId: string;
+      labelName: string;
+      labelColor: string;
+      scheduledAt: string;
     }> = {};
     if (input.contactName !== undefined) patch.contactName = input.contactName;
     if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
     if (input.leadCpf !== undefined) {
       patch.leadContext = mergeLeadCpfIntoContext(contact.leadContext, input.leadCpf);
+    }
+    if (input.priorityId !== undefined) {
+      const raw = input.priorityId;
+      if (raw === null || raw === "") {
+        patch.priorityId = undefined;
+        patch.priorityName = undefined;
+      } else {
+        const priority = priorityRepository.findById(tenantId, raw);
+        if (!priority) throw new Error("Prioridade inválida para este assinante.");
+        patch.priorityId = priority.id;
+        patch.priorityName = priority.name;
+      }
+    }
+    if (input.labelId !== undefined) {
+      const raw = input.labelId;
+      if (raw === null || raw === "") {
+        patch.labelId = undefined;
+        patch.labelName = undefined;
+        patch.labelColor = undefined;
+      } else {
+        const label = labelRepository.findById(tenantId, raw);
+        if (!label) throw new Error("Etiqueta inválida para este assinante.");
+        patch.labelId = label.id;
+        patch.labelName = label.name;
+        patch.labelColor = label.color;
+      }
+    }
+    if (input.scheduledAt !== undefined) {
+      const raw = input.scheduledAt;
+      if (raw === null || raw === "") {
+        patch.scheduledAt = undefined;
+      } else {
+        patch.scheduledAt = new Date(raw).toISOString();
+      }
     }
     const updated = this.queueRepository.updateContact(tenantId, contactId, patch);
     return updated ? withNormalizedQueueContact(updated) : null;
