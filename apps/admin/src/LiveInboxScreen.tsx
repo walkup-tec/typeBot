@@ -229,6 +229,7 @@ export function LiveInboxScreen({
             ) : (
               filteredContacts.map((item) => {
                 const status = resolveInboxStatus(item);
+                const previewText = resolveInboxPreviewText(item);
                 const isSelected = item.contactId === selectedContactId;
                 const isFinished = item.status === "closed";
                 return (
@@ -263,7 +264,7 @@ export function LiveInboxScreen({
                         </span>
                       </div>
                     </div>
-                    <p className="live-inbox-preview">{resolveInboxPreviewText(item)}</p>
+                    {previewText ? <p className="live-inbox-preview">{previewText}</p> : null}
                     <div className="live-inbox-tags">
                       {flowTagsForItem(item).map((tag) => (
                         <LabelTag key={`${item.contactId}-flow-${tag.name}`} name={tag.name} color={tag.color} />

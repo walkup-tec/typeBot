@@ -97,8 +97,7 @@ export function resolveInboxPreviewText(item: QueueListItem): string {
     if (typeof value === "string" && value.trim()) return value.trim();
   }
   if (item.status === "waiting") return "Aguardando atendimento na fila";
-  if (item.status === "closed") return "Atendimento finalizado";
-  return "Conversa em andamento";
+  return "";
 }
 
 export function resolveFlowLabelColor(label: string): string {
