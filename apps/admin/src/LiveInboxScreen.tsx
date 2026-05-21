@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LabelTag } from "./LabelTag";
-import type { TenantLabelRow } from "./TenantLabelsStep";
 import {
   countInboxContacts,
   filterInboxContacts,
@@ -49,7 +48,6 @@ export function LiveInboxScreen({
 }: LiveInboxScreenProps) {
   const [activeTab, setActiveTab] = useState<LiveInboxTab>("mine");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
-  const [tenantLabels, setTenantLabels] = useState<TenantLabelRow[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
 
   const currentAgentId = useMemo(
@@ -81,22 +79,6 @@ export function LiveInboxScreen({
     );
   }, [authDisplayName, buildAgentChatUrl, currentAgentId, selectedContact, tenantId]);
 
-  const loadLabels = useCallback(async () => {
-    if (!tenantId) return;
-    try {
-      const response = await fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/labels`);
-      if (!response.ok) return;
-      const rows = (await response.json()) as TenantLabelRow[];
-      setTenantLabels(Array.isArray(rows) ? rows : []);
-    } catch {
-      setTenantLabels([]);
-    }
-  }, [apiBase, tenantId]);
-
-  useEffect(() => {
-    void loadLabels();
-  }, [loadLabels]);
-
   useEffect(() => {
     if (!selectedContactId) return;
     if (!filteredContacts.some((item) => item.contactId === selectedContactId)) {
@@ -106,14 +88,20 @@ export function LiveInboxScreen({
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.data?.type !== "chattypebot-queue-ended") return;
-      const endedId = String(event.data?.contactId ?? "").trim();
-      if (!endedId) return;
-      if (selectedContactId === endedId) {
-        setSelectedContactId(null);
+      const messageType = String(event.data?.type ?? "");
+      if (messageType === "chattypebot-queue-ended") {
+        const endedId = String(event.data?.contactId ?? "").trim();
+        if (!endedId) return;
+        if (selectedContactId === endedId) {
+          setSelectedContactId(null);
+        }
+        void onRefreshQueue();
+        onStatusMessage("Atendimento encerrado.");
+        return;
       }
-      void onRefreshQueue();
-      onStatusMessage("Atendimento encerrado.");
+      if (messageType === "chattypebot-queue-updated") {
+        void onRefreshQueue();
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -162,6 +150,19 @@ export function LiveInboxScreen({
       });
     }
     return tags;
+  };
+
+  const labelTagsForItem = (item: QueueListItem) => {
+    if (Array.isArray(item.labels) && item.labels.length > 0) {
+      return item.labels.map((label) => ({
+        name: label.name,
+        color: label.color || "#64748b",
+      }));
+    }
+    if (item.labelName?.trim()) {
+      return [{ name: item.labelName.trim(), color: item.labelColor || "#64748b" }];
+    }
+    return [];
   };
 
   return (
@@ -220,7 +221,16 @@ export function LiveInboxScreen({
                       </span>
                       <div className="live-inbox-conversation__meta">
                         <div className="live-inbox-conversation__title-row">
-                          <strong>{item.contactName}</strong>
+                          <strong>
+                            {item.isPinned ? (
+                              <span className="live-inbox-pin" title="Conversa fixada" aria-label="Conversa fixada">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1.03 1 1.03-1v-7H19v-2c-1.66 0-3-1.34-3-3z" />
+                                </svg>
+                              </span>
+                            ) : null}
+                            {item.contactName}
+                          </strong>
                           <span className="live-inbox-time">{formatInboxRelativeTime(item.updatedAt)}</span>
                         </div>
                         <span className={`live-inbox-status-pill live-inbox-status-pill--${status.tone}`}>
@@ -231,10 +241,13 @@ export function LiveInboxScreen({
                     <p className="live-inbox-preview">{resolveInboxPreviewText(item)}</p>
                     <div className="live-inbox-tags">
                       {flowTagsForItem(item).map((tag) => (
-                        <LabelTag key={`${item.contactId}-${tag.name}`} name={tag.name} color={tag.color} />
+                        <LabelTag key={`${item.contactId}-flow-${tag.name}`} name={tag.name} color={tag.color} />
                       ))}
-                      {tenantLabels.length > 0 && flowTagsForItem(item).length === 0 ? (
-                        <span className="live-inbox-tags-hint muted-subtle">Sem etiqueta</span>
+                      {labelTagsForItem(item).map((tag) => (
+                        <LabelTag key={`${item.contactId}-label-${tag.name}`} name={tag.name} color={tag.color} />
+                      ))}
+                      {item.priorityName?.trim() ? (
+                        <span className="live-inbox-priority-pill">{item.priorityName.trim()}</span>
                       ) : null}
                     </div>
                   </button>

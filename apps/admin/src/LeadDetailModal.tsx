@@ -9,9 +9,7 @@ import {
   resolveLeadWhatsapp,
   type LeadContactDetail,
 } from "./leadContactData";
-import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
-
-type LeadDetailSection = "assign" | "variables" | "notes" | "attachments";
+type LeadDetailSection = "variables" | "notes" | "attachments";
 
 type LeadDetailModalProps = {
   open: boolean;
@@ -47,7 +45,6 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
   const [contact, setContact] = useState<LeadContactDetail | null>(null);
   const [status, setStatus] = useState("");
   const [openSections, setOpenSections] = useState<Record<LeadDetailSection, boolean>>({
-    assign: false,
     variables: false,
     notes: false,
     attachments: false,
@@ -97,18 +94,6 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
     () => getLeadContextEntries(contact?.leadContext).filter(([key]) => !isLeadCpfContextKey(key)),
     [contact?.leadContext],
   );
-  const assignedLabel = useMemo(() => {
-    const assignedAgentId = String(contact?.assignedAgentId ?? "").trim();
-    const assignedAgentName = String(contact?.assignedAgentName ?? "").trim();
-    if (!assignedAgentId && !assignedAgentName) return "Não atribuído";
-    return resolveAttendantDisplayName(
-      {
-        username: assignedAgentId || assignedAgentName,
-        displayName: assignedAgentName,
-      },
-      { assignedAgentId, assignedAgentName },
-    );
-  }, [contact?.assignedAgentId, contact?.assignedAgentName]);
   const notes = Array.isArray(contact?.agentNotesHistory) ? contact.agentNotesHistory : [];
   const attachments = Array.isArray(contact?.attachments) ? contact.attachments : [];
 
@@ -214,17 +199,6 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
           </ul>
 
           <div className="lead-accordion">
-            <AccordionSection
-              label="Atribuição"
-              open={openSections.assign}
-              onToggle={() => toggleSection("assign")}
-            >
-              <div className="lead-field">
-                <span>Atendente atual</span>
-                <p className="lead-field-value">{assignedLabel}</p>
-              </div>
-            </AccordionSection>
-
             <AccordionSection
               label="Informações do Typebot"
               open={openSections.variables}

@@ -1,5 +1,11 @@
 export type LiveInboxTab = "mine" | "unassigned" | "all";
 
+export type QueueLabelTag = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 export type QueueListItem = {
   contactId: string;
   tenantId: string;
@@ -9,9 +15,23 @@ export type QueueListItem = {
   status: "waiting" | "in_service";
   assignedAgentId?: string;
   assignedAgentName?: string;
+  priorityName?: string;
+  labelIds?: string[];
+  labels?: QueueLabelTag[];
+  labelName?: string;
+  labelColor?: string;
+  isPinned?: boolean;
   updatedAt: string;
   leadContext?: Record<string, string | number | boolean>;
 };
+
+const sortInboxByPinnedAndDate = (items: QueueListItem[]) =>
+  [...items].sort((left, right) => {
+    const leftPinned = left.isPinned === true ? 1 : 0;
+    const rightPinned = right.isPinned === true ? 1 : 0;
+    if (leftPinned !== rightPinned) return rightPinned - leftPinned;
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
 
 export function resolveCurrentAgentId(
   authUsername: string | undefined,
@@ -29,20 +49,19 @@ export function filterInboxContacts(
   currentAgentId: string,
 ): QueueListItem[] {
   const agentKey = currentAgentId.trim().toLowerCase();
-  const sorted = [...items].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
 
-  if (tab === "all") return sorted;
+  if (tab === "all") return sortInboxByPinnedAndDate(items);
   if (tab === "unassigned") {
-    return sorted.filter((item) => item.status === "waiting");
+    return sortInboxByPinnedAndDate(items.filter((item) => item.status === "waiting"));
   }
-  return sorted.filter(
-    (item) =>
-      item.status === "in_service" &&
-      String(item.assignedAgentId ?? "")
-        .trim()
-        .toLowerCase() === agentKey,
+  return sortInboxByPinnedAndDate(
+    items.filter(
+      (item) =>
+        item.status === "in_service" &&
+        String(item.assignedAgentId ?? "")
+          .trim()
+          .toLowerCase() === agentKey,
+    ),
   );
 }
 

@@ -62,6 +62,12 @@ type QueueContact = {
   status: "waiting" | "in_service";
   assignedAgentId?: string;
   assignedAgentName?: string;
+  priorityName?: string;
+  labelIds?: string[];
+  labels?: Array<{ id: string; name: string; color: string }>;
+  labelName?: string;
+  labelColor?: string;
+  isPinned?: boolean;
   updatedAt: string;
 };
 

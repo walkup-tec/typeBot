@@ -642,7 +642,12 @@ export const registerQueueRoutes = (app: Express) => {
       labelId: queuedContact?.labelId ?? null,
       labelName: queuedContact?.labelName ?? null,
       labelColor: queuedContact?.labelColor ?? null,
+      labelIds: queuedContact?.labelIds ?? (queuedContact?.labelId ? [queuedContact.labelId] : []),
+      labels: queuedContact?.labels ?? [],
       scheduledAt: queuedContact?.scheduledAt ?? null,
+      isPinned: queuedContact?.isPinned === true,
+      assignedAgentId: queuedContact?.assignedAgentId ?? null,
+      assignedAgentName: queuedContact?.assignedAgentName ?? null,
     });
     const safeProfileImageTag =
       profileImageUrl && isSafeImageSrc(profileImageUrl)
@@ -716,6 +721,25 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-meta-menu-actions { display:flex; gap:8px; justify-content:flex-end; }
     body.agent-screen .lead-meta-menu-actions button { border-radius:8px; border:1px solid #334155; background:#111827; color:#e2e8f0; padding:7px 10px; font-size:12px; font-weight:600; cursor:pointer; }
     body.agent-screen .lead-meta-menu-actions button.primary { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
+    body.agent-screen .lead-actions-menu-wrap { position:relative; display:inline-flex; }
+    body.agent-screen .lead-actions-menu { position:absolute; top:calc(100% + 6px); left:0; min-width:220px; background:#0f172a; border:1px solid #334155; border-radius:10px; padding:6px; z-index:150; box-shadow:0 14px 34px rgba(2,6,23,.45); display:none; }
+    body.agent-screen .lead-actions-menu.open { display:block; }
+    body.agent-screen .lead-actions-menu-row { position:relative; display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:8px; padding:8px 10px; color:#e2e8f0; font-size:13px; cursor:default; }
+    body.agent-screen .lead-actions-menu-row:hover, body.agent-screen .lead-actions-menu-row:focus-within { background:#1e293b; }
+    body.agent-screen .lead-actions-menu-row > span { pointer-events:none; font-weight:600; white-space:nowrap; }
+    body.agent-screen .lead-actions-menu-row::after { content:"›"; color:#94a3b8; font-size:14px; }
+    body.agent-screen .lead-actions-submenu { position:absolute; left:calc(100% + 4px); top:0; min-width:200px; max-width:min(280px,70vw); max-height:min(280px,55vh); overflow:auto; background:#0f172a; border:1px solid #334155; border-radius:10px; padding:6px; display:none; gap:2px; z-index:160; box-shadow:0 14px 34px rgba(2,6,23,.45); }
+    body.agent-screen .lead-actions-menu-row:hover .lead-actions-submenu, body.agent-screen .lead-actions-menu-row:focus-within .lead-actions-submenu { display:grid; }
+    body.agent-screen .lead-actions-submenu-item { width:100%; border:0; border-radius:8px; background:transparent; color:#e2e8f0; text-align:left; padding:8px 10px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; }
+    body.agent-screen .lead-actions-submenu-item:hover, body.agent-screen .lead-actions-submenu-item:focus-visible { background:#1e293b; outline:none; }
+    body.agent-screen .lead-actions-submenu-item.is-selected { background:rgba(20,184,166,.12); color:#99f6e4; }
+    body.agent-screen .lead-actions-submenu-item__check { width:14px; height:14px; border:1px solid #475569; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; flex-shrink:0; color:transparent; }
+    body.agent-screen .lead-actions-submenu-item.is-selected .lead-actions-submenu-item__check { border-color:#14b8a6; color:#5eead4; background:rgba(20,184,166,.2); }
+    body.agent-screen .lead-actions-submenu-item__dot { width:10px; height:10px; border-radius:999px; flex-shrink:0; }
+    body.agent-screen .lead-actions-menu-pin { width:100%; border:0; border-radius:8px; background:transparent; color:#e2e8f0; text-align:left; padding:8px 10px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; }
+    body.agent-screen .lead-actions-menu-pin:hover, body.agent-screen .lead-actions-menu-pin:focus-visible { background:#1e293b; outline:none; }
+    body.agent-screen .lead-actions-menu-pin.is-active { color:#fde68a; }
+    body.agent-screen .lead-meta-badges { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
     body.agent-screen .lead-schedule-input { width:100%; border-radius:8px; border:1px solid #334155; background:#111827; color:#f1f5f9; padding:9px 10px; font:inherit; box-sizing:border-box; }
     body.agent-screen .lead-drawer-overlay { position:fixed; inset:0; background:transparent; z-index:80; display:none; pointer-events:none; }
     body.agent-screen .lead-drawer-overlay.open { display:block; }
@@ -1166,16 +1190,33 @@ export const registerQueueRoutes = (app: Express) => {
           <div class="lead-header-identity">
             <strong id="leadTitle">${escapedName}</strong>
             <div class="lead-inline-meta" id="leadInlineMeta">
-              <button type="button" id="leadPriorityBtn" class="lead-meta-icon-btn" title="Definir prioridade" aria-label="Definir prioridade do lead" aria-haspopup="menu" aria-expanded="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 2.5L18.5 10H14V5.5ZM8 13h8v1.5H8V13Zm0 3.5h5V18H8v-1.5Z"/></svg>
-              </button>
-              <span id="leadPriorityBadge" class="lead-meta-badge is-hidden" title="Prioridade"></span>
-              <div id="leadPriorityMenu" class="lead-meta-menu" role="menu" aria-label="Prioridades"></div>
-              <button type="button" id="leadLabelBtn" class="lead-meta-icon-btn" title="Definir etiqueta" aria-label="Definir etiqueta do lead" aria-haspopup="menu" aria-expanded="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41 11.58 12.41 2.58a2 2 0 0 0-2.83 0L2.59 9.58A2 2 0 0 0 2 11.41V20a2 2 0 0 0 2 2h8.59a2 2 0 0 0 1.41-.59l9-9a2 2 0 0 0 0-2.83ZM7 7a2 2 0 1 1 2.83 2.83A2 2 0 0 1 7 7Z"/></svg>
-              </button>
-              <span id="leadLabelBadge" class="lead-meta-badge is-hidden" title="Etiqueta"><span class="lead-meta-badge__dot"></span><span id="leadLabelBadgeText"></span></span>
-              <div id="leadLabelMenu" class="lead-meta-menu" role="menu" aria-label="Etiquetas"></div>
+              <div class="lead-actions-menu-wrap">
+                <button type="button" id="leadMenuBtn" class="lead-meta-icon-btn" title="Opções do lead" aria-label="Abrir menu do lead" aria-haspopup="menu" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v2H4V8Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z"/></svg>
+                </button>
+                <div id="leadActionsMenu" class="lead-actions-menu" role="menu" aria-label="Opções do lead">
+                  <div class="lead-actions-menu-row" tabindex="0">
+                    <span>Atribuir etiqueta</span>
+                    <div id="leadLabelsSubmenu" class="lead-actions-submenu" role="menu" aria-label="Etiquetas"></div>
+                  </div>
+                  <div class="lead-actions-menu-row" tabindex="0">
+                    <span>Propriedade</span>
+                    <div id="leadPrioritySubmenu" class="lead-actions-submenu" role="menu" aria-label="Propriedades"></div>
+                  </div>
+                  <div class="lead-actions-menu-row" tabindex="0">
+                    <span>Atribuir atendente</span>
+                    <div id="leadAssignSubmenu" class="lead-actions-submenu" role="menu" aria-label="Atendentes"></div>
+                  </div>
+                  <button type="button" id="leadPinToggleBtn" class="lead-actions-menu-pin" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1.03 1 1.03-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg>
+                    <span id="leadPinToggleLabel">Fixar conversa</span>
+                  </button>
+                </div>
+              </div>
+              <div class="lead-meta-badges" id="leadMetaBadges">
+                <span id="leadPriorityBadge" class="lead-meta-badge is-hidden" title="Propriedade"></span>
+                <span id="leadLabelsBadges" class="lead-meta-badges"></span>
+              </div>
               <button type="button" id="leadScheduleBtn" class="lead-meta-icon-btn" title="Agendar retorno" aria-label="Agendar data com o lead" aria-haspopup="dialog" aria-expanded="false">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h2v2H7V3Zm8 0h2v2h-2V3ZM5 7h14v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7Zm2 2v10h10V9H7Zm2 2h2v2H9v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H9v-2Zm4 0h2v2h-2v-2Z"/></svg>
               </button>
@@ -1296,12 +1337,6 @@ export const registerQueueRoutes = (app: Express) => {
             </button>
           </div>
           <div class="lead-accordion">
-            <section class="lead-accordion-item" data-lead-section="assign">
-              <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Atribuição</span><span class="lead-accordion-icon">+</span></button>
-              <div class="lead-accordion-panel">
-                <label class="lead-field"><span>Atribuir para outro atendente</span><select id="leadAssignSelect"><option value="">Manter atendente atual</option></select></label>
-              </div>
-            </section>
             <section class="lead-accordion-item" data-lead-section="variables">
               <button type="button" class="lead-accordion-trigger" aria-expanded="false"><span class="lead-accordion-label">Informações do Typebot</span><span class="lead-accordion-icon">+</span></button>
               <div class="lead-accordion-panel"><div id="leadVariablesList" class="lead-variables-list"></div></div>
@@ -1719,7 +1754,6 @@ export const registerQueueRoutes = (app: Express) => {
     const leadNameInput = document.getElementById("leadNameInput");
     const leadWhatsappInput = document.getElementById("leadWhatsappInput");
     const leadCpfInput = document.getElementById("leadCpfInput");
-    const leadAssignSelect = document.getElementById("leadAssignSelect");
     const leadFilesInput = document.getElementById("leadFilesInput");
     const leadAttachmentsList = document.getElementById("leadAttachmentsList");
     const leadVariablesList = document.getElementById("leadVariablesList");
@@ -1735,13 +1769,15 @@ export const registerQueueRoutes = (app: Express) => {
     const tenantPriorities = ${tenantPrioritiesJson};
     const tenantLabels = ${tenantLabelsJson};
     let leadMetaState = ${initialLeadMetaJson};
-    const leadPriorityBtn = document.getElementById("leadPriorityBtn");
+    const leadMenuBtn = document.getElementById("leadMenuBtn");
+    const leadActionsMenu = document.getElementById("leadActionsMenu");
+    const leadLabelsSubmenu = document.getElementById("leadLabelsSubmenu");
+    const leadPrioritySubmenu = document.getElementById("leadPrioritySubmenu");
+    const leadAssignSubmenu = document.getElementById("leadAssignSubmenu");
+    const leadPinToggleBtn = document.getElementById("leadPinToggleBtn");
+    const leadPinToggleLabel = document.getElementById("leadPinToggleLabel");
     const leadPriorityBadge = document.getElementById("leadPriorityBadge");
-    const leadPriorityMenu = document.getElementById("leadPriorityMenu");
-    const leadLabelBtn = document.getElementById("leadLabelBtn");
-    const leadLabelBadge = document.getElementById("leadLabelBadge");
-    const leadLabelBadgeText = document.getElementById("leadLabelBadgeText");
-    const leadLabelMenu = document.getElementById("leadLabelMenu");
+    const leadLabelsBadges = document.getElementById("leadLabelsBadges");
     const leadScheduleBtn = document.getElementById("leadScheduleBtn");
     const leadScheduleBadge = document.getElementById("leadScheduleBadge");
     const leadScheduleMenu = document.getElementById("leadScheduleMenu");
@@ -1811,24 +1847,36 @@ export const registerQueueRoutes = (app: Express) => {
       void patchLeadMeta({ scheduledAt: raw || null });
     }
 
+    function closeLeadActionsMenu() {
+      if (leadActionsMenu) leadActionsMenu.classList.remove("open");
+      if (leadMenuBtn) {
+        leadMenuBtn.classList.remove("is-active");
+        leadMenuBtn.setAttribute("aria-expanded", "false");
+      }
+    }
+
     function closeLeadMetaMenus(exceptMenu) {
       const scheduleWasOpen = isLeadScheduleMenuOpen();
       const closingSchedule = scheduleWasOpen && exceptMenu !== leadScheduleMenu;
       if (closingSchedule) {
         persistLeadScheduleDraft();
       }
-      const menus = [leadPriorityMenu, leadLabelMenu, leadScheduleMenu];
-      const buttons = [leadPriorityBtn, leadLabelBtn, leadScheduleBtn];
-      menus.forEach((menu, index) => {
-        if (!menu) return;
-        const active = menu === exceptMenu;
-        menu.classList.toggle("open", active);
-        const button = buttons[index];
-        if (button) {
-          button.classList.toggle("is-active", active);
-          button.setAttribute("aria-expanded", active ? "true" : "false");
+      if (exceptMenu !== leadScheduleMenu) {
+        closeLeadActionsMenu();
+      }
+      if (leadScheduleMenu) {
+        const active = leadScheduleMenu === exceptMenu;
+        leadScheduleMenu.classList.toggle("open", active);
+        if (leadScheduleBtn) {
+          leadScheduleBtn.classList.toggle("is-active", active);
+          leadScheduleBtn.setAttribute("aria-expanded", active ? "true" : "false");
         }
-      });
+      }
+    }
+
+    function notifyParentQueueUpdated() {
+      if (!window.parent || window.parent === window) return;
+      window.parent.postMessage({ type: "chattypebot-queue-updated", contactId }, "*");
     }
 
     function renderLeadMetaBadges() {
@@ -1845,18 +1893,29 @@ export const registerQueueRoutes = (app: Express) => {
             "lead-meta-badge lead-meta-badge--priority-" + resolvePriorityTone(name);
         }
       }
-      if (leadLabelBadge && leadLabelBadgeText) {
-        const name = String(leadMetaState.labelName || "").trim();
-        const color = String(leadMetaState.labelColor || "#64748b").trim();
-        if (!name) {
-          leadLabelBadge.classList.add("is-hidden");
-          leadLabelBadgeText.textContent = "";
+      if (leadLabelsBadges) {
+        const labels = Array.isArray(leadMetaState.labels) ? leadMetaState.labels : [];
+        if (labels.length === 0) {
+          leadLabelsBadges.innerHTML = "";
         } else {
-          leadLabelBadge.classList.remove("is-hidden");
-          leadLabelBadge.className = "lead-meta-badge";
-          leadLabelBadgeText.textContent = name;
-          const dot = leadLabelBadge.querySelector(".lead-meta-badge__dot");
-          if (dot) dot.style.background = color;
+          leadLabelsBadges.innerHTML = labels
+            .map(
+              (item) =>
+                '<span class="lead-meta-badge" title="Etiqueta"><span class="lead-meta-badge__dot" style="background:' +
+                escapeHtml(String(item.color || "#64748b")) +
+                '"></span><span>' +
+                escapeHtml(String(item.name || "")) +
+                "</span></span>",
+            )
+            .join("");
+        }
+      }
+      if (leadPinToggleBtn) {
+        const pinned = leadMetaState.isPinned === true;
+        leadPinToggleBtn.classList.toggle("is-active", pinned);
+        leadPinToggleBtn.setAttribute("aria-pressed", pinned ? "true" : "false");
+        if (leadPinToggleLabel) {
+          leadPinToggleLabel.textContent = pinned ? "Desafixar conversa" : "Fixar conversa";
         }
       }
       if (leadScheduleBadge) {
@@ -1878,15 +1937,31 @@ export const registerQueueRoutes = (app: Express) => {
 
     function applyLeadMetaFromContact(contact) {
       if (!contact || typeof contact !== "object") return;
+      const labelIds = Array.isArray(contact.labelIds)
+        ? contact.labelIds.map((id) => String(id || "").trim()).filter(Boolean)
+        : contact.labelId
+          ? [String(contact.labelId).trim()]
+          : [];
+      const labels = Array.isArray(contact.labels)
+        ? contact.labels
+        : contact.labelId && contact.labelName
+          ? [{ id: contact.labelId, name: contact.labelName, color: contact.labelColor || "#64748b" }]
+          : [];
       leadMetaState = {
         priorityId: contact.priorityId || null,
         priorityName: contact.priorityName || null,
-        labelId: contact.labelId || null,
-        labelName: contact.labelName || null,
-        labelColor: contact.labelColor || null,
+        labelId: contact.labelId || labelIds[0] || null,
+        labelName: contact.labelName || labels[0]?.name || null,
+        labelColor: contact.labelColor || labels[0]?.color || null,
+        labelIds,
+        labels,
         scheduledAt: contact.scheduledAt || null,
+        isPinned: contact.isPinned === true,
+        assignedAgentId: contact.assignedAgentId || null,
+        assignedAgentName: contact.assignedAgentName || null,
       };
       renderLeadMetaBadges();
+      buildLeadActionsMenus();
     }
 
     async function patchLeadMeta(patch) {
@@ -1898,58 +1973,145 @@ export const registerQueueRoutes = (app: Express) => {
       if (!response.ok) return null;
       const updated = await response.json();
       applyLeadMetaFromContact(updated);
+      notifyParentQueueUpdated();
       return updated;
     }
 
-    function buildLeadMetaMenus() {
+    async function assignLeadToAttendant(agentId, agentName) {
+      const response = await fetch("/api/chat/queue/" + contactId + "/assign", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+        body: JSON.stringify({ agentId, agentName }),
+      });
+      if (!response.ok) return null;
+      const updated = await response.json();
+      applyLeadMetaFromContact(updated);
+      if (leadDrawerContact) applyLeadContactToDrawer(updated);
+      notifyParentQueueUpdated();
+      return updated;
+    }
+
+    function getSelectedLabelIds() {
+      return Array.isArray(leadMetaState.labelIds)
+        ? leadMetaState.labelIds.map((id) => String(id || "").trim()).filter(Boolean)
+        : [];
+    }
+
+    function toggleLeadLabel(labelId) {
+      const normalized = String(labelId || "").trim();
+      if (!normalized) return;
+      const current = new Set(getSelectedLabelIds());
+      if (current.has(normalized)) current.delete(normalized);
+      else current.add(normalized);
+      void patchLeadMeta({ labelIds: [...current] });
+    }
+
+    function buildLeadActionsMenus() {
       if (!isAgentMode) return;
-      if (leadPriorityMenu) {
+      if (leadPrioritySubmenu) {
         const clearItem =
-          '<button type="button" class="lead-meta-menu-item" data-priority-id=""><span>Sem prioridade</span></button>';
+          '<button type="button" class="lead-actions-submenu-item" data-priority-id=""><span>Sem propriedade</span></button>';
         const items = (tenantPriorities || [])
-          .map(
-            (item) =>
-              '<button type="button" class="lead-meta-menu-item" data-priority-id="' +
-              escapeHtml(String(item.id || "")) +
+          .map((item) => {
+            const id = String(item.id || "").trim();
+            const selected = id && id === String(leadMetaState.priorityId || "");
+            return (
+              '<button type="button" class="lead-actions-submenu-item' +
+              (selected ? " is-selected" : "") +
+              '" data-priority-id="' +
+              escapeHtml(id) +
               '"><span>' +
               escapeHtml(String(item.name || "")) +
-              "</span></button>",
-          )
+              "</span></button>"
+            );
+          })
           .join("");
-        leadPriorityMenu.innerHTML = clearItem + items;
+        leadPrioritySubmenu.innerHTML = clearItem + items;
       }
-      if (leadLabelMenu) {
-        const clearItem =
-          '<button type="button" class="lead-meta-menu-item" data-label-id=""><span>Sem etiqueta</span></button>';
+      if (leadLabelsSubmenu) {
         const items = (tenantLabels || [])
-          .map(
-            (item) =>
-              '<button type="button" class="lead-meta-menu-item" data-label-id="' +
-              escapeHtml(String(item.id || "")) +
-              '"><span class="lead-meta-menu-item__dot" style="--label-dot:' +
-              escapeHtml(String(item.color || "#64748b")) +
-              ';background:' +
+          .map((item) => {
+            const id = String(item.id || "").trim();
+            const selected = getSelectedLabelIds().includes(id);
+            return (
+              '<button type="button" class="lead-actions-submenu-item' +
+              (selected ? " is-selected" : "") +
+              '" data-label-id="' +
+              escapeHtml(id) +
+              '"><span class="lead-actions-submenu-item__check" aria-hidden="true">✓</span><span class="lead-actions-submenu-item__dot" style="background:' +
               escapeHtml(String(item.color || "#64748b")) +
               '"></span><span>' +
               escapeHtml(String(item.name || "")) +
-              "</span></button>",
-          )
+              "</span></button>"
+            );
+          })
           .join("");
-        leadLabelMenu.innerHTML = clearItem + items;
+        leadLabelsSubmenu.innerHTML =
+          (items || '<button type="button" class="lead-actions-submenu-item" disabled><span>Sem etiquetas cadastradas</span></button>');
       }
+      if (leadAssignSubmenu) {
+        const currentAssigned = String(leadMetaState.assignedAgentId || "").trim().toLowerCase();
+        const options = (leadAttendants || [])
+          .map((attendant) => {
+            const username = String(attendant.username || "").trim();
+            if (!username) return "";
+            const displayName = resolveAttendantDisplayName(attendant, {
+              assignedAgentId: leadMetaState.assignedAgentId,
+              assignedAgentName: leadMetaState.assignedAgentName,
+              sessionAgentId,
+              sessionAgentName,
+            });
+            const selected = username.toLowerCase() === currentAssigned;
+            return (
+              '<button type="button" class="lead-actions-submenu-item' +
+              (selected ? " is-selected" : "") +
+              '" data-agent-id="' +
+              escapeHtml(username) +
+              '" data-agent-name="' +
+              escapeHtml(displayName) +
+              '"><span>' +
+              escapeHtml(displayName) +
+              (selected ? " (atual)" : "") +
+              "</span></button>"
+            );
+          })
+          .join("");
+        leadAssignSubmenu.innerHTML =
+          options || '<button type="button" class="lead-actions-submenu-item" disabled><span>Nenhum atendente cadastrado</span></button>';
+      }
+    }
+
+    async function ensureLeadAttendantsLoaded() {
+      if (!isAgentMode) return;
+      if (leadAttendants.length > 0) return;
+      const response = await fetch("/api/master/tenants/" + encodeURIComponent(tenantId) + "/attendants?t=" + Date.now(), {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      leadAttendants = Array.isArray(data) ? data : [];
+      buildLeadActionsMenus();
     }
 
     function initLeadMetaControls() {
       if (!isAgentMode) return;
-      buildLeadMetaMenus();
+      buildLeadActionsMenus();
       renderLeadMetaBadges();
-      if (leadPriorityBtn && leadPriorityMenu) {
-        leadPriorityBtn.addEventListener("click", (event) => {
+      void ensureLeadAttendantsLoaded();
+      if (leadMenuBtn && leadActionsMenu) {
+        leadMenuBtn.addEventListener("click", (event) => {
           event.stopPropagation();
-          const willOpen = !leadPriorityMenu.classList.contains("open");
-          closeLeadMetaMenus(willOpen ? leadPriorityMenu : null);
+          void ensureLeadAttendantsLoaded();
+          const willOpen = !leadActionsMenu.classList.contains("open");
+          closeLeadMetaMenus(null);
+          if (willOpen) {
+            leadActionsMenu.classList.add("open");
+            leadMenuBtn.classList.add("is-active");
+            leadMenuBtn.setAttribute("aria-expanded", "true");
+            buildLeadActionsMenus();
+          }
         });
-        leadPriorityMenu.addEventListener("click", (event) => {
+        leadPrioritySubmenu?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof HTMLElement)) return;
           const button = target.closest("[data-priority-id]");
@@ -1958,22 +2120,33 @@ export const registerQueueRoutes = (app: Express) => {
           closeLeadMetaMenus(null);
           void patchLeadMeta({ priorityId: priorityId || null });
         });
-      }
-      if (leadLabelBtn && leadLabelMenu) {
-        leadLabelBtn.addEventListener("click", (event) => {
-          event.stopPropagation();
-          const willOpen = !leadLabelMenu.classList.contains("open");
-          closeLeadMetaMenus(willOpen ? leadLabelMenu : null);
-        });
-        leadLabelMenu.addEventListener("click", (event) => {
+        leadLabelsSubmenu?.addEventListener("click", (event) => {
           const target = event.target;
           if (!(target instanceof HTMLElement)) return;
           const button = target.closest("[data-label-id]");
           if (!button) return;
-          const labelId = button.getAttribute("data-label-id");
-          closeLeadMetaMenus(null);
-          void patchLeadMeta({ labelId: labelId || null });
+          event.stopPropagation();
+          toggleLeadLabel(button.getAttribute("data-label-id"));
         });
+        leadAssignSubmenu?.addEventListener("click", (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const button = target.closest("[data-agent-id]");
+          if (!button) return;
+          const agentId = String(button.getAttribute("data-agent-id") || "").trim();
+          const agentName = String(button.getAttribute("data-agent-name") || "").trim();
+          if (!agentId) return;
+          closeLeadMetaMenus(null);
+          void assignLeadToAttendant(agentId, agentName);
+        });
+        if (leadPinToggleBtn) {
+          leadPinToggleBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const nextPinned = leadMetaState.isPinned !== true;
+            closeLeadMetaMenus(null);
+            void patchLeadMeta({ isPinned: nextPinned });
+          });
+        }
       }
       if (leadScheduleBtn && leadScheduleMenu) {
         leadScheduleBtn.addEventListener("click", (event) => {
@@ -2003,9 +2176,11 @@ export const registerQueueRoutes = (app: Express) => {
         });
       }
       document.addEventListener("click", (event) => {
-        if (!leadInlineMeta) return;
         const target = event.target;
-        if (target instanceof Node && leadInlineMeta.contains(target)) return;
+        if (target instanceof Node) {
+          if (leadInlineMeta && leadInlineMeta.contains(target)) return;
+          if (leadActionsMenu && leadActionsMenu.contains(target)) return;
+        }
         closeLeadMetaMenus(null);
       });
     }
@@ -2427,35 +2602,6 @@ export const registerQueueRoutes = (app: Express) => {
       return finalizeAttendantLabel(username);
     }
 
-    async function loadLeadAttendants() {
-      if (!isAgentMode || !leadAssignSelect) return;
-      const response = await fetch("/api/master/tenants/" + encodeURIComponent(tenantId) + "/attendants?t=" + Date.now(), {
-        cache: "no-store",
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      leadAttendants = Array.isArray(data) ? data : [];
-      const currentAssigned = String(leadDrawerContact?.assignedAgentId || "").trim().toLowerCase();
-      const currentAssignedName = String(leadDrawerContact?.assignedAgentName || "").trim();
-      const labelHints = {
-        assignedAgentId: currentAssigned,
-        assignedAgentName: currentAssignedName,
-        sessionAgentId,
-        sessionAgentName,
-      };
-      leadAssignSelect.innerHTML = '<option value="">Manter atendente atual</option>';
-      leadAttendants.forEach((attendant) => {
-        const username = String(attendant.username || "").trim();
-        if (!username) return;
-        const displayName = resolveAttendantDisplayName(attendant, labelHints);
-        const option = document.createElement("option");
-        option.value = username;
-        option.textContent = displayName;
-        if (username.toLowerCase() === currentAssigned) option.textContent = displayName + " (atual)";
-        leadAssignSelect.appendChild(option);
-      });
-    }
-
     async function refreshLeadDrawer() {
       if (!isAgentMode) return;
       setLeadDrawerStatus("Carregando dados do lead...");
@@ -2469,7 +2615,8 @@ export const registerQueueRoutes = (app: Express) => {
       }
       const contact = await response.json();
       applyLeadContactToDrawer(contact);
-      await loadLeadAttendants();
+      applyLeadMetaFromContact(contact);
+      await ensureLeadAttendantsLoaded();
       setLeadDrawerStatus("");
     }
 
@@ -2523,33 +2670,6 @@ export const registerQueueRoutes = (app: Express) => {
       if (!noteSaved) return;
       const saved = await saveLeadContactFields();
       if (!saved) return;
-
-      const assignTo = leadAssignSelect ? String(leadAssignSelect.value || "").trim() : "";
-      const currentAssigned = String(leadDrawerContact?.assignedAgentId || "").trim().toLowerCase();
-      if (assignTo && assignTo.toLowerCase() !== currentAssigned) {
-        const attendant = leadAttendants.find((item) => String(item.username || "").trim() === assignTo);
-        const assignResponse = await fetch("/api/chat/queue/" + contactId + "/assign", {
-          method: "PATCH",
-          headers: { "content-type": "application/json", "x-tenant-id": tenantId },
-          body: JSON.stringify({
-            agentId: assignTo,
-            agentName: attendant
-              ? resolveAttendantDisplayName(attendant, {
-                  assignedAgentId: String(leadDrawerContact?.assignedAgentId || "").trim(),
-                  assignedAgentName: String(leadDrawerContact?.assignedAgentName || "").trim(),
-                  sessionAgentId,
-                  sessionAgentName,
-                })
-              : undefined,
-          }),
-        });
-        if (!assignResponse.ok) {
-          setLeadDrawerStatus("Dados salvos, mas a transferência falhou.");
-          return;
-        }
-        applyLeadContactToDrawer(await assignResponse.json());
-        if (leadAssignSelect) leadAssignSelect.value = "";
-      }
       setLeadDrawerStatus("Dados do lead salvos.");
     }
 

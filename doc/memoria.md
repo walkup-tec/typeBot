@@ -1,3 +1,12 @@
+## 2026-05-20 - Menu lead na Fila ao vivo (etiquetas, propriedade, atendente, fixar)
+
+- **Header chat:** menu (☰) + agendamento; submenus no hover.
+- **Etiquetas:** múltipla seleção (`labelIds` / `labels`).
+- **Propriedade:** prioridades do tenant (antes “prioridade”).
+- **Atendente:** atribuição via menu; removida do drawer/modal detalhes.
+- **Fixar:** `isPinned` + alfinete na lista; fixados no topo.
+- **Deploy:** api-typebot-crm + painel-typebot-crm.
+
 ## 2026-05-20 - Ícone encerrar atendimento (Fila ao vivo)
 
 - **UI:** botão `#leadEndServiceButton` no header (último à direita), ícone `call_end` (telefone desligar), tom vermelho, confirmação.

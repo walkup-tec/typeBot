@@ -34,6 +34,8 @@ export const updateQueueContactSchema = z.object({
   leadCpf: z.string().max(20).optional(),
   priorityId: optionalUuidOrClear,
   labelId: optionalUuidOrClear,
+  labelIds: z.array(z.string().uuid()).optional(),
+  isPinned: z.boolean().optional(),
   scheduledAt: z.union([z.string().min(1).max(40), z.literal(""), z.null()]).optional(),
 });
 
@@ -174,7 +176,10 @@ export class QueueService {
       labelId: string;
       labelName: string;
       labelColor: string;
+      labelIds: string[];
+      labels: Array<{ id: string; name: string; color: string }>;
       scheduledAt: string;
+      isPinned: boolean;
     }> = {};
     if (input.contactName !== undefined) patch.contactName = input.contactName;
     if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
@@ -193,19 +198,45 @@ export class QueueService {
         patch.priorityName = priority.name;
       }
     }
-    if (input.labelId !== undefined) {
+    if (input.labelIds !== undefined) {
+      const ids = [...new Set(input.labelIds.map((id) => String(id).trim()).filter(Boolean))];
+      if (ids.length === 0) {
+        patch.labelIds = undefined;
+        patch.labels = undefined;
+        patch.labelId = undefined;
+        patch.labelName = undefined;
+        patch.labelColor = undefined;
+      } else {
+        const resolved = ids
+          .map((id) => labelRepository.findById(tenantId, id))
+          .filter((label): label is NonNullable<typeof label> => Boolean(label));
+        if (resolved.length !== ids.length) throw new Error("Etiqueta inválida para este assinante.");
+        patch.labelIds = resolved.map((label) => label.id);
+        patch.labels = resolved.map((label) => ({ id: label.id, name: label.name, color: label.color }));
+        patch.labelId = resolved[0]?.id;
+        patch.labelName = resolved[0]?.name;
+        patch.labelColor = resolved[0]?.color;
+      }
+    } else if (input.labelId !== undefined) {
       const raw = input.labelId;
       if (raw === null || raw === "") {
+        patch.labelIds = undefined;
+        patch.labels = undefined;
         patch.labelId = undefined;
         patch.labelName = undefined;
         patch.labelColor = undefined;
       } else {
         const label = labelRepository.findById(tenantId, raw);
         if (!label) throw new Error("Etiqueta inválida para este assinante.");
+        patch.labelIds = [label.id];
+        patch.labels = [{ id: label.id, name: label.name, color: label.color }];
         patch.labelId = label.id;
         patch.labelName = label.name;
         patch.labelColor = label.color;
       }
+    }
+    if (input.isPinned !== undefined) {
+      patch.isPinned = input.isPinned;
     }
     if (input.scheduledAt !== undefined) {
       const raw = input.scheduledAt;

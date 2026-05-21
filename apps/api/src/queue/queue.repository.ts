@@ -34,11 +34,16 @@ export interface QueueContact {
   assignedAgentName?: string;
   priorityId?: string;
   priorityName?: string;
+  /** Compatibilidade: primeira etiqueta quando há apenas uma. */
   labelId?: string;
   labelName?: string;
   labelColor?: string;
+  labelIds?: string[];
+  labels?: Array<{ id: string; name: string; color: string }>;
   /** Data/hora ISO do próximo agendamento com o lead. */
   scheduledAt?: string;
+  /** Conversa fixada no topo da fila ao vivo. */
+  isPinned?: boolean;
   updatedAt: string;
 }
 
@@ -165,7 +170,10 @@ export class QueueRepository {
         | "labelId"
         | "labelName"
         | "labelColor"
+        | "labelIds"
+        | "labels"
         | "scheduledAt"
+        | "isPinned"
       >
     >,
   ): QueueContact | null {
@@ -183,7 +191,10 @@ export class QueueRepository {
       "labelId",
       "labelName",
       "labelColor",
+      "labelIds",
+      "labels",
       "scheduledAt",
+      "isPinned",
     ] as const) {
       if (key in patch && patch[key] === undefined) {
         delete updated[key];

@@ -38,11 +38,49 @@ export const withResolvedLeadAgentNotes = (contact: QueueContact): QueueContact 
   agentNotesHistory: resolveLeadAgentNotes(contact),
 });
 
+const normalizeQueueLabels = (contact: QueueContact): QueueContact => {
+  const labelIds = Array.isArray(contact.labelIds)
+    ? contact.labelIds.map((id) => String(id).trim()).filter(Boolean)
+    : [];
+  const labels = Array.isArray(contact.labels)
+    ? contact.labels
+        .map((row) => ({
+          id: String(row.id ?? "").trim(),
+          name: String(row.name ?? "").trim(),
+          color: String(row.color ?? "#64748b").trim() || "#64748b",
+        }))
+        .filter((row) => row.id && row.name)
+    : [];
+  if (labelIds.length === 0 && contact.labelId) {
+    const legacyId = String(contact.labelId).trim();
+    if (legacyId) {
+      labelIds.push(legacyId);
+      if (labels.length === 0 && contact.labelName) {
+        labels.push({
+          id: legacyId,
+          name: String(contact.labelName).trim(),
+          color: String(contact.labelColor ?? "#64748b").trim() || "#64748b",
+        });
+      }
+    }
+  }
+  const first = labels[0];
+  return {
+    ...contact,
+    labelIds: labelIds.length > 0 ? labelIds : undefined,
+    labels: labels.length > 0 ? labels : undefined,
+    labelId: first?.id ?? contact.labelId,
+    labelName: first?.name ?? contact.labelName,
+    labelColor: first?.color ?? contact.labelColor,
+    isPinned: contact.isPinned === true,
+  };
+};
+
 export const withNormalizedQueueContact = (contact: QueueContact): QueueContact => {
   const leadContext = pruneLeadContext(contact.leadContext);
-  return {
+  return normalizeQueueLabels({
     ...withResolvedLeadAgentNotes(contact),
     leadContext,
     contactName: resolveLeadContactName(contact.contactName, leadContext),
-  };
+  });
 };
