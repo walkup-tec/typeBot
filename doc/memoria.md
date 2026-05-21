@@ -1,3 +1,9 @@
+## 2026-05-20 - Fix troca de abas Fila ao vivo + sidebar mais larga
+
+- Removido `useEffect` que forçava aba Hoje/Minhas conforme lead selecionado (bug ao clicar Não atribuídas).
+- `handleTabChange`: respeita fila escolhida e reseleciona só contatos daquela fila.
+- Sidebar filas: ~480px / 44vw; abas com scroll horizontal se necessário.
+
 ## 2026-05-20 - Chat abre em lead finalizado (somente leitura)
 
 - Fila ao vivo: iframe do handoff abre também para `status: closed`.

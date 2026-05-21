@@ -91,29 +91,17 @@ export function LiveInboxScreen({
   useEffect(() => {
     if (!selectedContactId) return;
     if (filteredContacts.some((item) => item.contactId === selectedContactId)) return;
+    setSelectedContactId(filteredContacts[0]?.contactId ?? null);
+  }, [filteredContacts, selectedContactId]);
 
-    const selected = contacts.find((item) => item.contactId === selectedContactId);
-    if (!selected) {
-      setSelectedContactId(filteredContacts[0]?.contactId ?? null);
-      return;
-    }
-
-    if (isScheduledForToday(selected.scheduledAt)) {
-      setActiveTab("today");
-      return;
-    }
-    if (selected.status === "in_service") {
-      setActiveTab("mine");
-      return;
-    }
-    if (selected.status === "waiting") {
-      setActiveTab("unassigned");
-      return;
-    }
-    if (selected.status === "closed") {
-      setActiveTab("all");
-    }
-  }, [contacts, currentAgentId, filteredContacts, selectedContactId]);
+  const handleTabChange = (tab: LiveInboxTab) => {
+    setActiveTab(tab);
+    const nextFiltered = filterInboxContacts(contacts, tab, currentAgentId);
+    setSelectedContactId((current) => {
+      if (current && nextFiltered.some((item) => item.contactId === current)) return current;
+      return nextFiltered[0]?.contactId ?? null;
+    });
+  };
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -207,7 +195,7 @@ export function LiveInboxScreen({
               role="tab"
               aria-selected={activeTab === "today"}
               className={`live-inbox-tab ${activeTab === "today" ? "active" : ""}`}
-              onClick={() => setActiveTab("today")}
+              onClick={() => handleTabChange("today")}
             >
               Hoje <span className="live-inbox-tab-count">{tabCounts.today}</span>
             </button>
@@ -216,7 +204,7 @@ export function LiveInboxScreen({
               role="tab"
               aria-selected={activeTab === "mine"}
               className={`live-inbox-tab ${activeTab === "mine" ? "active" : ""}`}
-              onClick={() => setActiveTab("mine")}
+              onClick={() => handleTabChange("mine")}
             >
               Minhas <span className="live-inbox-tab-count">{tabCounts.mine}</span>
             </button>
@@ -225,7 +213,7 @@ export function LiveInboxScreen({
               role="tab"
               aria-selected={activeTab === "unassigned"}
               className={`live-inbox-tab ${activeTab === "unassigned" ? "active" : ""}`}
-              onClick={() => setActiveTab("unassigned")}
+              onClick={() => handleTabChange("unassigned")}
             >
               Não atribuídas <span className="live-inbox-tab-count">{tabCounts.unassigned}</span>
             </button>
@@ -234,7 +222,7 @@ export function LiveInboxScreen({
               role="tab"
               aria-selected={activeTab === "all"}
               className={`live-inbox-tab ${activeTab === "all" ? "active" : ""}`}
-              onClick={() => setActiveTab("all")}
+              onClick={() => handleTabChange("all")}
             >
               Todos <span className="live-inbox-tab-count">{tabCounts.all}</span>
             </button>
