@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveLeadAgentNotes, withNormalizedQueueContact } from "../lib/lead-agent-notes";
 import { resolveAttendantDisplayName } from "../lib/agent-session-meta";
+import { mergeLeadContactNameIntoContext } from "../lib/lead-contact-name";
 import { mergeLeadCpfIntoContext } from "../lib/lead-cpf";
 import { pruneLeadContext } from "../lib/lead-context";
 import { labelRepository, priorityRepository } from "../lib/repositories";
@@ -186,10 +187,17 @@ export class QueueService {
       scheduledAt: string;
       isPinned: boolean;
     }> = {};
-    if (input.contactName !== undefined) patch.contactName = input.contactName;
-    if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
+    let nextLeadContext = contact.leadContext;
     if (input.leadCpf !== undefined) {
-      patch.leadContext = mergeLeadCpfIntoContext(contact.leadContext, input.leadCpf);
+      nextLeadContext = mergeLeadCpfIntoContext(nextLeadContext, input.leadCpf);
+    }
+    if (input.contactName !== undefined) {
+      patch.contactName = input.contactName;
+      nextLeadContext = mergeLeadContactNameIntoContext(nextLeadContext, input.contactName);
+    }
+    if (input.leadWhatsapp !== undefined) patch.leadWhatsapp = input.leadWhatsapp;
+    if (nextLeadContext !== contact.leadContext) {
+      patch.leadContext = nextLeadContext;
     }
     if (input.priorityId !== undefined) {
       const raw = input.priorityId;

@@ -1,3 +1,7 @@
+import { pruneLeadContext } from "./lead-context";
+
+export const LEAD_CONTACT_NAME_CONTEXT_KEY = "nome_contato";
+
 const PLACEHOLDER_CONTACT_NAMES = new Set(["-", "lead", "visitante", "lead typebot"]);
 
 const normalizeContactNameKey = (key: string): string =>
@@ -79,4 +83,22 @@ export const resolveLeadContactName = (
   if (fallback) return fallback;
 
   return direct || "Lead";
+};
+
+/** Persiste o nome editado no leadContext para não ser sobrescrito por nome_completo do Typebot. */
+export const mergeLeadContactNameIntoContext = (
+  leadContext: Record<string, string | number | boolean> | undefined,
+  contactName: string,
+): Record<string, string | number | boolean> | undefined => {
+  const trimmed = String(contactName ?? "").trim();
+  if (trimmed.length < 2) return pruneLeadContext(leadContext);
+
+  const next: Record<string, string | number | boolean> = { ...(leadContext ?? {}) };
+  next[LEAD_CONTACT_NAME_CONTEXT_KEY] = trimmed;
+
+  for (const key of Object.keys(next)) {
+    if (isNomeCompletoKey(key)) next[key] = trimmed;
+  }
+
+  return pruneLeadContext(next);
 };
