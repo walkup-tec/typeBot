@@ -1181,7 +1181,7 @@ export const registerQueueRoutes = (app: Express) => {
             </div>
           </div>
         </div>
-        <span class="lead-header-sub">${embedInbox ? `${escapedFlow} · ${tenantDisplayName.replace(/</g, "&lt;").replace(/>/g, "&gt;")}` : "Você está conversando com o visitante em tempo real"}</span>
+        ${embedInbox ? "" : '<span class="lead-header-sub">Você está conversando com o visitante em tempo real</span>'}
       </div>
       <div class="lead-header-actions">
         <button type="button" id="leadAttachmentsHeaderButton" class="lead-info-button" title="Anexos do lead" aria-label="Abrir anexos do lead">
@@ -1778,7 +1778,27 @@ export const registerQueueRoutes = (app: Express) => {
       }
     }
 
+    function isLeadScheduleMenuOpen() {
+      return Boolean(leadScheduleMenu && leadScheduleMenu.classList.contains("open"));
+    }
+
+    function readLeadScheduleInputValue() {
+      return leadScheduleInput ? String(leadScheduleInput.value || "").trim() : "";
+    }
+
+    function persistLeadScheduleDraft() {
+      const raw = readLeadScheduleInputValue();
+      const savedLocal = toDatetimeLocalValue(leadMetaState.scheduledAt);
+      if (raw === savedLocal) return;
+      void patchLeadMeta({ scheduledAt: raw || null });
+    }
+
     function closeLeadMetaMenus(exceptMenu) {
+      const scheduleWasOpen = isLeadScheduleMenuOpen();
+      const closingSchedule = scheduleWasOpen && exceptMenu !== leadScheduleMenu;
+      if (closingSchedule) {
+        persistLeadScheduleDraft();
+      }
       const menus = [leadPriorityMenu, leadLabelMenu, leadScheduleMenu];
       const buttons = [leadPriorityBtn, leadLabelBtn, leadScheduleBtn];
       menus.forEach((menu, index) => {
@@ -1833,7 +1853,7 @@ export const registerQueueRoutes = (app: Express) => {
           leadScheduleBadge.className = "lead-meta-badge lead-meta-badge--priority-neutral";
         }
       }
-      if (leadScheduleInput) {
+      if (leadScheduleInput && !isLeadScheduleMenuOpen()) {
         leadScheduleInput.value = toDatetimeLocalValue(leadMetaState.scheduledAt);
       }
     }
@@ -1944,15 +1964,21 @@ export const registerQueueRoutes = (app: Express) => {
           closeLeadMetaMenus(willOpen ? leadScheduleMenu : null);
         });
       }
+      if (leadScheduleInput) {
+        leadScheduleInput.addEventListener("change", () => {
+          void patchLeadMeta({ scheduledAt: readLeadScheduleInputValue() || null });
+        });
+      }
       if (leadScheduleSaveBtn) {
-        leadScheduleSaveBtn.addEventListener("click", () => {
-          const raw = leadScheduleInput ? String(leadScheduleInput.value || "").trim() : "";
+        leadScheduleSaveBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          persistLeadScheduleDraft();
           closeLeadMetaMenus(null);
-          void patchLeadMeta({ scheduledAt: raw || null });
         });
       }
       if (leadScheduleClearBtn) {
-        leadScheduleClearBtn.addEventListener("click", () => {
+        leadScheduleClearBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
           if (leadScheduleInput) leadScheduleInput.value = "";
           closeLeadMetaMenus(null);
           void patchLeadMeta({ scheduledAt: null });
