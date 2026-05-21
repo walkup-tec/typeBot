@@ -29,7 +29,7 @@ export interface QueueContact {
   agentNotes?: string;
   agentNotesHistory?: LeadAgentNote[];
   attachments?: LeadAttachment[];
-  status: "waiting" | "in_service";
+  status: "waiting" | "in_service" | "closed";
   assignedAgentId?: string;
   assignedAgentName?: string;
   priorityId?: string;
@@ -109,12 +109,16 @@ export class QueueRepository {
     return contact;
   }
 
-  listByTenant(tenantId: string) {
-    return [...waitingQueue.values()].filter((item) => item.tenantId === tenantId);
+  listByTenant(tenantId: string, options?: { includeClosed?: boolean }) {
+    const includeClosed = options?.includeClosed === true;
+    return [...waitingQueue.values()].filter(
+      (item) => item.tenantId === tenantId && (includeClosed || item.status !== "closed"),
+    );
   }
 
-  listAll() {
-    return [...waitingQueue.values()];
+  listAll(options?: { includeClosed?: boolean }) {
+    const includeClosed = options?.includeClosed === true;
+    return [...waitingQueue.values()].filter((item) => includeClosed || item.status !== "closed");
   }
 
   hydrateAssignedAgentNames(tenantId: string, resolveName: (agentId: string) => string | undefined) {
@@ -217,6 +221,31 @@ export class QueueRepository {
       });
       liveMessages.set(contactId, history);
     }
+    saveQueueState(waitingQueue, liveMessages);
+    return updated;
+  }
+
+  complete(tenantId: string, contactId: string, closedByLabel: string): QueueContact | null {
+    const contact = waitingQueue.get(contactId);
+    if (!contact || contact.tenantId !== tenantId) return null;
+    if (contact.status === "closed") return contact;
+
+    const updated: QueueContact = {
+      ...contact,
+      status: "closed",
+      updatedAt: new Date().toISOString(),
+    };
+    waitingQueue.set(contactId, updated);
+
+    const history = liveMessages.get(contactId) ?? [];
+    history.push({
+      id: `${contactId}-closed-${Date.now()}`,
+      contactId,
+      sender: "system",
+      content: `Atendimento encerrado por ${closedByLabel}`,
+      createdAt: new Date().toISOString(),
+    });
+    liveMessages.set(contactId, history);
     saveQueueState(waitingQueue, liveMessages);
     return updated;
   }

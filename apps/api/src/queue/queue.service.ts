@@ -123,6 +123,11 @@ export class QueueService {
     return contact ? withNormalizedQueueContact(contact) : null;
   }
 
+  completeService(tenantId: string, contactId: string, closedByLabel: string) {
+    const completed = this.queueRepository.complete(tenantId, contactId, closedByLabel);
+    return completed ? withNormalizedQueueContact(completed) : null;
+  }
+
   assign(tenantId: string, contactId: string, input: z.infer<typeof assignSchema>) {
     const assignedAgentName = resolveAttendantDisplayName(
       { username: input.agentId, displayName: input.agentName },
@@ -142,6 +147,8 @@ export class QueueService {
   }
 
   sendMessage(tenantId: string, contactId: string, input: z.infer<typeof sendLiveMessageSchema>) {
+    const contact = this.queueRepository.getByTenantAndContactId(tenantId, contactId);
+    if (!contact || contact.status === "closed") return null;
     const messages = this.queueRepository.getMessages(tenantId, contactId);
     if (!messages) return null;
 

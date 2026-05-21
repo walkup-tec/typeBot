@@ -104,6 +104,21 @@ export function LiveInboxScreen({
     }
   }, [filteredContacts, selectedContactId]);
 
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "chattypebot-queue-ended") return;
+      const endedId = String(event.data?.contactId ?? "").trim();
+      if (!endedId) return;
+      if (selectedContactId === endedId) {
+        setSelectedContactId(null);
+      }
+      void onRefreshQueue();
+      onStatusMessage("Atendimento encerrado.");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [onRefreshQueue, onStatusMessage, selectedContactId]);
+
   async function assignAndOpen(item: QueueListItem) {
     const resolvedAgentName = authDisplayName?.trim() || currentAgentId;
     setIsAssigning(true);

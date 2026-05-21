@@ -528,8 +528,10 @@ export const registerQueueRoutes = (app: Express) => {
     const senderRole = mode === "agent" ? "agent" : "visitor";
     const resolvedTenantIdForSession = String(queuedContact?.tenantId || tenantIdFromQuery || "").trim();
     const tenantId = resolvedTenantIdForSession;
+    const contactClosed = queuedContact?.status === "closed";
     const initialVisitorChatEnabled =
       mode !== "agent" &&
+      !contactClosed &&
       (queuedContact?.status === "in_service" || Boolean(String(queuedContact?.assignedAgentId ?? "").trim()));
     const tenant = tenantRepository.getById(tenantId);
     const tenantTheme = tenant?.defaultChatTheme;
@@ -679,7 +681,11 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .widget-header span { color:#94a3b8; font-size:14px; }
     body.agent-screen .lead-info-button { width:38px; height:38px; min-width:38px; flex-shrink:0; border-radius:999px; border:1px solid #334155; background:#0f172a; color:#cbd5e1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; }
     body.agent-screen .lead-info-button--active { border-color:#14b8a6; background:rgba(20,184,166,.16); color:#5eead4; }
+    body.agent-screen .lead-info-button.lead-end-service-button:hover, body.agent-screen .lead-info-button.lead-end-service-button:focus-visible { border-color:#ef4444; background:rgba(239,68,68,.14); color:#fca5a5; }
     body.agent-screen .lead-info-button svg { width:18px; height:18px; fill:currentColor; }
+    body.agent-screen .agent-widget.is-ended .widget-chat, body.agent-screen .agent-widget.is-ended .widget-input { opacity:.55; pointer-events:none; }
+    body.agent-screen .agent-ended-banner { display:none; margin:0 0 8px; padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#94a3b8; font-size:13px; }
+    body.agent-screen .agent-widget.is-ended .agent-ended-banner { display:block; }
     body.agent-screen .lead-header-top { display:flex; align-items:flex-start; gap:10px; width:100%; }
     body.agent-screen .lead-header-identity { display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; flex:1; }
     body.agent-screen .lead-header-identity > strong { font-size:18px; line-height:1.25; }
@@ -1148,7 +1154,8 @@ export const registerQueueRoutes = (app: Express) => {
 <body class="${isAgentMode ? `agent-screen${embedInbox ? " embed-inbox" : ""}` : ""}">
   ${
     isAgentMode
-      ? `<div class="agent-widget">
+      ? `<div class="agent-widget${contactClosed ? " is-ended" : ""}" id="agentWidgetRoot">
+    <p class="agent-ended-banner" id="agentEndedBanner">Este atendimento foi encerrado. O lead saiu da fila ao vivo.</p>
     <div class="widget-header">
       <div class="lead-header-main">
         <div class="lead-header-top">
@@ -1184,6 +1191,9 @@ export const registerQueueRoutes = (app: Express) => {
         ${embedInbox ? "" : '<span class="lead-header-sub">Você está conversando com o visitante em tempo real</span>'}
       </div>
       <div class="lead-header-actions">
+        <button type="button" id="leadEndServiceButton" class="lead-info-button lead-end-service-button" title="Encerrar atendimento" aria-label="Encerrar atendimento">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10zm-1.41 14.41 6.59-6.58L17 11.83l-6.58 6.59-1.41-1.42L14.17 12l-4.58-4.59 1.41-1.41L12 10.59l4.59-4.58 1.41 1.41L13.41 12l4.58 4.59z"/></svg>
+        </button>
         <button type="button" id="leadAttachmentsHeaderButton" class="lead-info-button" title="Anexos do lead" aria-label="Abrir anexos do lead">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5v9a4.5 4.5 0 0 1-9 0v-10a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V7h-1.5v8.5a3 3 0 0 0 6 0v-10a4.5 4.5 0 0 0-9 0v10a6 6 0 0 0 12 0V6.5h-1.5Z"/></svg>
         </button>
@@ -1485,6 +1495,7 @@ export const registerQueueRoutes = (app: Express) => {
 
     function shouldEnableVisitorLiveChat(contact) {
       if (!contact) return false;
+      if (contact.status === "closed") return false;
       if (contact.status === "in_service") return true;
       const assigned = String(contact.assignedAgentId || "").trim();
       return contact.status === "waiting" && assigned.length > 0;
@@ -1734,6 +1745,9 @@ export const registerQueueRoutes = (app: Express) => {
     const leadScheduleSaveBtn = document.getElementById("leadScheduleSaveBtn");
     const leadScheduleClearBtn = document.getElementById("leadScheduleClearBtn");
     const leadInlineMeta = document.getElementById("leadInlineMeta");
+    const leadEndServiceButton = document.getElementById("leadEndServiceButton");
+    const agentWidgetRoot = document.getElementById("agentWidgetRoot");
+    const contactClosedInitially = ${JSON.stringify(contactClosed)};
 
     function resolvePriorityTone(name) {
       const normalized = String(name || "")
@@ -2565,6 +2579,47 @@ export const registerQueueRoutes = (app: Express) => {
         void registerLeadNote();
       });
     }
+    function notifyParentQueueEnded() {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "chattypebot-queue-ended", contactId: contactId }, "*");
+      }
+    }
+
+    function setAgentServiceEndedUI(ended) {
+      if (agentWidgetRoot) agentWidgetRoot.classList.toggle("is-ended", ended);
+      if (leadEndServiceButton) leadEndServiceButton.disabled = ended;
+      closeLeadMetaMenus(null);
+    }
+
+    async function completeLeadService() {
+      if (!isAgentMode || leadEndServiceButton?.disabled) return;
+      const agentLabel = resolveAttendantDisplayName(
+        { username: sessionAgentId, displayName: sessionAgentName },
+        { sessionAgentId, sessionAgentName },
+      );
+      if (!window.confirm("Encerrar este atendimento? O lead sairá da fila ao vivo.")) return;
+      const response = await fetch("/api/chat/queue/" + contactId + "/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
+        body: JSON.stringify({ agentName: agentLabel }),
+      });
+      if (!response.ok) {
+        window.alert("Não foi possível encerrar o atendimento.");
+        return;
+      }
+      setAgentServiceEndedUI(true);
+      notifyParentQueueEnded();
+      await loadMessages();
+    }
+
+    if (isAgentMode && leadEndServiceButton) {
+      leadEndServiceButton.addEventListener("click", () => {
+        void completeLeadService();
+      });
+      if (contactClosedInitially) {
+        setAgentServiceEndedUI(true);
+      }
+    }
     if (isAgentMode && leadInfoButton) {
       leadInfoButton.addEventListener("click", () => openLeadDrawer());
     }
@@ -2949,6 +3004,26 @@ export const registerQueueRoutes = (app: Express) => {
 
       if (!assigned) return res.status(404).json({ message: "Contact not found for tenant" });
       return res.status(200).json(assigned);
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
+  });
+
+  app.post("/api/chat/queue/:contactId/complete", (req, res) => {
+    try {
+      const tenantId = resolveTenantIdForContact(req, req.params.contactId);
+      const agentName = String(req.body?.agentName ?? req.body?.agentId ?? "").trim();
+      const closedByLabel =
+        agentName ||
+        resolveAttendantDisplayName(
+          { username: String(req.header("x-agent-id") ?? "").trim(), displayName: agentName },
+          {},
+        ) ||
+        "atendente";
+      const completed = queueService.completeService(tenantId, req.params.contactId, closedByLabel);
+      if (!completed) return res.status(404).json({ message: "Contact not found for tenant" });
+      res.setHeader("x-resolved-tenant-id", tenantId);
+      return res.status(200).json(completed);
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
     }
