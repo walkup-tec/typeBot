@@ -803,7 +803,9 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-note-register-button { width:100%; margin-top:8px; border-radius:8px; border:1px solid #2f6ca3; background:#2f6ca3; color:#f8fafc; padding:10px; font-weight:700; cursor:pointer; }
     body.agent-screen .lead-variable-chip, body.agent-screen .lead-attachment-item { border:1px solid #334155; border-radius:8px; background:#0f172a; padding:8px 10px; font-size:12px; color:#e2e8f0; word-break:break-word; }
     body.agent-screen .lead-variable-chip strong, body.agent-screen .lead-attachment-item strong { display:block; color:#94a3b8; font-size:11px; margin-bottom:4px; }
-    body.agent-screen .lead-attachment-item a { color:#93c5fd; text-decoration:none; }
+    body.agent-screen .lead-attachment-item a { color:#93c5fd; text-decoration:none; font-weight:600; }
+    body.agent-screen .lead-attachment-item .msg-image { display:block; max-width:100%; border-radius:8px; margin-bottom:8px; }
+    body.agent-screen .lead-attachment-download { display:inline-block; margin-top:4px; font-size:12px; }
     body.agent-screen .lead-save-button { border-radius:8px; border:1px solid #334155; background:var(--handoff-user-bubble-bg, #2f6ca3); color:#f8fafc; font-weight:700; padding:11px 12px; cursor:pointer; }
     body.agent-screen .lead-drawer-status { color:#94a3b8; min-height:16px; }
     body.agent-screen .widget-chat { min-height:320px; max-height:min(420px,52vh); overflow:auto; padding:10px; border:1px solid #1f2937; border-radius:10px; display:flex; flex-direction:column; gap:10px; background:#0b1224; }
@@ -2510,13 +2512,17 @@ export const registerQueueRoutes = (app: Express) => {
               content +
               '" alt="' +
               fileName +
-              '" /></div>'
+              '" /><a class="lead-attachment-download" href="' +
+              content +
+              '" download="' +
+              fileName +
+              '">Baixar</a></div>'
             );
           }
           return (
             '<div class="lead-attachment-item"><strong>' +
             fileName +
-            '</strong><a href="' +
+            '</strong><a class="lead-attachment-download" href="' +
             content +
             '" download="' +
             fileName +

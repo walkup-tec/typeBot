@@ -252,6 +252,20 @@ body {
   text-decoration: none;
 }
 
+.lead-attachment-item .live-message-image {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.lead-attachment-download {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .lead-save-button {
   font-weight: 700;
 }

@@ -1186,6 +1186,14 @@ button:disabled {
   display: block;
   max-width: 100%;
   border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.lead-detail-modal .lead-attachment-download {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .muted {
@@ -3689,6 +3697,7 @@ button.danger-btn:not(.ghost-btn):hover {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-top: 12px;
 }
 
 .live-inbox-tags .label-tag {

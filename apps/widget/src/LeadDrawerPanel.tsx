@@ -336,11 +336,10 @@ export function LeadDrawerPanel({
                     <strong>{item.fileName}</strong>
                     {item.mimeType.startsWith("image/") || item.content.startsWith(imageDataUrlPrefix) ? (
                       <img className="live-message-image" src={item.content} alt={item.fileName} />
-                    ) : (
-                      <a href={item.content} download={item.fileName}>
-                        Baixar
-                      </a>
-                    )}
+                    ) : null}
+                    <a className="lead-attachment-download" href={item.content} download={item.fileName}>
+                      Baixar
+                    </a>
                   </div>
                 ))}
               </div>

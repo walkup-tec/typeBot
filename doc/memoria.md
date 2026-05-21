@@ -1,3 +1,14 @@
+## 2026-05-20 - UI fila: margem etiquetas + baixar imagem anexo
+
+- `.live-inbox-tags` — `margin-top: 12px` (afasta do pill Em atendimento).
+- Anexos imagem: link **Baixar** igual aos docs (`handoff-view`, `LeadDetailModal`, `LeadDrawerPanel`).
+
+## 2026-05-20 - Deploy fila ao vivo (commit d45d5b2)
+
+- **Commit:** `deploy(fila-ao-vivo): anexos PDF/Word, salvar nome do lead e pill Em atendimento`
+- **Push:** `origin/master`
+- **Easypanel:** rebuild **api-typebot-crm** + **painel-typebot-crm**
+
 ## 2026-05-20 - Anexos PDF/Word no detalhamento do lead
 
 - **Causa:** limite de 260 KB (base64) valia também para documentos; PDF/Word estouravam no cliente e na API (max 300 KB).

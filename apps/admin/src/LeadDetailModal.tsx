@@ -256,11 +256,10 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
                       <strong>{item.fileName}</strong>
                       {item.mimeType.startsWith("image/") || item.content.startsWith("data:image/") ? (
                         <img className="live-message-image" src={item.content} alt={item.fileName} />
-                      ) : (
-                        <a href={item.content} download={item.fileName}>
-                          Baixar
-                        </a>
-                      )}
+                      ) : null}
+                      <a className="lead-attachment-download" href={item.content} download={item.fileName}>
+                        Baixar
+                      </a>
                     </div>
                   ))
                 )}
