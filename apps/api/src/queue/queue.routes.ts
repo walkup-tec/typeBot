@@ -1557,11 +1557,11 @@ export const registerQueueRoutes = (app: Express) => {
     }
 
     function formatCreatedAt(value) {
-      try {
-        return new Date(value).toLocaleString("pt-BR");
-      } catch {
-        return "";
-      }
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) return "";
+      return date.toLocaleString("pt-BR");
     }
 
     function senderTitle(sender) {
@@ -1802,16 +1802,16 @@ export const registerQueueRoutes = (app: Express) => {
     }
 
     function formatScheduleLabel(iso) {
-      try {
-        return new Date(iso).toLocaleString("pt-BR", {
-          day: "2-digit",
-          month: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      } catch {
-        return "";
-      }
+      const raw = String(iso || "").trim();
+      if (!raw) return "";
+      const date = new Date(raw);
+      if (Number.isNaN(date.getTime())) return "";
+      return date.toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     }
 
     function isLeadScheduleMenuOpen() {
