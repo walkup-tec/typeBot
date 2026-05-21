@@ -12,6 +12,7 @@ export type QueueListItem = {
   tenantName?: string;
   contactName: string;
   sourceFlowLabel: string;
+  sourceFlowDisplayName?: string;
   status: "waiting" | "in_service" | "closed";
   assignedAgentId?: string;
   assignedAgentName?: string;

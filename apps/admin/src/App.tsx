@@ -57,6 +57,7 @@ type QueueContact = {
   contactName: string;
   source: "typebot" | "widget";
   sourceFlowLabel: string;
+  sourceFlowDisplayName?: string;
   leadContext?: Record<string, string | number | boolean>;
   leadWhatsapp?: string;
   status: "waiting" | "in_service" | "closed";

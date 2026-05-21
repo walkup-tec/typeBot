@@ -141,10 +141,11 @@ export function LiveInboxScreen({
 
   const flowTagsForItem = (item: QueueListItem) => {
     const tags: { name: string; color: string }[] = [];
-    if (item.sourceFlowLabel?.trim()) {
+    const flowName = String(item.sourceFlowDisplayName ?? item.sourceFlowLabel ?? "").trim();
+    if (flowName) {
       tags.push({
-        name: item.sourceFlowLabel.trim(),
-        color: resolveFlowLabelColor(item.sourceFlowLabel),
+        name: flowName,
+        color: resolveFlowLabelColor(item.sourceFlowLabel || flowName),
       });
     }
     return tags;

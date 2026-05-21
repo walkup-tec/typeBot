@@ -20,6 +20,7 @@ import {
 } from "../lib/agent-session-meta";
 import { pruneLeadContext } from "../lib/lead-context";
 import { resolveLeadContactName } from "../lib/lead-contact-name";
+import { resolveSourceFlowDisplayName } from "../lib/source-flow-display";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   QueueService,
@@ -2867,7 +2868,7 @@ export const registerQueueRoutes = (app: Express) => {
       const item = queueService.enqueue(resolvedTenantId, {
         contactName: resolvedContactName,
         source: "typebot",
-        sourceFlowLabel: resolvedFlowLabel || "Fluxo",
+        sourceFlowLabel: displayFlowLabel || resolvedFlowLabel || "Fluxo",
         leadContext: storedLeadContext,
         leadWhatsapp: resolvedLeadWhatsapp,
       }, {
@@ -2988,8 +2989,10 @@ export const registerQueueRoutes = (app: Express) => {
         attendants.map((attendant) => [attendant.username.trim().toLowerCase(), attendant.displayName]),
       );
       queueService.backfillAssignedAgentNames(tenantId, (agentId) => attendantByUsername.get(agentId.trim().toLowerCase()));
+      const tenantFlows = flowRepository.listByTenant(tenantId);
       const queue = queueService.listInbox(tenantId).map((contact) => ({
         ...contact,
+        sourceFlowDisplayName: resolveSourceFlowDisplayName(tenantFlows, contact.sourceFlowLabel),
         assignedAgentName: resolveQueueContactAssignedAgentName(contact, attendants),
       }));
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
