@@ -253,8 +253,10 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
                     <strong>{item.contactName}</strong>
                     <span className="scheduling-card__datetime">{formatSchedulingDateTime(item.scheduledAt)}</span>
                   </div>
-                  <span className={`live-inbox-status-pill live-inbox-status-pill--${status.tone}`}>{status.label}</span>
-                  <div className="scheduling-card__meta">
+                  <div className="scheduling-card__inline-tags">
+                    <span className={`live-inbox-status-pill live-inbox-status-pill--${status.tone}`}>
+                      {status.label}
+                    </span>
                     {item.priorityName?.trim() ? (
                       <span className="scheduling-meta-pill">{item.priorityName.trim()}</span>
                     ) : null}
@@ -263,8 +265,6 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
                         {item.assignedAgentName.trim()}
                       </span>
                     ) : null}
-                  </div>
-                  <div className="live-inbox-tags">
                     {flowName ? (
                       <LabelTag name={flowName} color={resolveFlowLabelColor(item.sourceFlowLabel || flowName)} />
                     ) : null}

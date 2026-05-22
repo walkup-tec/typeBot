@@ -3936,15 +3936,33 @@ button.danger-btn:not(.ghost-btn):hover {
   white-space: nowrap;
 }
 
-.scheduling-card__meta {
+.scheduling-card__inline-tags {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin: 8px 0;
+  margin-top: 8px;
+}
+
+.scheduling-card__inline-tags .live-inbox-status-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0;
+}
+
+.scheduling-card__inline-tags .label-tag {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.scheduling-card__inline-tags .label-tag__swatch {
+  width: 10px;
+  height: 10px;
 }
 
 .scheduling-meta-pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
   border: 1px solid #334155;
   background: #111827;
