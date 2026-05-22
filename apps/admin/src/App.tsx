@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ClientsListScreen } from "./ClientsListScreen";
 import { LiveInboxScreen } from "./LiveInboxScreen";
+import { SchedulingScreen } from "./SchedulingScreen";
+import type { ScheduledLeadItem } from "./schedulingUtils";
 import { TenantLabelsStep } from "./TenantLabelsStep";
 import { TenantPrioritiesStep } from "./TenantPrioritiesStep";
 import { TenantKanbanStep } from "./TenantKanbanStep";
@@ -63,6 +65,7 @@ type QueueContact = {
   status: "waiting" | "in_service" | "closed";
   assignedAgentId?: string;
   assignedAgentName?: string;
+  priorityId?: string;
   priorityName?: string;
   labelIds?: string[];
   labels?: Array<{ id: string; name: string; color: string }>;
@@ -1265,7 +1268,7 @@ export function App() {
   }, [selectedTenant, attendants, masterProfile]);
 
   useEffect(() => {
-    if (!authSession || masterProfile !== "system_master" || activeScreen !== "clientList") return;
+    if (!authSession || masterProfile !== "system_master" || (activeScreen !== "clientList" && activeScreen !== "scheduling")) return;
     void loadMasterClientDirectory().catch(() => setStatusMessage("Falha ao carregar lista global de clientes"));
     const timer = window.setInterval(() => {
       loadMasterClientDirectory().catch(() => undefined);
@@ -3213,12 +3216,27 @@ export function App() {
           <KanbanScreen apiBase={apiBase} tenantId={selectedTenant} />
         ) : null}
 
-        {activeScreen === "scheduling" ? (
+        {activeScreen === "scheduling" && selectedTenant ? (
+          <SchedulingScreen
+            apiBase={apiBase}
+            tenantId={selectedTenant}
+            contacts={
+              (masterProfile === "system_master" ? masterClientContacts : queueItems) as ScheduledLeadItem[]
+            }
+            onOpenContact={openLeadDetailByContactId}
+            onRefresh={async () => {
+              if (masterProfile === "system_master") {
+                await loadMasterClientDirectory();
+                return;
+              }
+              await loadQueue(selectedTenant);
+            }}
+          />
+        ) : null}
+
+        {activeScreen === "scheduling" && !selectedTenant ? (
           <section className="card">
-            <h3>Agendamento</h3>
-            <p className="muted">
-              A agenda de compromissos e retornos com clientes será disponibilizada nesta área em breve.
-            </p>
+            <p className="muted">Selecione um assinante para visualizar a agenda de retornos.</p>
           </section>
         ) : null}
 

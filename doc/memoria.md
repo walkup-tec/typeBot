@@ -1,3 +1,9 @@
+## 2026-05-20 - Menu Agendamento (painel)
+
+- Tela `SchedulingScreen`: leads com `scheduledAt` no período.
+- Filtros inline: Essa semana (+7d), 15 dias, 30 dias, período custom De/Até.
+- Abas: Prioridades (select), Etiquetas (multi), Todos; ordenação por data/hora.
+
 ## 2026-05-20 - Fix troca de abas Fila ao vivo + sidebar mais larga
 
 - Removido `useEffect` que forçava aba Hoje/Minhas conforme lead selecionado (bug ao clicar Não atribuídas).
