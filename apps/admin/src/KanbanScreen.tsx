@@ -9,7 +9,7 @@ import {
 } from "./kanbanConfig";
 import {
   buildKanbanBoard,
-  countKanbanAssignedLeads,
+  countKanbanPlacedLeads,
   kanbanOrganizeSubtitle,
   resolveKanbanColumnDefs,
   type KanbanBoardContact,
@@ -72,20 +72,26 @@ export function KanbanScreen({ apiBase, tenantId, contacts, onOpenContact, onRef
     [config, priorities, labels],
   );
 
-  const boardColumns = useMemo(() => buildKanbanBoard(columnDefs, contacts), [columnDefs, contacts]);
+  const boardColumns = useMemo(
+    () => buildKanbanBoard(columnDefs, contacts, config.organizeBy),
+    [columnDefs, contacts, config.organizeBy],
+  );
 
-  const assignedCount = useMemo(() => countKanbanAssignedLeads(contacts), [contacts]);
+  const placedCount = useMemo(
+    () => countKanbanPlacedLeads(columnDefs, contacts, config.organizeBy),
+    [columnDefs, contacts, config.organizeBy],
+  );
 
   const organizeLabel =
     KANBAN_ORGANIZE_OPTIONS.find((option) => option.value === config.organizeBy)?.label ?? config.organizeBy;
 
   return (
-    <section className="kanban-screen" data-build="20260520-kanban-board-v1">
+    <section className="kanban-screen" data-build="20260520-kanban-by-label-v2">
       <header className="kanban-screen__toolbar">
         <p className="muted muted-subtle kanban-screen__summary">
           <strong>{organizeLabel}</strong> — {kanbanOrganizeSubtitle[config.organizeBy]}.{" "}
           <span>
-            {assignedCount} lead(s) com coluna definida · {contacts.length} na fila
+            {placedCount} lead(s) no quadro · {contacts.length} na fila
           </span>
         </p>
         <button type="button" className="ghost-btn" onClick={() => void refreshAll()} disabled={isLoading}>

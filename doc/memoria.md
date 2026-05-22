@@ -1,3 +1,9 @@
+## 2026-05-20 - Fix Kanban por etiqueta (labelIds do lead)
+
+- **Causa:** quadro só lia `kanbanColumnId` manual (ex. colunas personalizadas Segunda–Sexta); ao mudar para "Ordem de etiquetas" os IDs não batiam → "Coluna não encontrada".
+- **Correção:** `buildKanbanBoard` usa `labelIds`/`labels` do contato quando `organizeBy === "labels"`; prioridade usa `priorityId`; personalizado mantém coluna manual.
+- Colunas auxiliares: "Sem etiqueta", "Etapa manual desatualizada".
+
 ## 2026-05-20 - Modal lead: WhatsApp ao lado do nome (exceto fila ao vivo)
 
 - Botão verde inline no topo do `LeadDetailModal` quando há WhatsApp; oculto em `activeScreen === "liveQueue"`.

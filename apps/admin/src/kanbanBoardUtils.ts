@@ -13,7 +13,11 @@ export type KanbanBoardContact = {
   leadWhatsapp?: string;
   status: "waiting" | "in_service" | "closed" | string;
   assignedAgentName?: string;
+  priorityId?: string;
   priorityName?: string;
+  labelId?: string;
+  labelIds?: string[];
+  labels?: Array<{ id: string; name: string; color?: string }>;
   kanbanColumnId?: string;
   kanbanColumnName?: string;
   updatedAt: string;
@@ -34,7 +38,8 @@ export type KanbanBoardColumn = {
   cards: KanbanLeadCard[];
 };
 
-const UNASSIGNED_COLUMN_ID = "__kanban_unassigned";
+const ORPHAN_COLUMN_ID = "__kanban_orphan";
+const NO_LABEL_COLUMN_ID = "__kanban_no_label";
 
 export function resolveKanbanColumnDefs(
   config: TenantKanbanConfig,
@@ -77,40 +82,106 @@ function sortKanbanCards(cards: KanbanLeadCard[]): KanbanLeadCard[] {
   });
 }
 
-function resolveContactColumnId(
+function findColumnIdByName(columns: KanbanColumnDef[], name: string): string | null {
+  const normalized = String(name || "").trim().toLowerCase();
+  if (!normalized) return null;
+  const match = columns.find((column) => column.name.trim().toLowerCase() === normalized);
+  return match?.id ?? null;
+}
+
+function collectContactLabelIds(contact: KanbanBoardContact): string[] {
+  const fromArray = Array.isArray(contact.labelIds)
+    ? contact.labelIds.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  const legacy = contact.labelId ? [String(contact.labelId).trim()] : [];
+  const fromLabels = Array.isArray(contact.labels)
+    ? contact.labels.map((row) => String(row?.id || "").trim()).filter(Boolean)
+    : [];
+  return [...new Set([...fromArray, ...legacy, ...fromLabels])];
+}
+
+function resolveColumnIdFromKanbanFields(
   contact: KanbanBoardContact,
   columns: KanbanColumnDef[],
 ): string | null {
   const columnId = String(contact.kanbanColumnId || "").trim();
   if (columnId && columns.some((column) => column.id === columnId)) return columnId;
-
-  const columnName = String(contact.kanbanColumnName || "").trim().toLowerCase();
-  if (!columnName) return null;
-
-  const byName = columns.find((column) => column.name.trim().toLowerCase() === columnName);
-  return byName?.id ?? null;
+  return findColumnIdByName(columns, String(contact.kanbanColumnName || ""));
 }
 
-export function hasKanbanAssignment(contact: KanbanBoardContact): boolean {
+function resolveContactColumnId(
+  contact: KanbanBoardContact,
+  columns: KanbanColumnDef[],
+  organizeBy: KanbanOrganizeBy,
+): string | null {
+  if (organizeBy === "labels") {
+    for (const labelId of collectContactLabelIds(contact)) {
+      if (columns.some((column) => column.id === labelId)) return labelId;
+    }
+    return resolveColumnIdFromKanbanFields(contact, columns);
+  }
+
+  if (organizeBy === "priority") {
+    const priorityId = String(contact.priorityId || "").trim();
+    if (priorityId && columns.some((column) => column.id === priorityId)) return priorityId;
+    const byPriorityName = findColumnIdByName(columns, String(contact.priorityName || ""));
+    if (byPriorityName) return byPriorityName;
+    return resolveColumnIdFromKanbanFields(contact, columns);
+  }
+
+  return resolveColumnIdFromKanbanFields(contact, columns);
+}
+
+export function hasManualKanbanAssignment(contact: KanbanBoardContact): boolean {
   return Boolean(String(contact.kanbanColumnId || "").trim() || String(contact.kanbanColumnName || "").trim());
+}
+
+function shouldPlaceContactOnBoard(
+  contact: KanbanBoardContact,
+  columns: KanbanColumnDef[],
+  organizeBy: KanbanOrganizeBy,
+): boolean {
+  if (organizeBy === "custom") return hasManualKanbanAssignment(contact);
+  if (organizeBy === "labels") return collectContactLabelIds(contact).length > 0 || hasManualKanbanAssignment(contact);
+  const priorityId = String(contact.priorityId || "").trim();
+  const priorityName = String(contact.priorityName || "").trim();
+  return Boolean(priorityId || priorityName || hasManualKanbanAssignment(contact));
 }
 
 export function buildKanbanBoard(
   columns: KanbanColumnDef[],
   contacts: KanbanBoardContact[],
+  organizeBy: KanbanOrganizeBy,
 ): KanbanBoardColumn[] {
   const buckets = new Map<string, KanbanLeadCard[]>(columns.map((column) => [column.id, []]));
   const orphanCards: KanbanLeadCard[] = [];
+  const noLabelCards: KanbanLeadCard[] = [];
 
   for (const contact of contacts) {
-    if (!hasKanbanAssignment(contact)) continue;
+    if (!shouldPlaceContactOnBoard(contact, columns, organizeBy)) continue;
+
     const card = toKanbanLeadCard(contact);
-    const columnId = resolveContactColumnId(contact, columns);
+    const columnId = resolveContactColumnId(contact, columns, organizeBy);
+
     if (columnId && buckets.has(columnId)) {
       buckets.get(columnId)?.push(card);
       continue;
     }
-    orphanCards.push(card);
+
+    const labelIds = collectContactLabelIds(contact);
+
+    if (organizeBy === "labels") {
+      if (labelIds.length === 0 && !hasManualKanbanAssignment(contact)) {
+        noLabelCards.push(card);
+      } else {
+        orphanCards.push(card);
+      }
+      continue;
+    }
+
+    if (organizeBy === "priority" || organizeBy === "custom") {
+      orphanCards.push(card);
+    }
   }
 
   const board: KanbanBoardColumn[] = columns.map((column) => ({
@@ -118,9 +189,22 @@ export function buildKanbanBoard(
     cards: sortKanbanCards(buckets.get(column.id) ?? []),
   }));
 
+  if (organizeBy === "labels" && noLabelCards.length > 0) {
+    board.push({
+      column: { id: NO_LABEL_COLUMN_ID, name: "Sem etiqueta" },
+      cards: sortKanbanCards(noLabelCards),
+    });
+  }
+
   if (orphanCards.length > 0) {
     board.push({
-      column: { id: UNASSIGNED_COLUMN_ID, name: "Coluna não encontrada" },
+      column: {
+        id: ORPHAN_COLUMN_ID,
+        name:
+          organizeBy === "custom"
+            ? "Coluna não encontrada"
+            : "Etapa manual desatualizada",
+      },
       cards: sortKanbanCards(orphanCards),
     });
   }
@@ -128,12 +212,32 @@ export function buildKanbanBoard(
   return board;
 }
 
+export function countKanbanPlacedLeads(
+  columns: KanbanColumnDef[],
+  contacts: KanbanBoardContact[],
+  organizeBy: KanbanOrganizeBy,
+): number {
+  let count = 0;
+  for (const contact of contacts) {
+    if (!shouldPlaceContactOnBoard(contact, columns, organizeBy)) continue;
+    if (resolveContactColumnId(contact, columns, organizeBy)) {
+      count += 1;
+      continue;
+    }
+    if (organizeBy === "labels" && collectContactLabelIds(contact).length === 0) count += 1;
+    if (organizeBy === "custom" && hasManualKanbanAssignment(contact)) count += 1;
+    if (organizeBy === "priority" && (contact.priorityId || contact.priorityName)) count += 1;
+  }
+  return count;
+}
+
+/** @deprecated use countKanbanPlacedLeads */
 export function countKanbanAssignedLeads(contacts: KanbanBoardContact[]): number {
-  return contacts.filter(hasKanbanAssignment).length;
+  return contacts.filter(hasManualKanbanAssignment).length;
 }
 
 export const kanbanOrganizeSubtitle: Record<KanbanOrganizeBy, string> = {
-  priority: "Colunas pelas prioridades do assinante",
-  labels: "Colunas pelas etiquetas do assinante",
-  custom: "Colunas personalizadas do funil",
+  priority: "Leads agrupados pela prioridade do contato",
+  labels: "Leads agrupados pelas etiquetas do contato",
+  custom: "Leads na coluna definida manualmente no atendimento",
 };
