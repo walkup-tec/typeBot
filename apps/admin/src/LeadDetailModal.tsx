@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { LeadInlineFactField } from "./LeadInlineFactField";
+import { LeadWhatsappOpenButton } from "./LeadWhatsappOpenButton";
 import {
   getLeadContextEntries,
   getLeadInitials,
@@ -17,6 +18,8 @@ type LeadDetailModalProps = {
   apiBase: string;
   tenantId: string;
   contactId: string;
+  /** Fila ao vivo usa o drawer do handoff; não exibir atalho WhatsApp no topo do modal. */
+  showWhatsappHeaderAction?: boolean;
 };
 
 const AccordionSection = ({
@@ -41,7 +44,14 @@ const AccordionSection = ({
   </section>
 );
 
-export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }: LeadDetailModalProps) {
+export function LeadDetailModal({
+  open,
+  onClose,
+  apiBase,
+  tenantId,
+  contactId,
+  showWhatsappHeaderAction = true,
+}: LeadDetailModalProps) {
   const [contact, setContact] = useState<LeadContactDetail | null>(null);
   const [status, setStatus] = useState("");
   const [openSections, setOpenSections] = useState<Record<LeadDetailSection, boolean>>({
@@ -90,6 +100,11 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
     () => leadNameDraft.trim() || resolveLeadContactName(contact?.contactName, contact?.leadContext),
     [contact?.contactName, contact?.leadContext, leadNameDraft],
   );
+  const leadWhatsappForAction = useMemo(() => {
+    const draft = leadWhatsappDraft.trim();
+    if (draft) return draft;
+    return resolveLeadWhatsapp(contact?.leadWhatsapp, contact?.leadContext);
+  }, [contact?.leadContext, contact?.leadWhatsapp, leadWhatsappDraft]);
   const leadVariables = useMemo(
     () => getLeadContextEntries(contact?.leadContext).filter(([key]) => !isLeadCpfContextKey(key)),
     [contact?.leadContext],
@@ -151,7 +166,12 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
               {getLeadInitials(leadName)}
             </div>
             <div className="lead-profile-meta">
-              <strong>{leadName || "Visitante"}</strong>
+              <div className="lead-profile-name-row">
+                <strong>{leadName || "Visitante"}</strong>
+                {showWhatsappHeaderAction ? (
+                  <LeadWhatsappOpenButton phoneRaw={leadWhatsappForAction} contactName={leadName} />
+                ) : null}
+              </div>
               <span className="lead-profile-sub">Lead em atendimento ao vivo</span>
             </div>
           </div>

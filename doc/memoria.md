@@ -1,3 +1,14 @@
+## 2026-05-20 - Modal lead: WhatsApp ao lado do nome (exceto fila ao vivo)
+
+- Botão verde inline no topo do `LeadDetailModal` quando há WhatsApp; oculto em `activeScreen === "liveQueue"`.
+- `LeadWhatsappOpenButton.tsx` — abre WhatsApp Web com saudação.
+
+## 2026-05-20 - Kanban operacional (leads nas colunas)
+
+- **Antes:** `KanbanBoardPreview` só mostrava colunas vazias (prévia).
+- **Agora:** `KanbanBoard` agrupa `queueItems` por `kanbanColumnId`/`kanbanColumnName`; layout `content--kanban` em tela cheia.
+- Commit `3fb8d7c` — rebuild **painel-typebot-crm**; Ctrl+F5. Atribuir coluna no handoff (ícone Kanban) e **Atualizar** no quadro.
+
 ## 2026-05-20 - Fix botões Copiar (nome/WhatsApp/CPF)
 
 - **Causa:** `navigator.clipboard` falha em iframe da Fila ao vivo sem permissão; erro era silencioso.

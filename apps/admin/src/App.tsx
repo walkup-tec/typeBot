@@ -3401,6 +3401,7 @@ export function App() {
           apiBase={apiBase}
           tenantId={selectedLeadTenantId}
           contactId={selectedLeadContactId}
+          showWhatsappHeaderAction={activeScreen !== "liveQueue"}
         />
 
       </main>
