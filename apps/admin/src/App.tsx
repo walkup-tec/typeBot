@@ -67,6 +67,8 @@ type QueueContact = {
   assignedAgentName?: string;
   priorityId?: string;
   priorityName?: string;
+  kanbanColumnId?: string;
+  kanbanColumnName?: string;
   labelIds?: string[];
   labels?: Array<{ id: string; name: string; color: string }>;
   labelName?: string;

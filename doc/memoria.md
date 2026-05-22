@@ -1,3 +1,22 @@
+## 2026-05-20 - Fila ao vivo: scroll finalizado, Kanban no lead, filtros
+
+1. **Scroll histórico (finalizado):** `.is-ended .widget-chat` com `overflow-y:auto` e `pointer-events:auto`; só o input permanece bloqueado.
+2. **Kanban no lead:** ícone de colunas ao lado do calendário no handoff; `kanbanColumnId`/`kanbanColumnName` no contato; colunas conforme config do tenant (prioridade/etiquetas/personalizado).
+3. **Filtros na fila:** barra acima das abas — busca (nome, WhatsApp, CPF, contexto), chips de propriedades, etiquetas e produtos (fluxos); Limpar filtros.
+4. **Deploy:** rebuild **api-typebot-crm** + **painel-typebot-crm**.
+
+## 2026-05-20 - Agendamento: botão Limpar filtros
+
+- Toolbar: `Limpar filtros` restaura Essa semana, datas De/Até hoje, aba Todos, sem etiquetas, prioridade padrão (primeira do cadastro).
+- Desabilitado quando já está no estado padrão.
+
+## 2026-05-20 - Push deploy agendamento (230944c)
+
+- **Problema:** commit `607ae37` ficou só local (`ahead 1`); Easypanel não via código novo.
+- **Correção:** amend → `230944c`, mensagem `deploy[painel-typebot-crm+api-typebot-crm]: ...`, `git push origin master` OK.
+- **Marcador:** `data-build="20260520-agendamento-card-v2"` em `SchedulingScreen`.
+- Rebuild **painel-typebot-crm** + **api-typebot-crm**; Ctrl+F5 no Agendamento.
+
 ## 2026-05-20 - Layout card Agendamento (alinhamento mockup)
 
 - Card em duas colunas: esquerda (nome → WhatsApp → tags); direita (data/hora ciano + botão Ver lead centralizado).

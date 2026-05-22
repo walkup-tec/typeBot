@@ -1,4 +1,13 @@
+import { formatBrazilianCpf, resolveLeadCpf, resolveLeadWhatsapp } from "./leadContactData";
+
 export type LiveInboxTab = "today" | "mine" | "unassigned" | "all";
+
+export type LiveInboxListFilters = {
+  searchQuery: string;
+  priorityIds: string[];
+  labelIds: string[];
+  flowKeys: string[];
+};
 
 const BRAZIL_TIMEZONE = "America/Sao_Paulo";
 
@@ -18,7 +27,11 @@ export type QueueListItem = {
   status: "waiting" | "in_service" | "closed";
   assignedAgentId?: string;
   assignedAgentName?: string;
+  priorityId?: string;
   priorityName?: string;
+  kanbanColumnId?: string;
+  kanbanColumnName?: string;
+  labelId?: string;
   labelIds?: string[];
   labels?: QueueLabelTag[];
   labelName?: string;
@@ -79,6 +92,107 @@ export function resolveCurrentAgentId(
   const masterUsername = authUsername?.trim();
   if (useMasterOnly && masterUsername) return masterUsername;
   return fallbackAgentId.trim() || masterUsername || "atendente";
+}
+
+export const createEmptyInboxListFilters = (): LiveInboxListFilters => ({
+  searchQuery: "",
+  priorityIds: [],
+  labelIds: [],
+  flowKeys: [],
+});
+
+export function resolveInboxFlowKey(item: QueueListItem): string {
+  const name = String(item.sourceFlowDisplayName ?? item.sourceFlowLabel ?? "").trim();
+  return name.toLowerCase();
+}
+
+export function resolveInboxFlowLabel(item: QueueListItem): string {
+  return String(item.sourceFlowDisplayName ?? item.sourceFlowLabel ?? "").trim();
+}
+
+export function collectInboxFlowOptions(items: QueueListItem[]): Array<{ key: string; name: string }> {
+  const map = new Map<string, string>();
+  for (const item of items) {
+    const name = resolveInboxFlowLabel(item);
+    if (!name) continue;
+    const key = resolveInboxFlowKey(item);
+    if (!map.has(key)) map.set(key, name);
+  }
+  return [...map.entries()]
+    .map(([key, name]) => ({ key, name }))
+    .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+}
+
+const resolveItemLabelIds = (item: QueueListItem): string[] => {
+  if (Array.isArray(item.labelIds) && item.labelIds.length > 0) {
+    return item.labelIds.map((id) => String(id).trim()).filter(Boolean);
+  }
+  if (item.labelId) return [String(item.labelId).trim()].filter(Boolean);
+  return [];
+};
+
+export function buildInboxSearchHaystack(item: QueueListItem): string {
+  const parts: string[] = [
+    item.contactName,
+    resolveLeadWhatsapp(item.leadWhatsapp, item.leadContext),
+    resolveLeadCpf(item.leadContext),
+    formatBrazilianCpf(resolveLeadCpf(item.leadContext)),
+    item.priorityName,
+    item.kanbanColumnName,
+    item.assignedAgentName,
+    resolveInboxFlowLabel(item),
+    item.labelName,
+    ...(item.labels?.map((label) => label.name) ?? []),
+  ];
+  if (item.leadContext) {
+    for (const [key, value] of Object.entries(item.leadContext)) {
+      parts.push(key, String(value));
+    }
+  }
+  return parts
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+export function matchesInboxSearch(item: QueueListItem, searchQuery: string): boolean {
+  const query = String(searchQuery ?? "").trim().toLowerCase();
+  if (!query) return true;
+  const haystack = buildInboxSearchHaystack(item);
+  if (haystack.includes(query)) return true;
+  const queryDigits = query.replace(/\D/g, "");
+  if (queryDigits.length >= 3) {
+    const hayDigits = haystack.replace(/\D/g, "");
+    if (hayDigits.includes(queryDigits)) return true;
+  }
+  return false;
+}
+
+export function applyInboxListFilters(items: QueueListItem[], filters: LiveInboxListFilters): QueueListItem[] {
+  const priorityIds = filters.priorityIds.map((id) => id.trim()).filter(Boolean);
+  const labelIds = filters.labelIds.map((id) => id.trim()).filter(Boolean);
+  const flowKeys = filters.flowKeys.map((key) => key.trim().toLowerCase()).filter(Boolean);
+
+  return items.filter((item) => {
+    if (!matchesInboxSearch(item, filters.searchQuery)) return false;
+    if (priorityIds.length > 0 && !priorityIds.includes(String(item.priorityId ?? "").trim())) return false;
+    if (labelIds.length > 0) {
+      const itemLabelIds = resolveItemLabelIds(item);
+      if (!labelIds.some((id) => itemLabelIds.includes(id))) return false;
+    }
+    if (flowKeys.length > 0 && !flowKeys.includes(resolveInboxFlowKey(item))) return false;
+    return true;
+  });
+}
+
+export function hasActiveInboxListFilters(filters: LiveInboxListFilters): boolean {
+  return (
+    String(filters.searchQuery ?? "").trim().length > 0 ||
+    filters.priorityIds.length > 0 ||
+    filters.labelIds.length > 0 ||
+    filters.flowKeys.length > 0
+  );
 }
 
 export function filterInboxContacts(

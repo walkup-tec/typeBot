@@ -7,7 +7,8 @@ import { normalizeScheduledAtStorage } from "../lib/scheduled-at";
 import { mergeLeadContactNameIntoContext } from "../lib/lead-contact-name";
 import { mergeLeadCpfIntoContext } from "../lib/lead-cpf";
 import { pruneLeadContext } from "../lib/lead-context";
-import { labelRepository, priorityRepository } from "../lib/repositories";
+import { resolveKanbanColumnAssignment } from "../lib/kanban-column-options";
+import { kanbanRepository, labelRepository, priorityRepository } from "../lib/repositories";
 import { QueueRepository } from "./queue.repository";
 import type { QueueDistributionMode } from "../tenants/tenant.repository";
 
@@ -40,6 +41,7 @@ export const updateQueueContactSchema = z.object({
   labelIds: z.array(z.string().uuid()).optional(),
   isPinned: z.boolean().optional(),
   scheduledAt: z.union([z.string().min(1).max(40), z.literal(""), z.null()]).optional(),
+  kanbanColumnId: z.union([z.string().min(1).max(64), z.literal(""), z.null()]).optional(),
 });
 
 export const addAgentNoteSchema = z.object({
@@ -188,6 +190,8 @@ export class QueueService {
       labels: Array<{ id: string; name: string; color: string }>;
       scheduledAt: string;
       isPinned: boolean;
+      kanbanColumnId: string;
+      kanbanColumnName: string;
     }> = {};
     let nextLeadContext = contact.leadContext;
     if (input.leadCpf !== undefined) {
@@ -259,6 +263,22 @@ export class QueueService {
         patch.scheduledAt = undefined;
       } else {
         patch.scheduledAt = normalizeScheduledAtStorage(raw);
+      }
+    }
+    if (input.kanbanColumnId !== undefined) {
+      const raw = input.kanbanColumnId;
+      if (raw === null || raw === "") {
+        patch.kanbanColumnId = undefined;
+        patch.kanbanColumnName = undefined;
+      } else {
+        const resolved = resolveKanbanColumnAssignment(tenantId, raw, {
+          kanbanRepository,
+          priorityRepository,
+          labelRepository,
+        });
+        if (!resolved) throw new Error("Coluna do Kanban inválida para este assinante.");
+        patch.kanbanColumnId = resolved.kanbanColumnId;
+        patch.kanbanColumnName = resolved.kanbanColumnName;
       }
     }
     const updated = this.queueRepository.updateContact(tenantId, contactId, patch);

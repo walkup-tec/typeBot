@@ -44,6 +44,9 @@ export interface QueueContact {
   scheduledAt?: string;
   /** Conversa fixada no topo da fila ao vivo. */
   isPinned?: boolean;
+  /** Coluna do Kanban (id conforme organização: prioridade, etiqueta ou coluna personalizada). */
+  kanbanColumnId?: string;
+  kanbanColumnName?: string;
   updatedAt: string;
 }
 
@@ -240,6 +243,8 @@ export class QueueRepository {
         | "labels"
         | "scheduledAt"
         | "isPinned"
+        | "kanbanColumnId"
+        | "kanbanColumnName"
       >
     >,
   ): QueueContact | null {
@@ -261,6 +266,8 @@ export class QueueRepository {
       "labels",
       "scheduledAt",
       "isPinned",
+      "kanbanColumnId",
+      "kanbanColumnName",
     ] as const) {
       if (key in patch && patch[key] === undefined) {
         delete updated[key];

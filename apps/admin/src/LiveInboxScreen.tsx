@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { LabelTag } from "./LabelTag";
+import { LiveInboxToolbar } from "./LiveInboxToolbar";
+import type { TenantLabelRow } from "./TenantLabelsStep";
+import type { TenantPriorityRow } from "./TenantPrioritiesStep";
 import {
+  applyInboxListFilters,
+  collectInboxFlowOptions,
   countInboxContacts,
+  createEmptyInboxListFilters,
   filterInboxContacts,
   formatInboxRelativeTime,
   formatInboxScheduleTime,
@@ -10,6 +16,7 @@ import {
   resolveFlowLabelColor,
   resolveInboxPreviewText,
   resolveInboxStatus,
+  type LiveInboxListFilters,
   type LiveInboxTab,
   type QueueListItem,
 } from "./liveInboxUtils";
@@ -49,10 +56,37 @@ export function LiveInboxScreen({
   onOpenLeadDetail,
 }: LiveInboxScreenProps) {
   const [activeTab, setActiveTab] = useState<LiveInboxTab>("today");
+  const [listFilters, setListFilters] = useState<LiveInboxListFilters>(() => createEmptyInboxListFilters());
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [priorities, setPriorities] = useState<TenantPriorityRow[]>([]);
+  const [labels, setLabels] = useState<TenantLabelRow[]>([]);
   /** Mantém o iframe aberto entre o clique em "Não atribuídas" e o refresh da fila. */
   const [pendingChatContactId, setPendingChatContactId] = useState<string | null>(null);
+
+  const loadFilterMeta = useCallback(async () => {
+    if (!tenantId) return;
+    try {
+      const [prioritiesRes, labelsRes] = await Promise.all([
+        fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/priorities`),
+        fetch(`${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/labels`),
+      ]);
+      if (prioritiesRes.ok) {
+        const rows = (await prioritiesRes.json()) as TenantPriorityRow[];
+        setPriorities(Array.isArray(rows) ? rows : []);
+      }
+      if (labelsRes.ok) {
+        const rows = (await labelsRes.json()) as TenantLabelRow[];
+        setLabels(Array.isArray(rows) ? rows : []);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [apiBase, tenantId]);
+
+  useEffect(() => {
+    void loadFilterMeta();
+  }, [loadFilterMeta]);
 
   const currentAgentId = useMemo(
     () => resolveCurrentAgentId(authUsername, agentId, noSeparateAttendants === true),
@@ -61,10 +95,12 @@ export function LiveInboxScreen({
 
   const tabCounts = useMemo(() => countInboxContacts(contacts, currentAgentId), [contacts, currentAgentId]);
 
-  const filteredContacts = useMemo(
-    () => filterInboxContacts(contacts, activeTab, currentAgentId),
-    [activeTab, contacts, currentAgentId],
-  );
+  const flowOptions = useMemo(() => collectInboxFlowOptions(contacts), [contacts]);
+
+  const filteredContacts = useMemo(() => {
+    const byTab = filterInboxContacts(contacts, activeTab, currentAgentId);
+    return applyInboxListFilters(byTab, listFilters);
+  }, [activeTab, contacts, currentAgentId, listFilters]);
 
   const selectedContact = useMemo(
     () => contacts.find((item) => item.contactId === selectedContactId) ?? null,
@@ -96,7 +132,7 @@ export function LiveInboxScreen({
 
   const handleTabChange = (tab: LiveInboxTab) => {
     setActiveTab(tab);
-    const nextFiltered = filterInboxContacts(contacts, tab, currentAgentId);
+    const nextFiltered = applyInboxListFilters(filterInboxContacts(contacts, tab, currentAgentId), listFilters);
     setSelectedContactId((current) => {
       if (current && nextFiltered.some((item) => item.contactId === current)) return current;
       return nextFiltered[0]?.contactId ?? null;
@@ -189,6 +225,13 @@ export function LiveInboxScreen({
     <section className="live-inbox" aria-label="Caixa de atendimento">
       <div className="live-inbox-layout">
         <aside className="live-inbox-sidebar">
+          <LiveInboxToolbar
+            filters={listFilters}
+            onChange={setListFilters}
+            priorities={priorities}
+            labels={labels}
+            flowOptions={flowOptions}
+          />
           <div className="live-inbox-tabs" role="tablist" aria-label="Filtrar conversas">
             <button
               type="button"
@@ -230,7 +273,13 @@ export function LiveInboxScreen({
 
           <div className="live-inbox-list" role="list">
             {filteredContacts.length === 0 ? (
-              <p className="live-inbox-empty muted muted-subtle">Nenhuma conversa neste filtro.</p>
+              <p className="live-inbox-empty muted muted-subtle">
+                Nenhuma conversa neste filtro
+                {listFilters.searchQuery.trim() || listFilters.priorityIds.length || listFilters.labelIds.length || listFilters.flowKeys.length
+                  ? " com os critérios aplicados"
+                  : ""}
+                .
+              </p>
             ) : (
               filteredContacts.map((item) => {
                 const status = resolveInboxStatus(item);

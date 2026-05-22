@@ -3505,6 +3505,109 @@ button.danger-btn:not(.ghost-btn):hover {
   background: #0a101c;
 }
 
+.live-inbox-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+
+.live-inbox-search input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 13px;
+  padding: 9px 11px;
+}
+
+.live-inbox-search input::placeholder {
+  color: #64748b;
+}
+
+.live-inbox-filter-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(220px, 32vh);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.live-inbox-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live-inbox-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.live-inbox-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.live-inbox-filter-chip {
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.live-inbox-filter-chip.active {
+  border-color: #14b8a6;
+  background: rgba(20, 184, 166, 0.14);
+  color: #5eead4;
+}
+
+.live-inbox-filter-chip .label-tag {
+  pointer-events: none;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.live-inbox-filter-empty {
+  font-size: 11px;
+}
+
+.live-inbox-clear-filters {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.live-inbox-clear-filters:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .live-inbox-tabs {
   display: flex;
   flex-wrap: nowrap;
@@ -3806,6 +3909,15 @@ button.danger-btn:not(.ghost-btn):hover {
 
 .scheduling-period-apply {
   margin-left: 2px;
+}
+
+.scheduling-clear-filters {
+  margin-left: auto;
+}
+
+.scheduling-clear-filters:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .scheduling-tabs {

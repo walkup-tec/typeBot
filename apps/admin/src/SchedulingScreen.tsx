@@ -4,10 +4,13 @@ import { SchedulingWhatsappInline } from "./SchedulingWhatsappInline";
 import type { TenantLabelRow } from "./TenantLabelsStep";
 import type { TenantPriorityRow } from "./TenantPrioritiesStep";
 import {
+  createSchedulingDefaultCustomRange,
   filterScheduledLeads,
   formatSchedulingDateTime,
   getBrazilTodayKey,
   resolveSchedulingDateRange,
+  SCHEDULING_DEFAULT_DATE_PRESET,
+  SCHEDULING_DEFAULT_VIEW_TAB,
   sortScheduledLeads,
   type ScheduledLeadItem,
   type SchedulingDatePreset,
@@ -92,6 +95,39 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
     setDatePreset("custom");
   };
 
+  const hasActiveFilters = useMemo(() => {
+    const todayKey = getBrazilTodayKey();
+    const defaultPriorityId = String(priorities[0]?.id ?? "").trim();
+    const currentPriorityId = String(selectedPriorityId ?? "").trim();
+    return (
+      datePreset !== SCHEDULING_DEFAULT_DATE_PRESET ||
+      customStart !== todayKey ||
+      customEnd !== todayKey ||
+      viewTab !== SCHEDULING_DEFAULT_VIEW_TAB ||
+      selectedLabelIds.length > 0 ||
+      (defaultPriorityId.length > 0 && currentPriorityId !== defaultPriorityId)
+    );
+  }, [
+    customEnd,
+    customStart,
+    datePreset,
+    priorities,
+    selectedLabelIds.length,
+    selectedPriorityId,
+    viewTab,
+  ]);
+
+  const clearFilters = () => {
+    const { customStart: start, customEnd: end } = createSchedulingDefaultCustomRange();
+    setDatePreset(SCHEDULING_DEFAULT_DATE_PRESET);
+    setCustomStart(start);
+    setCustomEnd(end);
+    setViewTab(SCHEDULING_DEFAULT_VIEW_TAB);
+    setSelectedLabelIds([]);
+    const firstPriorityId = String(priorities[0]?.id ?? "").trim();
+    setSelectedPriorityId(firstPriorityId);
+  };
+
   const flowNameFor = (item: ScheduledLeadItem) =>
     String(item.sourceFlowDisplayName ?? item.sourceFlowLabel ?? "").trim();
 
@@ -155,6 +191,15 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
         </label>
         <button type="button" className="ghost-btn scheduling-period-apply" onClick={applyCustomPeriod}>
           Aplicar período
+        </button>
+        <button
+          type="button"
+          className="ghost-btn scheduling-clear-filters"
+          onClick={clearFilters}
+          disabled={!hasActiveFilters}
+          aria-label="Limpar todos os filtros da agenda"
+        >
+          Limpar filtros
         </button>
       </div>
 

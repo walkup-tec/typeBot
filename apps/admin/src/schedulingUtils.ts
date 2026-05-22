@@ -5,6 +5,14 @@ export type SchedulingViewTab = "priorities" | "labels" | "all";
 
 export type SchedulingDatePreset = "week" | "15days" | "30days" | "custom";
 
+export const SCHEDULING_DEFAULT_VIEW_TAB: SchedulingViewTab = "all";
+export const SCHEDULING_DEFAULT_DATE_PRESET: SchedulingDatePreset = "week";
+
+export const createSchedulingDefaultCustomRange = (): { customStart: string; customEnd: string } => {
+  const todayKey = getBrazilTodayKey();
+  return { customStart: todayKey, customEnd: todayKey };
+};
+
 export type ScheduledLeadItem = {
   contactId: string;
   tenantId: string;
