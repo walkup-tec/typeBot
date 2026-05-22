@@ -1,3 +1,4 @@
+import { copyTextToClipboard } from "./copyToClipboard";
 import {
   buildWhatsappWebUrl,
   formatWhatsappDisplay,
@@ -20,11 +21,7 @@ export function SchedulingWhatsappInline({ item }: SchedulingWhatsappInlineProps
   const copyNumber = async () => {
     const value = display || digits;
     if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      /* ignore */
-    }
+    await copyTextToClipboard(value);
   };
 
   return (

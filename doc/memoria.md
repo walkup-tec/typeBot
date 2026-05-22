@@ -3,7 +3,7 @@
 - Removidos badges `leadKanbanBadge` / `leadScheduleBadge` (ex.: "Segunda", "22/05, 06:27").
 - Ícones com classe `.is-set` (verde) quando há coluna ou agendamento.
 - Clique abre menu: valor atual + remover + definir novo.
-- Arquivo: `apps/api/src/queue/queue.routes.ts` — **pendente commit/push**; rebuild **api-typebot-crm**.
+- Commit `6bfc0f8`, push `origin/master` OK — rebuild **api-typebot-crm** no Easypanel; Ctrl+F5 na Fila ao vivo.
 
 ## 2026-05-20 - Fila ao vivo: filtros em dropdown (estilo Chatwoot)
 

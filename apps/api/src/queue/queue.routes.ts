@@ -2517,6 +2517,34 @@ export const registerQueueRoutes = (app: Express) => {
       copyButton.disabled = !String(input?.value || "").trim();
     }
 
+    async function copyTextToClipboard(text) {
+      const value = String(text || "").trim();
+      if (!value) return false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+          return true;
+        }
+      } catch {}
+      try {
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        area.style.top = "0";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        area.setSelectionRange(0, value.length);
+        const ok = document.execCommand("copy");
+        document.body.removeChild(area);
+        return ok;
+      } catch {
+        return false;
+      }
+    }
+
     function bindLeadInlineField(input, copyButton, editButton) {
       if (!input) return;
       rememberLeadInlineFieldValue(input);
@@ -2542,12 +2570,12 @@ export const registerQueueRoutes = (app: Express) => {
         if (event.key === "Enter") input.blur();
       });
       if (copyButton) {
-        copyButton.addEventListener("click", async () => {
+        copyButton.addEventListener("click", async (event) => {
+          event.stopPropagation();
           const value = String(input.value || "").trim();
           if (!value) return;
-          try {
-            await navigator.clipboard.writeText(value);
-          } catch {}
+          const ok = await copyTextToClipboard(value);
+          setLeadDrawerStatus(ok ? "Copiado para a área de transferência." : "Não foi possível copiar.");
         });
       }
     }

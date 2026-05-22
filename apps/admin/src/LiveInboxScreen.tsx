@@ -348,6 +348,7 @@ export function LiveInboxScreen({
               className="live-inbox-chat-frame"
               title={`Chat com ${selectedContact.contactName}`}
               src={chatUrl}
+              allow="clipboard-write"
             />
           ) : (
             <div className="live-inbox-chat-empty">

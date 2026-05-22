@@ -162,6 +162,7 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
               value={leadNameDraft}
               onChange={setLeadNameDraft}
               onCommit={() => void saveLeadContactFields()}
+              onCopyResult={(ok) => setStatus(ok ? "Copiado para a área de transferência." : "Não foi possível copiar.")}
               copyLabel="Copiar nome"
               icon={
                 <svg viewBox="0 0 24 24">
@@ -174,6 +175,7 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
               value={leadWhatsappDraft}
               onChange={setLeadWhatsappDraft}
               onCommit={() => void saveLeadContactFields()}
+              onCopyResult={(ok) => setStatus(ok ? "Copiado para a área de transferência." : "Não foi possível copiar.")}
               copyLabel="Copiar WhatsApp"
               inputMode="tel"
               icon={
@@ -187,6 +189,7 @@ export function LeadDetailModal({ open, onClose, apiBase, tenantId, contactId }:
               value={leadCpfDraft}
               onChange={setLeadCpfDraft}
               onCommit={() => void saveLeadContactFields()}
+              onCopyResult={(ok) => setStatus(ok ? "Copiado para a área de transferência." : "Não foi possível copiar.")}
               copyLabel="Copiar CPF"
               inputMode="numeric"
               placeholder="000.000.000-00"

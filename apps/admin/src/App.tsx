@@ -7,6 +7,7 @@ import { TenantLabelsStep } from "./TenantLabelsStep";
 import { TenantPrioritiesStep } from "./TenantPrioritiesStep";
 import { TenantKanbanStep } from "./TenantKanbanStep";
 import { KanbanScreen } from "./KanbanScreen";
+import { copyTextToClipboard } from "./copyToClipboard";
 import { LeadDetailModal } from "./LeadDetailModal";
 import { resolveAttendantDisplayName } from "./resolveAttendantDisplayName";
 import {

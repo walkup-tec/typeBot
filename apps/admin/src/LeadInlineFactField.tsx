@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { copyTextToClipboard } from "./copyToClipboard";
 
 type LeadInlineFactFieldProps = {
   label: string;
@@ -7,6 +8,7 @@ type LeadInlineFactFieldProps = {
   onCommit: () => void | Promise<void>;
   copyValue?: string;
   copyLabel: string;
+  onCopyResult?: (ok: boolean) => void;
   inputMode?: "text" | "tel" | "numeric";
   placeholder?: string;
   icon: ReactNode;
@@ -19,6 +21,7 @@ export function LeadInlineFactField({
   onCommit,
   copyValue,
   copyLabel,
+  onCopyResult,
   inputMode = "text",
   placeholder,
   icon,
@@ -49,11 +52,8 @@ export function LeadInlineFactField({
   const copyFieldValue = async () => {
     const normalized = String(copyValue ?? value ?? "").trim();
     if (!normalized) return;
-    try {
-      await navigator.clipboard.writeText(normalized);
-    } catch {
-      // Mantém o painel utilizável mesmo sem permissão de clipboard.
-    }
+    const ok = await copyTextToClipboard(normalized);
+    onCopyResult?.(ok);
   };
 
   return (
@@ -99,7 +99,10 @@ export function LeadInlineFactField({
         className="lead-fact-copy"
         aria-label={copyLabel}
         title={copyLabel}
-        onClick={() => void copyFieldValue()}
+        onClick={(event) => {
+          event.stopPropagation();
+          void copyFieldValue();
+        }}
         disabled={!String(copyValue ?? value ?? "").trim()}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
