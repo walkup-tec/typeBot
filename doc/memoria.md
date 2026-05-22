@@ -1,3 +1,9 @@
+## 2026-05-20 - Fix botões Copiar (nome/WhatsApp/CPF)
+
+- **Causa:** `navigator.clipboard` falha em iframe da Fila ao vivo sem permissão; erro era silencioso.
+- **Correção:** `copyToClipboard.ts` com fallback `execCommand`; `allow="clipboard-write"` no iframe; feedback no drawer/modal.
+- Commit `b17043e` — rebuild **api-typebot-crm** + **painel-typebot-crm**.
+
 ## 2026-05-20 - Handoff: ícones Kanban/Agenda sem label lateral
 
 - Removidos badges `leadKanbanBadge` / `leadScheduleBadge` (ex.: "Segunda", "22/05, 06:27").

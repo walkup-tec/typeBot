@@ -1,26 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { KanbanBoardPreview } from "./KanbanBoardPreview";
+import { KanbanBoard } from "./KanbanBoard";
 import type { TenantLabelRow } from "./TenantLabelsStep";
 import type { TenantPriorityRow } from "./TenantPrioritiesStep";
 import {
   KANBAN_ORGANIZE_OPTIONS,
   type TenantKanbanConfig,
   defaultKanbanConfig,
-  resolveKanbanColumnTitles,
 } from "./kanbanConfig";
+import {
+  buildKanbanBoard,
+  countKanbanAssignedLeads,
+  kanbanOrganizeSubtitle,
+  resolveKanbanColumnDefs,
+  type KanbanBoardContact,
+} from "./kanbanBoardUtils";
 
 type KanbanScreenProps = {
   apiBase: string;
   tenantId: string;
+  contacts: KanbanBoardContact[];
+  onOpenContact: (contactId: string) => void;
+  onRefresh: () => Promise<void>;
 };
 
-export function KanbanScreen({ apiBase, tenantId }: KanbanScreenProps) {
+export function KanbanScreen({ apiBase, tenantId, contacts, onOpenContact, onRefresh }: KanbanScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [config, setConfig] = useState<TenantKanbanConfig>(() => defaultKanbanConfig(tenantId));
   const [priorities, setPriorities] = useState<TenantPriorityRow[]>([]);
   const [labels, setLabels] = useState<TenantLabelRow[]>([]);
 
-  const loadBoard = useCallback(async () => {
+  const loadBoardMeta = useCallback(async () => {
     if (!tenantId) return;
     setIsLoading(true);
     try {
@@ -50,43 +59,49 @@ export function KanbanScreen({ apiBase, tenantId }: KanbanScreenProps) {
     }
   }, [apiBase, tenantId]);
 
-  useEffect(() => {
-    void loadBoard();
-  }, [loadBoard]);
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadBoardMeta(), onRefresh()]);
+  }, [loadBoardMeta, onRefresh]);
 
-  const columnTitles = useMemo(() => {
-    const customNames =
-      config.organizeBy === "custom" ? config.customColumns.map((col) => col.name) : [];
-    return resolveKanbanColumnTitles(config.organizeBy, customNames, priorities, labels);
-  }, [config, priorities, labels]);
+  useEffect(() => {
+    void loadBoardMeta();
+  }, [loadBoardMeta]);
+
+  const columnDefs = useMemo(
+    () => resolveKanbanColumnDefs(config, priorities, labels),
+    [config, priorities, labels],
+  );
+
+  const boardColumns = useMemo(() => buildKanbanBoard(columnDefs, contacts), [columnDefs, contacts]);
+
+  const assignedCount = useMemo(() => countKanbanAssignedLeads(contacts), [contacts]);
 
   const organizeLabel =
     KANBAN_ORGANIZE_OPTIONS.find((option) => option.value === config.organizeBy)?.label ?? config.organizeBy;
 
   return (
-    <section className="card kanban-screen">
-      <header className="kanban-screen__header">
-        <div>
-          <h3>Kanban</h3>
-          <p className="muted muted-subtle">
-            Organização atual: <strong>{organizeLabel}</strong>. Os cards de leads serão exibidos aqui conforme a
-            configuração definida no Master Console.
-          </p>
-        </div>
-        <button type="button" className="ghost-btn" onClick={() => void loadBoard()} disabled={isLoading}>
+    <section className="kanban-screen" data-build="20260520-kanban-board-v1">
+      <header className="kanban-screen__toolbar">
+        <p className="muted muted-subtle kanban-screen__summary">
+          <strong>{organizeLabel}</strong> — {kanbanOrganizeSubtitle[config.organizeBy]}.{" "}
+          <span>
+            {assignedCount} lead(s) com coluna definida · {contacts.length} na fila
+          </span>
+        </p>
+        <button type="button" className="ghost-btn" onClick={() => void refreshAll()} disabled={isLoading}>
           Atualizar
         </button>
       </header>
 
       {isLoading ? (
-        <p className="muted muted-subtle">
+        <p className="muted muted-subtle kanban-screen__loading">
           <span className="processing-inline-wrap" aria-live="polite">
             <i className="processing-inline-dot" aria-hidden="true" />
             Carregando quadro…
           </span>
         </p>
       ) : (
-        <KanbanBoardPreview columnTitles={columnTitles} organizeBy={config.organizeBy} />
+        <KanbanBoard columns={boardColumns} onOpenContact={onOpenContact} />
       )}
     </section>
   );

@@ -453,7 +453,7 @@ const SIDEBAR_MENU_ICON_PATHS: Record<SidebarMenuIconName, string> = {
 const SCREEN_PAGE_HEADER: Partial<Record<ScreenId, { title: string; subtitle: string }>> = {
   kanban: {
     title: "Kanban",
-    subtitle: "Visualize e mova leads pelas etapas do funil.",
+    subtitle: "Leads atribuídos às colunas do funil. Clique no card para ver o contato.",
   },
   liveQueue: {
     title: "Fila ao vivo",
@@ -1874,12 +1874,8 @@ export function App() {
       setStatusMessage("URL do fluxo indisponível para cópia.");
       return;
     }
-    try {
-      await navigator.clipboard.writeText(url);
-      setStatusMessage("Link copiado.");
-    } catch {
-      setStatusMessage(url);
-    }
+    const copied = await copyTextToClipboard(url);
+    setStatusMessage(copied ? "Link copiado." : url);
     if (selectedTenant) await loadFlows(selectedTenant);
   }
 
@@ -2262,7 +2258,9 @@ export function App() {
         </nav>
       </aside>
 
-      <main className={`content${activeScreen === "liveQueue" ? " content--live-inbox" : ""}`}>
+      <main
+        className={`content${activeScreen === "liveQueue" ? " content--live-inbox" : ""}${activeScreen === "kanban" ? " content--kanban" : ""}`}
+      >
         {pendingQueueCount > 0 ? (
           <section className="pending-summary-alert" role="status" aria-live="polite">
             <div className="pending-summary-alert__content">
@@ -3216,7 +3214,13 @@ export function App() {
         ) : null}
 
         {activeScreen === "kanban" && selectedTenant ? (
-          <KanbanScreen apiBase={apiBase} tenantId={selectedTenant} />
+          <KanbanScreen
+            apiBase={apiBase}
+            tenantId={selectedTenant}
+            contacts={queueItems}
+            onOpenContact={openLeadDetailByContactId}
+            onRefresh={async () => loadQueue(selectedTenant)}
+          />
         ) : null}
 
         {activeScreen === "scheduling" && selectedTenant ? (
