@@ -13,7 +13,7 @@ import {
   type SchedulingDatePreset,
   type SchedulingViewTab,
 } from "./schedulingUtils";
-import { resolveFlowLabelColor, resolveInboxStatus } from "./liveInboxUtils";
+import { resolveFlowLabelColor } from "./liveInboxUtils";
 
 type SchedulingScreenProps = {
   apiBase: string;
@@ -96,7 +96,7 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
     String(item.sourceFlowDisplayName ?? item.sourceFlowLabel ?? "").trim();
 
   return (
-    <section className="card scheduling-screen">
+    <section className="card scheduling-screen" data-build="20260520-agendamento-card-v2">
       <header className="scheduling-screen__header">
         <div>
           <h3>Agenda de retornos</h3>
@@ -245,20 +245,13 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
           <p className="scheduling-empty muted muted-subtle">Nenhum lead agendado neste período.</p>
         ) : (
           displayedLeads.map((item) => {
-            const status = resolveInboxStatus(item);
             const flowName = flowNameFor(item);
             return (
               <article key={item.contactId} className="scheduling-card" role="listitem">
-                <div className="scheduling-card__main">
-                  <div className="scheduling-card__title-row">
-                    <strong>{item.contactName}</strong>
-                    <span className="scheduling-card__datetime">{formatSchedulingDateTime(item.scheduledAt)}</span>
-                  </div>
-                  <div className="scheduling-card__inline-tags">
-                    <SchedulingWhatsappInline item={item} />
-                    <span className={`live-inbox-status-pill live-inbox-status-pill--${status.tone}`}>
-                      {status.label}
-                    </span>
+                <div className="scheduling-card__left">
+                  <strong className="scheduling-card__name">{item.contactName}</strong>
+                  <SchedulingWhatsappInline item={item} />
+                  <div className="scheduling-card__tags">
                     {item.priorityName?.trim() ? (
                       <span className="scheduling-meta-pill">{item.priorityName.trim()}</span>
                     ) : null}
@@ -284,9 +277,12 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
                         : null}
                   </div>
                 </div>
-                <button type="button" className="ghost-btn" onClick={() => onOpenContact(item.contactId)}>
-                  Ver lead
-                </button>
+                <div className="scheduling-card__right">
+                  <span className="scheduling-card__datetime">{formatSchedulingDateTime(item.scheduledAt)}</span>
+                  <button type="button" className="ghost-btn scheduling-card__action" onClick={() => onOpenContact(item.contactId)}>
+                    Ver lead
+                  </button>
+                </div>
               </article>
             );
           })

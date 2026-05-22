@@ -1,3 +1,17 @@
+## 2026-05-20 - Layout card Agendamento (alinhamento mockup)
+
+- Card em duas colunas: esquerda (nome → WhatsApp → tags); direita (data/hora ciano + botão Ver lead centralizado).
+- Ordem tags: prioridade, atendente, fluxo, etiquetas (sem pill de status no card).
+- `SchedulingScreen.tsx`, `styles.css` — deploy **painel-typebot-crm**.
+
+## 2026-05-20 - Fix nome prioridade/etiqueta após renomear no cadastro
+
+- **Causa:** `priorityName`/`labelName` eram snapshot no lead; editar no catálogo não atualizava `queue-state.json`.
+- **Leitura:** `withNormalizedQueueContact` resolve nome/cor pelo `priorityId`/`labelIds` no repositório do tenant.
+- **Escrita:** ao `PATCH` prioridade/etiqueta, `queueRepository.propagatePriorityRename` / `propagateLabelRename` atualiza contatos afetados.
+- **Arquivos:** `lead-agent-notes.ts`, `queue.repository.ts`, `priority.routes.ts`, `label.routes.ts`.
+- **Deploy:** rebuild **api-typebot-crm** (sem mudança no painel).
+
 ## 2026-05-20 - Menu Agendamento (painel)
 
 - Tela `SchedulingScreen`: leads com `scheduledAt` no período.

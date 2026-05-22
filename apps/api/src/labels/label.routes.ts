@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { labelRepository, tenantRepository } from "../lib/repositories";
+import { labelRepository, queueRepository, tenantRepository } from "../lib/repositories";
 import {
   LabelService,
   createTenantLabelSchema,
@@ -40,6 +40,10 @@ export const registerLabelRoutes = (app: Express) => {
     try {
       const input = updateTenantLabelSchema.parse(req.body);
       const updated = labelService.update(req.params.tenantId, req.params.labelId, input);
+      queueRepository.propagateLabelRename(req.params.tenantId, req.params.labelId, {
+        name: updated.name,
+        color: updated.color,
+      });
       return res.status(200).json(updated);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid request";

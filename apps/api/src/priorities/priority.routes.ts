@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { priorityRepository, tenantRepository } from "../lib/repositories";
+import { priorityRepository, queueRepository, tenantRepository } from "../lib/repositories";
 import {
   PriorityService,
   createTenantPrioritySchema,
@@ -40,6 +40,7 @@ export const registerPriorityRoutes = (app: Express) => {
     try {
       const input = updateTenantPrioritySchema.parse(req.body);
       const updated = priorityService.update(req.params.tenantId, req.params.priorityId, input);
+      queueRepository.propagatePriorityRename(req.params.tenantId, req.params.priorityId, updated.name);
       return res.status(200).json(updated);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid request";

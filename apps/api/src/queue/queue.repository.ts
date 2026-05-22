@@ -153,6 +153,72 @@ export class QueueRepository {
     return waitingQueue.get(contactId) ?? null;
   }
 
+  propagatePriorityRename(tenantId: string, priorityId: string, priorityName: string): number {
+    const normalizedId = String(priorityId).trim();
+    const normalizedName = String(priorityName).trim();
+    if (!normalizedId || !normalizedName) return 0;
+
+    let changed = 0;
+    for (const [contactId, contact] of waitingQueue) {
+      if (contact.tenantId !== tenantId) continue;
+      if (String(contact.priorityId ?? "").trim() !== normalizedId) continue;
+      if (String(contact.priorityName ?? "").trim() === normalizedName) continue;
+      waitingQueue.set(contactId, {
+        ...contact,
+        priorityName: normalizedName,
+        updatedAt: new Date().toISOString(),
+      });
+      changed += 1;
+    }
+    if (changed > 0) saveQueueState(waitingQueue, liveMessages);
+    return changed;
+  }
+
+  propagateLabelRename(
+    tenantId: string,
+    labelId: string,
+    patch: { name: string; color: string },
+  ): number {
+    const normalizedId = String(labelId).trim();
+    const normalizedName = String(patch.name).trim();
+    const normalizedColor = String(patch.color).trim() || "#64748b";
+    if (!normalizedId || !normalizedName) return 0;
+
+    let changed = 0;
+    for (const [contactId, contact] of waitingQueue) {
+      if (contact.tenantId !== tenantId) continue;
+
+      const ids = Array.isArray(contact.labelIds)
+        ? contact.labelIds.map((id) => String(id).trim()).filter(Boolean)
+        : contact.labelId
+          ? [String(contact.labelId).trim()]
+          : [];
+      if (!ids.includes(normalizedId)) continue;
+
+      const labels = Array.isArray(contact.labels)
+        ? contact.labels.map((row) => {
+            if (String(row.id ?? "").trim() !== normalizedId) return row;
+            return { ...row, name: normalizedName, color: normalizedColor };
+          })
+        : [];
+
+      const firstId = ids[0];
+      const next: QueueContact = {
+        ...contact,
+        labels: labels.length > 0 ? labels : contact.labels,
+        updatedAt: new Date().toISOString(),
+      };
+      if (firstId === normalizedId) {
+        next.labelName = normalizedName;
+        next.labelColor = normalizedColor;
+      }
+      waitingQueue.set(contactId, next);
+      changed += 1;
+    }
+    if (changed > 0) saveQueueState(waitingQueue, liveMessages);
+    return changed;
+  }
+
   updateContact(
     tenantId: string,
     contactId: string,

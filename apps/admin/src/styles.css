@@ -3903,30 +3903,53 @@ button.danger-btn:not(.ghost-btn):hover {
 
 .scheduling-card {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 20px;
   border: 1px solid #1e293b;
   border-radius: 10px;
   background: #0f172a;
-  padding: 12px 14px;
+  padding: 14px 16px;
 }
 
-.scheduling-card__main {
+.scheduling-card__left {
   min-width: 0;
   flex: 1;
-}
-
-.scheduling-card__title-row {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
-.scheduling-card__title-row strong {
+.scheduling-card__name {
   font-size: 15px;
+  line-height: 1.25;
+  color: #f8fafc;
+}
+
+.scheduling-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.scheduling-card__tags .label-tag {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.scheduling-card__tags .label-tag__swatch {
+  width: 10px;
+  height: 10px;
+}
+
+.scheduling-card__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
 }
 
 .scheduling-card__datetime {
@@ -3934,30 +3957,12 @@ button.danger-btn:not(.ghost-btn):hover {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+  line-height: 1.3;
 }
 
-.scheduling-card__inline-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.scheduling-card__inline-tags .live-inbox-status-pill {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 0;
-}
-
-.scheduling-card__inline-tags .label-tag {
-  font-size: 11px;
-  padding: 4px 8px;
-}
-
-.scheduling-card__inline-tags .label-tag__swatch {
-  width: 10px;
-  height: 10px;
+.scheduling-card__action {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .scheduling-whatsapp-inline {
@@ -3969,19 +3974,19 @@ button.danger-btn:not(.ghost-btn):hover {
 .scheduling-whatsapp-number {
   border: 0;
   background: transparent;
-  color: #cbd5e1;
+  color: #67e8f9;
   font-size: 12px;
   font-weight: 600;
   padding: 0;
   cursor: pointer;
   text-decoration: underline;
-  text-decoration-color: rgba(148, 163, 184, 0.45);
+  text-decoration-color: rgba(103, 232, 249, 0.55);
   text-underline-offset: 2px;
 }
 
 .scheduling-whatsapp-number:hover,
 .scheduling-whatsapp-number:focus-visible {
-  color: #f8fafc;
+  color: #a5f3fc;
   outline: none;
 }
 
@@ -4027,6 +4032,19 @@ button.danger-btn:not(.ghost-btn):hover {
 
 .scheduling-meta-pill--muted {
   color: #94a3b8;
+}
+
+@media (max-width: 720px) {
+  .scheduling-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .scheduling-card__right {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 @media (max-width: 960px) {
