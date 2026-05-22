@@ -1,3 +1,8 @@
+## 2026-05-20 - Fila ao vivo: filtros em dropdown (estilo Chatwoot)
+
+- Toolbar inline: `[Pesquisa][ícone filtro]`; opções em dropdown (propriedades, etiquetas, produtos).
+- `LiveInboxToolbar.tsx`, `styles.css` — deploy painel.
+
 ## 2026-05-20 - Fila ao vivo: scroll finalizado, Kanban no lead, filtros
 
 1. **Scroll histórico (finalizado):** `.is-ended .widget-chat` com `overflow-y:auto` e `pointer-events:auto`; só o input permanece bloqueado.
