@@ -1,3 +1,4 @@
+import { resolveLeadWhatsapp } from "./leadContactData";
 import { formatInboxScheduleTime } from "./liveInboxUtils";
 
 export type SchedulingViewTab = "priorities" | "labels" | "all";
@@ -21,6 +22,35 @@ export type ScheduledLeadItem = {
   labelColor?: string;
   scheduledAt: string;
   updatedAt: string;
+  leadWhatsapp?: string;
+  leadContext?: Record<string, string | number | boolean>;
+};
+
+export const normalizeWhatsappPhoneDigits = (value: string): string => {
+  let digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.length >= 10 && digits.length <= 11 && !digits.startsWith("55")) {
+    digits = `55${digits}`;
+  }
+  return digits.length >= 10 ? digits : "";
+};
+
+export const formatWhatsappDisplay = (value: string): string => {
+  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 13);
+  if (!digits) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+};
+
+export const resolveScheduledLeadWhatsapp = (item: ScheduledLeadItem): string =>
+  resolveLeadWhatsapp(item.leadWhatsapp, item.leadContext);
+
+export const buildWhatsappWebUrl = (phoneDigits: string, contactName?: string): string => {
+  const greeting = `Olá${contactName?.trim() ? ` ${contactName.trim()}` : ""}!`;
+  return `https://web.whatsapp.com/send?phone=${encodeURIComponent(phoneDigits)}&text=${encodeURIComponent(greeting)}`;
 };
 
 export type SchedulingDateRange = {

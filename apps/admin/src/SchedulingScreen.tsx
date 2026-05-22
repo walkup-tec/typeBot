@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LabelTag } from "./LabelTag";
+import { SchedulingWhatsappInline } from "./SchedulingWhatsappInline";
 import type { TenantLabelRow } from "./TenantLabelsStep";
 import type { TenantPriorityRow } from "./TenantPrioritiesStep";
 import {
@@ -254,6 +255,7 @@ export function SchedulingScreen({ apiBase, tenantId, contacts, onOpenContact, o
                     <span className="scheduling-card__datetime">{formatSchedulingDateTime(item.scheduledAt)}</span>
                   </div>
                   <div className="scheduling-card__inline-tags">
+                    <SchedulingWhatsappInline item={item} />
                     <span className={`live-inbox-status-pill live-inbox-status-pill--${status.tone}`}>
                       {status.label}
                     </span>
