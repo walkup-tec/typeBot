@@ -1,3 +1,10 @@
+## 2026-05-20 - Handoff: ícones Kanban/Agenda sem label lateral
+
+- Removidos badges `leadKanbanBadge` / `leadScheduleBadge` (ex.: "Segunda", "22/05, 06:27").
+- Ícones com classe `.is-set` (verde) quando há coluna ou agendamento.
+- Clique abre menu: valor atual + remover + definir novo.
+- Arquivo: `apps/api/src/queue/queue.routes.ts` — **pendente commit/push**; rebuild **api-typebot-crm**.
+
 ## 2026-05-20 - Fila ao vivo: filtros em dropdown (estilo Chatwoot)
 
 - Toolbar inline: `[Pesquisa][ícone filtro]`; opções em dropdown (propriedades, etiquetas, produtos).

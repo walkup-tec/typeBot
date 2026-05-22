@@ -731,6 +731,17 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-meta-icon-btn.is-active { border-color:#14b8a6; background:rgba(20,184,166,.14); color:#5eead4; }
     body.agent-screen .lead-meta-icon-btn.lead-whatsapp-btn { border-color:#15803d; background:rgba(34,197,94,.18); color:#4ade80; text-decoration:none; }
     body.agent-screen .lead-meta-icon-btn.lead-whatsapp-btn:hover, body.agent-screen .lead-meta-icon-btn.lead-whatsapp-btn:focus-visible { border-color:#22c55e; background:rgba(34,197,94,.32); color:#bbf7d0; outline:none; }
+    body.agent-screen .lead-meta-icon-btn.is-set { border-color:#15803d; background:rgba(34,197,94,.18); color:#4ade80; }
+    body.agent-screen .lead-meta-icon-btn.is-set:hover, body.agent-screen .lead-meta-icon-btn.is-set:focus-visible { border-color:#22c55e; background:rgba(34,197,94,.32); color:#bbf7d0; outline:none; }
+    body.agent-screen .lead-meta-icon-btn.is-set.active { border-color:#22c55e; background:rgba(34,197,94,.28); color:#bbf7d0; }
+    body.agent-screen .lead-meta-icon-wrap { position:relative; display:inline-flex; }
+    body.agent-screen .lead-meta-menu-current { display:grid; gap:4px; padding:8px 10px; margin-bottom:4px; border-bottom:1px solid #1e293b; color:#e2e8f0; font-size:13px; }
+    body.agent-screen .lead-meta-menu-current strong { font-weight:700; color:#f8fafc; text-transform:capitalize; }
+    body.agent-screen .lead-meta-menu-current__label { font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#64748b; }
+    body.agent-screen .lead-meta-menu-current--empty { color:#94a3b8; font-size:12px; }
+    body.agent-screen .lead-meta-menu-section-label { padding:6px 10px 2px; font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#64748b; }
+    body.agent-screen .lead-meta-menu-item--danger { color:#fca5a5; }
+    body.agent-screen .lead-meta-menu-item--danger:hover, body.agent-screen .lead-meta-menu-item--danger:focus-visible { background:rgba(239,68,68,.14); color:#fecaca; }
     body.agent-screen .lead-meta-icon-btn.is-hidden { display:none !important; }
     body.agent-screen .lead-meta-icon-btn svg { width:17px; height:17px; fill:currentColor; }
     body.agent-screen .lead-meta-badge { display:inline-flex; align-items:center; gap:6px; max-width:160px; border:1px solid #334155; border-radius:999px; padding:4px 10px; font-size:11px; font-weight:600; color:#e2e8f0; background:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -742,7 +753,8 @@ export const registerQueueRoutes = (app: Express) => {
     body.agent-screen .lead-meta-badge__dot { width:8px; height:8px; border-radius:999px; background:var(--label-dot, #64748b); flex-shrink:0; }
     body.agent-screen .lead-meta-menu { position:absolute; top:calc(100% + 6px); left:0; min-width:200px; max-width:min(280px,92vw); background:#0f172a; border:1px solid #334155; border-radius:10px; padding:6px; z-index:140; box-shadow:0 14px 34px rgba(2,6,23,.45); display:none; gap:2px; }
     body.agent-screen .lead-meta-menu.open { display:grid; }
-    body.agent-screen .lead-meta-menu--schedule { min-width:240px; padding:10px; gap:8px; }
+    body.agent-screen .lead-meta-menu--schedule { min-width:260px; padding:10px; gap:8px; }
+    body.agent-screen .lead-meta-icon-wrap .lead-meta-menu { top:calc(100% + 6px); left:0; }
     body.agent-screen .lead-meta-menu-item { width:100%; border:0; border-radius:8px; background:transparent; color:#e2e8f0; text-align:left; padding:8px 10px; font:inherit; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; }
     body.agent-screen .lead-meta-menu-item:hover, body.agent-screen .lead-meta-menu-item:focus-visible { background:#1e293b; outline:none; }
     body.agent-screen .lead-meta-menu-item.is-selected { background:rgba(20,184,166,.12); color:#99f6e4; }
@@ -1245,27 +1257,30 @@ export const registerQueueRoutes = (app: Express) => {
                   </button>
                 </div>
               </div>
-              <button type="button" id="leadScheduleBtn" class="lead-meta-icon-btn" title="Agendar retorno" aria-label="Agendar data com o lead" aria-haspopup="dialog" aria-expanded="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h2v2H7V3Zm8 0h2v2h-2V3ZM5 7h14v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7Zm2 2v10h10V9H7Zm2 2h2v2H9v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H9v-2Zm4 0h2v2h-2v-2Z"/></svg>
-              </button>
-              <button type="button" id="leadKanbanBtn" class="lead-meta-icon-btn" title="Coluna do Kanban" aria-label="Definir coluna do Kanban" aria-haspopup="menu" aria-expanded="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v16H4V4Zm10 0h6v10h-6V4Zm0 12h6v6h-6v-6Z"/></svg>
-              </button>
-              <div id="leadKanbanMenu" class="lead-meta-menu" role="menu" aria-label="Coluna do Kanban"></div>
-              <span id="leadKanbanBadge" class="lead-meta-badge is-hidden" title="Coluna do Kanban"></span>
+              <div class="lead-meta-icon-wrap">
+                <button type="button" id="leadScheduleBtn" class="lead-meta-icon-btn" title="Agendar retorno" aria-label="Agendar retorno com o lead" aria-haspopup="dialog" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h2v2H7V3Zm8 0h2v2h-2V3ZM5 7h14v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7Zm2 2v10h10V9H7Zm2 2h2v2H9v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H9v-2Zm4 0h2v2h-2v-2Z"/></svg>
+                </button>
+                <div id="leadScheduleMenu" class="lead-meta-menu lead-meta-menu--schedule" role="dialog" aria-label="Agendamento">
+                  <div id="leadScheduleCurrent" class="lead-meta-menu-current lead-meta-menu-current--empty">Nenhum agendamento definido</div>
+                  <label class="lead-field" style="margin:0;"><span style="color:#94a3b8;font-size:12px;font-weight:600;">Definir data e hora do retorno</span>
+                    <input id="leadScheduleInput" class="lead-schedule-input" type="datetime-local" />
+                  </label>
+                  <div class="lead-meta-menu-actions">
+                    <button type="button" id="leadScheduleClearBtn">Remover agendamento</button>
+                    <button type="button" id="leadScheduleSaveBtn" class="primary">Salvar</button>
+                  </div>
+                </div>
+              </div>
+              <div class="lead-meta-icon-wrap">
+                <button type="button" id="leadKanbanBtn" class="lead-meta-icon-btn" title="Coluna do Kanban" aria-label="Definir coluna do Kanban" aria-haspopup="menu" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v16H4V4Zm10 0h6v10h-6V4Zm0 12h6v6h-6v-6Z"/></svg>
+                </button>
+                <div id="leadKanbanMenu" class="lead-meta-menu" role="menu" aria-label="Coluna do Kanban"></div>
+              </div>
               <a id="leadWhatsappHeaderButton" class="lead-meta-icon-btn lead-whatsapp-btn is-hidden" href="#" target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp Web" aria-label="Iniciar conversa no WhatsApp Web">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
               </a>
-              <span id="leadScheduleBadge" class="lead-meta-badge is-hidden" title="Agendamento"></span>
-              <div id="leadScheduleMenu" class="lead-meta-menu lead-meta-menu--schedule" role="dialog" aria-label="Agendamento">
-                <label class="lead-field" style="margin:0;"><span style="color:#94a3b8;font-size:12px;font-weight:600;">Data e hora do retorno</span>
-                  <input id="leadScheduleInput" class="lead-schedule-input" type="datetime-local" />
-                </label>
-                <div class="lead-meta-menu-actions">
-                  <button type="button" id="leadScheduleClearBtn">Limpar</button>
-                  <button type="button" id="leadScheduleSaveBtn" class="primary">Salvar</button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -1835,14 +1850,13 @@ export const registerQueueRoutes = (app: Express) => {
     const leadPinToggleBtn = document.getElementById("leadPinToggleBtn");
     const leadPinToggleLabel = document.getElementById("leadPinToggleLabel");
     const leadScheduleBtn = document.getElementById("leadScheduleBtn");
-    const leadScheduleBadge = document.getElementById("leadScheduleBadge");
     const leadScheduleMenu = document.getElementById("leadScheduleMenu");
+    const leadScheduleCurrent = document.getElementById("leadScheduleCurrent");
     const leadScheduleInput = document.getElementById("leadScheduleInput");
     const leadScheduleSaveBtn = document.getElementById("leadScheduleSaveBtn");
     const leadScheduleClearBtn = document.getElementById("leadScheduleClearBtn");
     const leadKanbanBtn = document.getElementById("leadKanbanBtn");
     const leadKanbanMenu = document.getElementById("leadKanbanMenu");
-    const leadKanbanBadge = document.getElementById("leadKanbanBadge");
     const leadInlineMeta = document.getElementById("leadInlineMeta");
     const leadEndServiceButton = document.getElementById("leadEndServiceButton");
     const agentWidgetRoot = document.getElementById("agentWidgetRoot");
@@ -1878,14 +1892,16 @@ export const registerQueueRoutes = (app: Express) => {
       return datetimeLocalToIso(readLeadScheduleInputValue());
     }
 
-    function formatScheduleLabel(iso) {
+    function formatScheduleDetail(iso) {
       const raw = String(iso || "").trim();
       if (!raw) return "";
       const date = new Date(raw);
       if (Number.isNaN(date.getTime())) return "";
       return date.toLocaleString("pt-BR", {
+        weekday: "long",
         day: "2-digit",
         month: "2-digit",
+        year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
       });
@@ -1931,7 +1947,7 @@ export const registerQueueRoutes = (app: Express) => {
         const active = leadScheduleMenu === exceptMenu;
         leadScheduleMenu.classList.toggle("open", active);
         if (leadScheduleBtn) {
-          leadScheduleBtn.classList.toggle("is-active", active);
+          leadScheduleBtn.classList.toggle("active", active);
           leadScheduleBtn.setAttribute("aria-expanded", active ? "true" : "false");
         }
       }
@@ -1939,16 +1955,26 @@ export const registerQueueRoutes = (app: Express) => {
         const active = leadKanbanMenu === exceptMenu;
         leadKanbanMenu.classList.toggle("open", active);
         if (leadKanbanBtn) {
-          leadKanbanBtn.classList.toggle("is-active", active);
+          leadKanbanBtn.classList.toggle("active", active);
           leadKanbanBtn.setAttribute("aria-expanded", active ? "true" : "false");
         }
       }
+      syncLeadMetaIconStates();
     }
 
     function buildLeadKanbanMenu() {
       if (!leadKanbanMenu) return;
-      const clearItem =
-        '<button type="button" class="lead-meta-menu-item" data-kanban-column-id=""><span>Sem coluna</span></button>';
+      const currentName = String(leadMetaState.kanbanColumnName || "").trim();
+      const currentBlock = currentName
+        ? '<div class="lead-meta-menu-current"><span class="lead-meta-menu-current__label">Coluna atual</span><strong>' +
+          escapeHtml(currentName) +
+          "</strong></div>"
+        : '<div class="lead-meta-menu-current lead-meta-menu-current--empty"><span>Nenhuma coluna definida</span></div>';
+      const removeItem = currentName
+        ? '<button type="button" class="lead-meta-menu-item lead-meta-menu-item--danger" data-kanban-column-id=""><span>Remover coluna do Kanban</span></button>'
+        : "";
+      const chooseLabel =
+        '<div class="lead-meta-menu-section-label">Escolher coluna</div>';
       const items = (tenantKanbanColumns || [])
         .map((item) => {
           const id = String(item.id || "").trim();
@@ -1965,9 +1991,57 @@ export const registerQueueRoutes = (app: Express) => {
         })
         .join("");
       leadKanbanMenu.innerHTML =
-        clearItem +
+        currentBlock +
+        removeItem +
+        chooseLabel +
         (items ||
           '<button type="button" class="lead-meta-menu-item" disabled><span>Configure o Kanban no Master Console</span></button>');
+    }
+
+    function renderLeadScheduleCurrent() {
+      if (!leadScheduleCurrent) return;
+      const detail = formatScheduleDetail(leadMetaState.scheduledAt);
+      if (!detail) {
+        leadScheduleCurrent.className = "lead-meta-menu-current lead-meta-menu-current--empty";
+        leadScheduleCurrent.textContent = "Nenhum agendamento definido";
+        if (leadScheduleClearBtn) leadScheduleClearBtn.disabled = true;
+        return;
+      }
+      leadScheduleCurrent.className = "lead-meta-menu-current";
+      leadScheduleCurrent.innerHTML =
+        '<span class="lead-meta-menu-current__label">Agendamento atual</span><strong>' +
+        escapeHtml(detail) +
+        "</strong>";
+      if (leadScheduleClearBtn) leadScheduleClearBtn.disabled = false;
+    }
+
+    function syncLeadMetaIconStates() {
+      if (!isAgentMode) return;
+      const scheduledAt = String(leadMetaState.scheduledAt || "").trim();
+      const hasSchedule = Boolean(scheduledAt);
+      const columnName = String(leadMetaState.kanbanColumnName || "").trim();
+      const hasKanban = Boolean(String(leadMetaState.kanbanColumnId || "").trim() && columnName);
+
+      if (leadScheduleBtn) {
+        leadScheduleBtn.classList.toggle("is-set", hasSchedule);
+        leadScheduleBtn.title = hasSchedule
+          ? "Agendamento: " + formatScheduleDetail(scheduledAt)
+          : "Agendar retorno";
+        leadScheduleBtn.setAttribute(
+          "aria-label",
+          hasSchedule ? "Ver ou alterar agendamento" : "Agendar retorno com o lead",
+        );
+      }
+      if (leadKanbanBtn) {
+        leadKanbanBtn.classList.toggle("is-set", hasKanban);
+        leadKanbanBtn.title = hasKanban ? "Kanban: " + columnName : "Coluna do Kanban";
+        leadKanbanBtn.setAttribute(
+          "aria-label",
+          hasKanban ? "Ver ou alterar coluna do Kanban" : "Definir coluna do Kanban",
+        );
+      }
+      renderLeadScheduleCurrent();
+      buildLeadKanbanMenu();
     }
 
     function notifyParentQueueUpdated() {
@@ -1985,33 +2059,10 @@ export const registerQueueRoutes = (app: Express) => {
           leadPinToggleLabel.textContent = pinned ? "Desafixar conversa" : "Fixar conversa";
         }
       }
-      if (leadScheduleBadge) {
-        const scheduledAt = String(leadMetaState.scheduledAt || "").trim();
-        const label = formatScheduleLabel(scheduledAt);
-        if (!label) {
-          leadScheduleBadge.classList.add("is-hidden");
-          leadScheduleBadge.textContent = "";
-        } else {
-          leadScheduleBadge.classList.remove("is-hidden");
-          leadScheduleBadge.textContent = label;
-          leadScheduleBadge.className = "lead-meta-badge lead-meta-badge--priority-neutral";
-        }
-      }
       if (leadScheduleInput && !isLeadScheduleMenuOpen()) {
         leadScheduleInput.value = toDatetimeLocalValue(leadMetaState.scheduledAt);
       }
-      if (leadKanbanBadge) {
-        const columnName = String(leadMetaState.kanbanColumnName || "").trim();
-        if (!columnName) {
-          leadKanbanBadge.classList.add("is-hidden");
-          leadKanbanBadge.textContent = "";
-        } else {
-          leadKanbanBadge.classList.remove("is-hidden");
-          leadKanbanBadge.textContent = columnName;
-          leadKanbanBadge.className = "lead-meta-badge lead-meta-badge--priority-neutral";
-        }
-      }
-      buildLeadKanbanMenu();
+      syncLeadMetaIconStates();
     }
 
     function applyLeadMetaFromContact(contact) {
@@ -2270,7 +2321,9 @@ export const registerQueueRoutes = (app: Express) => {
           if (!button || button.disabled) return;
           const columnId = button.getAttribute("data-kanban-column-id");
           closeLeadMetaMenus(null);
-          void patchLeadMeta({ kanbanColumnId: columnId || null });
+          void patchLeadMeta({ kanbanColumnId: columnId || null }).then(() => {
+            if (!columnId) closeLeadMetaMenus(null);
+          });
         });
       }
       document.addEventListener("click", (event) => {
