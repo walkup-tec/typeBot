@@ -17,7 +17,7 @@ type ClientsListScreenProps = {
   onOpenContact: (contactId: string) => void;
 };
 
-const TABLE_COLUMNS = ["Nome", "CPF", "Fluxo/Produto", "Atualizado em", "Ações", "Etiquetas"] as const;
+const TABLE_COLUMNS = ["Nome", "CPF", "Fluxo/Produto", "Atualizado em", "Etiquetas", "Ações"] as const;
 
 const formatClientDate = (value: string): string => {
   const parsed = new Date(value);
@@ -58,7 +58,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   };
 
   return (
-    <section className="card clients-list-card" data-build="20260520-clients-labels-col-v5">
+    <section className="card clients-list-card" data-build="20260520-clients-actions-last-v6">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
         <button
@@ -156,6 +156,17 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
                 <td>{row.cpf || "-"}</td>
                 <td>{row.flowProductName || "-"}</td>
                 <td>{formatClientDate(row.updatedAt)}</td>
+                <td className="clients-table-col-labels">
+                  {row.leadLabels.length > 0 ? (
+                    <span className="clients-table-labels">
+                      {row.leadLabels.map((label) => (
+                        <LabelTag key={`${row.contactId}-${label.id}`} name={label.name} color={label.color} />
+                      ))}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
+                </td>
                 <td className="clients-table-col-actions">
                   <div className="clients-table-actions">
                     {row.whatsapp ? (
@@ -182,17 +193,6 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
                       </svg>
                     </button>
                   </div>
-                </td>
-                <td className="clients-table-col-labels">
-                  {row.leadLabels.length > 0 ? (
-                    <span className="clients-table-labels">
-                      {row.leadLabels.map((label) => (
-                        <LabelTag key={`${row.contactId}-${label.id}`} name={label.name} color={label.color} />
-                      ))}
-                    </span>
-                  ) : (
-                    "-"
-                  )}
                 </td>
               </tr>
             ))}
