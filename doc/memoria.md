@@ -1,3 +1,8 @@
+## 2026-05-20 - Lista de clientes: barra horizontal sempre visível
+
+- `overflow-x: scroll` + scrollbar estilizada; `content--client-list` com tabela em flex (barra na base da área visível).
+- Commit `d05e25c` — rebuild painel.
+
 ## 2026-05-20 - Fix Kanban por etiqueta (labelIds do lead)
 
 - **Causa:** quadro só lia `kanbanColumnId` manual (ex. colunas personalizadas Segunda–Sexta); ao mudar para "Ordem de etiquetas" os IDs não batiam → "Coluna não encontrada".

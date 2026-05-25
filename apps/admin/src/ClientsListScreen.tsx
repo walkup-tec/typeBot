@@ -8,6 +8,7 @@ import {
   type ClientDirectoryContact,
   type ClientWhatsappFilter,
 } from "./clientDirectory";
+import { ClientsTableScrollArea } from "./ClientsTableScrollArea";
 import { downloadClientDirectoryExcel } from "./exportClientDirectoryExcel";
 type ClientsListScreenProps = {
   contacts: ClientDirectoryContact[];
@@ -66,7 +67,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   };
 
   return (
-    <section className="card clients-list-card">
+    <section className="card clients-list-card" data-build="20260520-clients-hscroll-v2">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
         <button
@@ -140,7 +141,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
         {filteredRows.length} cliente(s) exibido(s) de {rows.length} atendido(s).
       </p>
 
-      <div className="clients-table-wrap">
+      <ClientsTableScrollArea>
         <table className="clients-table">
           <thead>
             <tr>
@@ -188,7 +189,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
             ))}
           </tbody>
         </table>
-      </div>
+      </ClientsTableScrollArea>
 
       {filteredRows.length === 0 ? (
         <p className="muted">Nenhum cliente encontrado para os filtros aplicados.</p>
