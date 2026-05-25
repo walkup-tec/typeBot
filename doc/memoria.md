@@ -1,3 +1,18 @@
+## 2026-05-20 - Lista de clientes: etiquetas inline no Nome
+
+- Coluna **Nome** exibe `LabelTag` para cada etiqueta do lead (`labels[]` ou legado `labelName`).
+- `clientDirectory.ts`: `resolveClientLeadLabels`, `leadLabels` em `ClientDirectoryRow`; busca por nome de etiqueta.
+- Export Excel: coluna **Etiquetas** (nomes separados por vírgula).
+- CSS: `.clients-table-cell-name`, `.clients-table-labels`.
+- `data-build="20260520-clients-labels-v4"` — rebuild **painel-typebot-crm** (API já normaliza labels em `queueService.listAll`).
+
+## 2026-05-20 - Lista de clientes: colunas fixas + nome do fluxo
+
+- Colunas: Nome, CPF, Fluxo/Produto, Atualizado em, Ações (WhatsApp + lupa).
+- Fluxo/Produto usa `displayLabel` (nome cadastrado), não nickname/alias.
+- API master `/queue/contacts` passa `sourceFlowDisplayName`.
+- Commit `4dc5372` — rebuild **painel** + **api**.
+
 ## 2026-05-20 - Lista de clientes: barra horizontal fixa (v2)
 
 - `ClientsTableScrollArea`: scroll vertical na tabela + **barra horizontal separada** sempre na base (sincronizada com `translateX`).

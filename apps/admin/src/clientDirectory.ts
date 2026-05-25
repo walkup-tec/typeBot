@@ -19,7 +19,18 @@ export type ClientDirectoryContact = {
   leadWhatsapp?: string;
   assignedAgentId?: string;
   assignedAgentName?: string;
+  labelId?: string;
+  labelIds?: string[];
+  labels?: Array<{ id: string; name: string; color: string }>;
+  labelName?: string;
+  labelColor?: string;
   updatedAt: string;
+};
+
+export type ClientDirectoryLabel = {
+  id: string;
+  name: string;
+  color: string;
 };
 
 export type ClientDirectoryRow = {
@@ -30,9 +41,31 @@ export type ClientDirectoryRow = {
   cpf: string;
   sourceFlowLabel: string;
   flowProductName: string;
+  leadLabels: ClientDirectoryLabel[];
   assignedAgentName: string;
   updatedAt: string;
   fieldValues: Record<string, string>;
+};
+
+export const resolveClientLeadLabels = (contact: ClientDirectoryContact): ClientDirectoryLabel[] => {
+  if (Array.isArray(contact.labels) && contact.labels.length > 0) {
+    return contact.labels.map((label) => ({
+      id: String(label.id || "").trim() || String(label.name || "etiqueta"),
+      name: String(label.name || "").trim() || "Etiqueta",
+      color: String(label.color || "#64748b"),
+    }));
+  }
+  const legacyName = String(contact.labelName ?? "").trim();
+  if (legacyName) {
+    return [
+      {
+        id: String(contact.labelId ?? "legacy-label").trim() || "legacy-label",
+        name: legacyName,
+        color: String(contact.labelColor ?? "#64748b"),
+      },
+    ];
+  }
+  return [];
 };
 
 export const resolveClientFlowProductName = (contact: ClientDirectoryContact): string => {
@@ -146,6 +179,7 @@ export const buildClientDirectoryRow = (contact: ClientDirectoryContact): Client
     cpf,
     sourceFlowLabel: String(contact.sourceFlowLabel ?? "").trim() || "Fluxo sem identificação",
     flowProductName: resolveClientFlowProductName(contact),
+    leadLabels: resolveClientLeadLabels(contact),
     assignedAgentName,
     updatedAt: contact.updatedAt,
     fieldValues,
@@ -172,6 +206,9 @@ export const matchesClientDirectorySearch = (row: ClientDirectoryRow, query: str
   if (row.contactName.toLowerCase().includes(loweredQuery)) return true;
   if (row.tenantName.toLowerCase().includes(loweredQuery)) return true;
   if (row.flowProductName.toLowerCase().includes(loweredQuery)) return true;
+  for (const label of row.leadLabels) {
+    if (label.name.toLowerCase().includes(loweredQuery)) return true;
+  }
   if (row.assignedAgentName.toLowerCase().includes(loweredQuery)) return true;
 
   if (row.whatsapp) {

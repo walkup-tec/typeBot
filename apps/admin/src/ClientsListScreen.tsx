@@ -7,6 +7,7 @@ import {
   type ClientDirectoryContact,
   type ClientWhatsappFilter,
 } from "./clientDirectory";
+import { LabelTag } from "./LabelTag";
 import { ClientsTableScrollArea } from "./ClientsTableScrollArea";
 import { LeadWhatsappOpenButton } from "./LeadWhatsappOpenButton";
 import { downloadClientDirectoryExcel } from "./exportClientDirectoryExcel";
@@ -57,7 +58,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   };
 
   return (
-    <section className="card clients-list-card" data-build="20260520-clients-columns-v3">
+    <section className="card clients-list-card" data-build="20260520-clients-labels-v4">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
         <button
@@ -78,7 +79,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
         <input
           className="clients-list-search"
           type="search"
-          placeholder="Pesquisar por Nome, CPF ou Fluxo/Produto"
+          placeholder="Pesquisar por Nome, CPF, Fluxo/Produto ou Etiqueta"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           aria-label="Pesquisar clientes"
@@ -145,7 +146,18 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
           <tbody>
             {filteredRows.map((row) => (
               <tr key={row.contactId}>
-                <td>{row.contactName || "-"}</td>
+                <td className="clients-table-cell-name">
+                  <div className="clients-table-name-cell">
+                    <span className="clients-table-name">{row.contactName || "-"}</span>
+                    {row.leadLabels.length > 0 ? (
+                      <span className="clients-table-labels">
+                        {row.leadLabels.map((label) => (
+                          <LabelTag key={`${row.contactId}-${label.id}`} name={label.name} color={label.color} />
+                        ))}
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
                 <td>{row.cpf || "-"}</td>
                 <td>{row.flowProductName || "-"}</td>
                 <td>{formatClientDate(row.updatedAt)}</td>

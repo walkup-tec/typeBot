@@ -3057,6 +3057,38 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.clients-table-cell-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.clients-table-name-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.clients-table-name {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.clients-table-labels {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.clients-table-labels .label-tag {
+  flex-shrink: 0;
+}
+
 .clients-table tbody tr:nth-child(even) td {
   background: rgba(15, 23, 42, 0.24);
 }
