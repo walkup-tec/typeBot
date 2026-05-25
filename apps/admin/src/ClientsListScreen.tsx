@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   buildClientDirectoryRow,
-  collectClientDirectoryColumnKeys,
   matchesClientDirectorySearch,
   matchesClientFlowFilter,
   matchesClientWhatsappFilter,
@@ -9,11 +8,15 @@ import {
   type ClientWhatsappFilter,
 } from "./clientDirectory";
 import { ClientsTableScrollArea } from "./ClientsTableScrollArea";
+import { LeadWhatsappOpenButton } from "./LeadWhatsappOpenButton";
 import { downloadClientDirectoryExcel } from "./exportClientDirectoryExcel";
+
 type ClientsListScreenProps = {
   contacts: ClientDirectoryContact[];
   onOpenContact: (contactId: string) => void;
 };
+
+const TABLE_COLUMNS = ["Nome", "CPF", "Fluxo/Produto", "Atualizado em", "Ações"] as const;
 
 const formatClientDate = (value: string): string => {
   const parsed = new Date(value);
@@ -31,7 +34,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   const flowOptions = useMemo(() => {
     const labels = new Set<string>();
     for (const row of rows) {
-      if (row.sourceFlowLabel.trim()) labels.add(row.sourceFlowLabel);
+      if (row.flowProductName.trim()) labels.add(row.flowProductName);
     }
     return [...labels].sort((left, right) => left.localeCompare(right, "pt-BR", { sensitivity: "base" }));
   }, [rows]);
@@ -47,19 +50,6 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
     [rows, searchQuery, flowFilter, whatsappFilter],
   );
 
-  const dynamicColumns = useMemo(() => collectClientDirectoryColumnKeys(filteredRows), [filteredRows]);
-  const showCpfColumn = useMemo(() => rows.some((row) => row.cpf.trim().length > 0), [rows]);
-  const showTenantColumn = useMemo(() => rows.some((row) => row.tenantName.trim().length > 0), [rows]);
-
-  const tableColumns = useMemo(() => {
-    const columns = ["Nome"];
-    if (showTenantColumn) columns.push("Assinante");
-    columns.push("WhatsApp");
-    if (showCpfColumn) columns.push("CPF");
-    columns.push("Fluxo/Produto", "Atendente", "Atualizado em", ...dynamicColumns, "Ações");
-    return columns;
-  }, [dynamicColumns, showCpfColumn, showTenantColumn]);
-
   const hasActiveFilters = searchQuery.trim().length > 0 || flowFilter !== "all" || whatsappFilter !== "all";
 
   const handleExportClients = () => {
@@ -67,7 +57,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   };
 
   return (
-    <section className="card clients-list-card" data-build="20260520-clients-hscroll-v2">
+    <section className="card clients-list-card" data-build="20260520-clients-columns-v3">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
         <button
@@ -88,11 +78,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
         <input
           className="clients-list-search"
           type="search"
-          placeholder={
-            showTenantColumn
-              ? "Pesquisar por Nome, Assinante, Atendente, WhatsApp ou CPF"
-              : "Pesquisar por Nome, WhatsApp ou CPF"
-          }
+          placeholder="Pesquisar por Nome, CPF ou Fluxo/Produto"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           aria-label="Pesquisar clientes"
@@ -145,11 +131,11 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
         <table className="clients-table">
           <thead>
             <tr>
-              {tableColumns.map((column, columnIndex) => (
+              {TABLE_COLUMNS.map((column) => (
                 <th
                   key={column}
                   scope="col"
-                  className={columnIndex === tableColumns.length - 1 ? "clients-table-col-actions" : undefined}
+                  className={column === "Ações" ? "clients-table-col-actions" : undefined}
                 >
                   {column}
                 </th>
@@ -160,30 +146,35 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
             {filteredRows.map((row) => (
               <tr key={row.contactId}>
                 <td>{row.contactName || "-"}</td>
-                {showTenantColumn ? <td>{row.tenantName || "-"}</td> : null}
-                <td>{row.whatsapp || "-"}</td>
-                {showCpfColumn ? <td>{row.cpf || "-"}</td> : null}
-                <td>{row.sourceFlowLabel || "-"}</td>
-                <td>{row.assignedAgentName || "-"}</td>
+                <td>{row.cpf || "-"}</td>
+                <td>{row.flowProductName || "-"}</td>
                 <td>{formatClientDate(row.updatedAt)}</td>
-                {dynamicColumns.map((column) => (
-                  <td key={`${row.contactId}-${column}`}>{row.fieldValues[column] ?? ""}</td>
-                ))}
                 <td className="clients-table-col-actions">
-                  <button
-                    type="button"
-                    className="queue-icon-btn clients-table-action-btn"
-                    onClick={() => onOpenContact(row.contactId)}
-                    title={`Ver detalhes de ${row.contactName || "cliente"}`}
-                    aria-label={`Ver detalhes de ${row.contactName || "cliente"}`}
-                  >
-                    <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path
-                        d="M11 4a7 7 0 1 0 4.384 12.46l3.578 3.579a1 1 0 0 0 1.414-1.415l-3.578-3.578A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
-                        fill="currentColor"
+                  <div className="clients-table-actions">
+                    {row.whatsapp ? (
+                      <LeadWhatsappOpenButton
+                        phoneRaw={row.whatsapp}
+                        contactName={row.contactName}
+                        className="clients-table-whatsapp-btn"
                       />
-                    </svg>
-                  </button>
+                    ) : (
+                      <span className="clients-table-action-spacer" aria-hidden="true" />
+                    )}
+                    <button
+                      type="button"
+                      className="queue-icon-btn clients-table-action-btn"
+                      onClick={() => onOpenContact(row.contactId)}
+                      title={`Ver detalhes de ${row.contactName || "cliente"}`}
+                      aria-label={`Ver detalhes de ${row.contactName || "cliente"}`}
+                    >
+                      <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path
+                          d="M11 4a7 7 0 1 0 4.384 12.46l3.578 3.579a1 1 0 0 0 1.414-1.415l-3.578-3.578A7 7 0 0 0 11 4Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

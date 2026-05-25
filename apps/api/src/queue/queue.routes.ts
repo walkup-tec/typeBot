@@ -3321,14 +3321,18 @@ export const registerQueueRoutes = (app: Express) => {
         );
       }
 
-      const contacts = queueService.listAll().map((contact) => ({
-        ...contact,
-        tenantName: tenantNames.get(contact.tenantId) ?? contact.tenantId,
-        assignedAgentName: resolveQueueContactAssignedAgentName(
-          contact,
-          attendantsByTenantId.get(contact.tenantId) ?? [],
-        ),
-      }));
+      const contacts = queueService.listAll().map((contact) => {
+        const tenantFlows = flowRepository.listByTenant(contact.tenantId);
+        return {
+          ...contact,
+          tenantName: tenantNames.get(contact.tenantId) ?? contact.tenantId,
+          sourceFlowDisplayName: resolveSourceFlowDisplayName(tenantFlows, contact.sourceFlowLabel),
+          assignedAgentName: resolveQueueContactAssignedAgentName(
+            contact,
+            attendantsByTenantId.get(contact.tenantId) ?? [],
+          ),
+        };
+      });
 
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       return res.status(200).json(contacts);

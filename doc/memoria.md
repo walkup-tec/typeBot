@@ -1,7 +1,8 @@
-## 2026-05-20 - Lista de clientes: barra horizontal sempre visível
+## 2026-05-20 - Lista de clientes: barra horizontal fixa (v2)
 
-- `overflow-x: scroll` + scrollbar estilizada; `content--client-list` com tabela em flex (barra na base da área visível).
-- Commit `d05e25c` — rebuild painel.
+- `ClientsTableScrollArea`: scroll vertical na tabela + **barra horizontal separada** sempre na base (sincronizada com `translateX`).
+- `content--client-list` com `height: 100dvh` e `overflow: hidden` (sem scroll da página).
+- Commit `a9207b2` — rebuild painel + Ctrl+F5; conferir `data-build="20260520-clients-hscroll-v2"` no HTML.
 
 ## 2026-05-20 - Fix Kanban por etiqueta (labelIds do lead)
 

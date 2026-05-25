@@ -14,6 +14,7 @@ export type ClientDirectoryContact = {
   tenantName?: string;
   contactName: string;
   sourceFlowLabel: string;
+  sourceFlowDisplayName?: string;
   leadContext?: Record<string, string | number | boolean>;
   leadWhatsapp?: string;
   assignedAgentId?: string;
@@ -28,9 +29,17 @@ export type ClientDirectoryRow = {
   whatsapp: string;
   cpf: string;
   sourceFlowLabel: string;
+  flowProductName: string;
   assignedAgentName: string;
   updatedAt: string;
   fieldValues: Record<string, string>;
+};
+
+export const resolveClientFlowProductName = (contact: ClientDirectoryContact): string => {
+  const displayName = String(contact.sourceFlowDisplayName ?? "").trim();
+  if (displayName) return displayName;
+  const label = String(contact.sourceFlowLabel ?? "").trim();
+  return label || "Fluxo sem identificação";
 };
 
 export type ClientWhatsappFilter = "all" | "with" | "without";
@@ -136,6 +145,7 @@ export const buildClientDirectoryRow = (contact: ClientDirectoryContact): Client
     whatsapp,
     cpf,
     sourceFlowLabel: String(contact.sourceFlowLabel ?? "").trim() || "Fluxo sem identificação",
+    flowProductName: resolveClientFlowProductName(contact),
     assignedAgentName,
     updatedAt: contact.updatedAt,
     fieldValues,
@@ -161,6 +171,7 @@ export const matchesClientDirectorySearch = (row: ClientDirectoryRow, query: str
 
   if (row.contactName.toLowerCase().includes(loweredQuery)) return true;
   if (row.tenantName.toLowerCase().includes(loweredQuery)) return true;
+  if (row.flowProductName.toLowerCase().includes(loweredQuery)) return true;
   if (row.assignedAgentName.toLowerCase().includes(loweredQuery)) return true;
 
   if (row.whatsapp) {
@@ -190,5 +201,5 @@ export const matchesClientWhatsappFilter = (row: ClientDirectoryRow, filter: Cli
 export const matchesClientFlowFilter = (row: ClientDirectoryRow, flowFilter: string): boolean => {
   const normalizedFilter = flowFilter.trim();
   if (!normalizedFilter || normalizedFilter === "all") return true;
-  return row.sourceFlowLabel === normalizedFilter;
+  return row.flowProductName === normalizedFilter;
 };

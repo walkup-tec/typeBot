@@ -36,7 +36,10 @@ const looksLikeTechnicalSlug = (value: string): boolean => {
   return /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(trimmed) && trimmed.length >= 12;
 };
 
-/** Nome amigável do fluxo para exibir na fila (ex.: "Drax Sistemas" em vez do publicId). */
+/**
+ * Nome do fluxo/produto cadastrado no painel (displayLabel).
+ * Não usa nickname/alias técnico de roteamento.
+ */
 export const resolveSourceFlowDisplayName = (
   flows: SavedFlow[],
   sourceFlowLabel: string,
@@ -48,9 +51,6 @@ export const resolveSourceFlowDisplayName = (
   if (matched) {
     const display = String(matched.displayLabel ?? "").trim();
     if (display) return display;
-    const nickname = String(matched.nickname ?? "").trim();
-    if (nickname && !looksLikeTechnicalSlug(nickname)) return nickname;
-    if (nickname) return humanizeSlug(nickname);
   }
 
   if (looksLikeTechnicalSlug(raw)) return humanizeSlug(raw);
