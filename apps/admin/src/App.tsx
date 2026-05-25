@@ -2259,7 +2259,7 @@ export function App() {
       </aside>
 
       <main
-        className={`content${activeScreen === "liveQueue" ? " content--live-inbox" : ""}${activeScreen === "kanban" ? " content--kanban" : ""}`}
+        className={`content${activeScreen === "liveQueue" ? " content--live-inbox" : ""}${activeScreen === "kanban" ? " content--kanban" : ""}${activeScreen === "clientList" ? " content--client-list" : ""}`}
       >
         {pendingQueueCount > 0 ? (
           <section className="pending-summary-alert" role="status" aria-live="polite">
