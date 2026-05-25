@@ -6,15 +6,21 @@ const formatClientDateForExport = (value: string): string => {
   return parsed.toLocaleString("pt-BR");
 };
 
-const CLIENT_DIRECTORY_EXPORT_HEADERS = ["Nome", "CPF", "Fluxo/Produto", "Etiquetas", "Atualizado em"] as const;
+const CLIENT_DIRECTORY_EXPORT_HEADERS = [
+  "Nome",
+  "CPF",
+  "Fluxo/Produto",
+  "Atualizado em",
+  "Etiquetas",
+] as const;
 
 const buildClientDirectoryExportRows = (rows: ClientDirectoryRow[]): string[][] =>
   rows.map((row) => [
     row.contactName || "",
     row.cpf || "",
     row.flowProductName || "",
-    row.leadLabels.map((label) => label.name).join(", "),
     formatClientDateForExport(row.updatedAt),
+    row.leadLabels.map((label) => label.name).join(", "),
   ]);
 
 const createClientDirectoryExportFileName = (usesFilters?: boolean): string => {

@@ -3057,24 +3057,14 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
-.clients-table-cell-name {
+.clients-table th.clients-table-col-labels,
+.clients-table td.clients-table-col-labels {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
-  min-width: 180px;
-  max-width: 320px;
-}
-
-.clients-table-name-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.clients-table-name {
-  font-weight: 600;
-  color: #f1f5f9;
+  min-width: 140px;
+  max-width: 280px;
+  vertical-align: middle;
 }
 
 .clients-table-labels {

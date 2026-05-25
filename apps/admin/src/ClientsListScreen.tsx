@@ -17,7 +17,7 @@ type ClientsListScreenProps = {
   onOpenContact: (contactId: string) => void;
 };
 
-const TABLE_COLUMNS = ["Nome", "CPF", "Fluxo/Produto", "Atualizado em", "Ações"] as const;
+const TABLE_COLUMNS = ["Nome", "CPF", "Fluxo/Produto", "Atualizado em", "Ações", "Etiquetas"] as const;
 
 const formatClientDate = (value: string): string => {
   const parsed = new Date(value);
@@ -58,7 +58,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   };
 
   return (
-    <section className="card clients-list-card" data-build="20260520-clients-labels-v4">
+    <section className="card clients-list-card" data-build="20260520-clients-labels-col-v5">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
         <button
@@ -136,7 +136,13 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
                 <th
                   key={column}
                   scope="col"
-                  className={column === "Ações" ? "clients-table-col-actions" : undefined}
+                  className={
+                    column === "Ações"
+                      ? "clients-table-col-actions"
+                      : column === "Etiquetas"
+                        ? "clients-table-col-labels"
+                        : undefined
+                  }
                 >
                   {column}
                 </th>
@@ -146,18 +152,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
           <tbody>
             {filteredRows.map((row) => (
               <tr key={row.contactId}>
-                <td className="clients-table-cell-name">
-                  <div className="clients-table-name-cell">
-                    <span className="clients-table-name">{row.contactName || "-"}</span>
-                    {row.leadLabels.length > 0 ? (
-                      <span className="clients-table-labels">
-                        {row.leadLabels.map((label) => (
-                          <LabelTag key={`${row.contactId}-${label.id}`} name={label.name} color={label.color} />
-                        ))}
-                      </span>
-                    ) : null}
-                  </div>
-                </td>
+                <td>{row.contactName || "-"}</td>
                 <td>{row.cpf || "-"}</td>
                 <td>{row.flowProductName || "-"}</td>
                 <td>{formatClientDate(row.updatedAt)}</td>
@@ -187,6 +182,17 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
                       </svg>
                     </button>
                   </div>
+                </td>
+                <td className="clients-table-col-labels">
+                  {row.leadLabels.length > 0 ? (
+                    <span className="clients-table-labels">
+                      {row.leadLabels.map((label) => (
+                        <LabelTag key={`${row.contactId}-${label.id}`} name={label.name} color={label.color} />
+                      ))}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
                 </td>
               </tr>
             ))}
