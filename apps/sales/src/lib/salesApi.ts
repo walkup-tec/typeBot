@@ -24,6 +24,45 @@ export const resolvePainelUrl = (): string => {
 
 export type SalesSubscriptionCycle = "MONTHLY" | "YEARLY";
 
+export type SalesPlanDto = {
+  id: string;
+  name: string;
+  priceCents: number;
+  billingCycle: SalesSubscriptionCycle;
+};
+
+export const fetchSalesPlans = async (): Promise<{
+  plans: SalesPlanDto[];
+  paymentConfigured: boolean;
+}> => {
+  const base = resolveApiBase();
+  if (!base) {
+    return { plans: [], paymentConfigured: false };
+  }
+
+  const response = await fetch(`${base}/api/public/sales/plans`, {
+    method: "GET",
+    headers: { accept: "application/json" },
+  });
+
+  const raw = await response.text();
+  let payload: { plans?: SalesPlanDto[]; paymentConfigured?: boolean; message?: string };
+  try {
+    payload = raw ? (JSON.parse(raw) as typeof payload) : {};
+  } catch {
+    throw new Error("Resposta inválida ao carregar planos.");
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.message ?? "Erro ao carregar planos.");
+  }
+
+  return {
+    plans: Array.isArray(payload.plans) ? payload.plans : [],
+    paymentConfigured: Boolean(payload.paymentConfigured),
+  };
+};
+
 export const createSalesSubscription = async (input: {
   customerName: string;
   ownerEmail: string;

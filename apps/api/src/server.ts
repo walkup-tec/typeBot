@@ -14,6 +14,7 @@ import { registerKanbanRoutes } from "./kanban/kanban.routes";
 import { flowRepository, tenantRepository } from "./lib/repositories";
 import { getDataFilePath } from "./lib/data-path";
 import { registerAuthRoutes } from "./auth/auth.routes";
+import { registerBillingRoutes } from "./billing/billing.routes";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
@@ -191,6 +192,7 @@ registerLabelRoutes(app);
 registerPriorityRoutes(app);
 registerKanbanRoutes(app);
 registerAuthRoutes(app);
+registerBillingRoutes(app);
 registerQueueRoutes(app);
 registerTypebotRoutes(app);
 

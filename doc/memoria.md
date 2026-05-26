@@ -1,9 +1,21 @@
+## 2026-05-26 - Integração landing + Asaas (retomada)
+
+- **API:** `registerBillingRoutes` em `server.ts`; módulo `apps/api/src/billing/*` versionado.
+- Rotas: `GET /api/public/sales/plans`, `POST /api/public/sales/subscriptions`, `POST /api/webhooks/asaas`.
+- **Landing** (`apps/sales`): preços via `fetchSalesPlans`; checkout → redirect `invoiceUrl` Asaas.
+- **Fix:** `asaasPaymentId` gravado na assinatura; reconciliação por subscription.
+- **Env API (Easypanel):** `ASAAS_API_KEY`, `ASAAS_API_BASE_URL`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `SALES_PLAN_*`, `SYSTEM_LOGIN_URL`, SMTP.
+- **Webhook Asaas:** `POST https://api.chattypebot.com/api/webhooks/asaas` + header `asaas-access-token`.
+- **Landing env:** só `VITE_API_BASE_URL`, `VITE_PAINEL_URL` (sem chaves Asaas).
+- Pendente: configurar secrets em produção + teste E2E sandbox.
+
 ## 2026-05-26 - Lista de clientes: coluna Telefone + tabela ocupa tela toda
 
 - Colunas: Nome | CPF | **Telefone (copiar)** | Fluxo/Produto | Atualizado em | Etiquetas | **Ações** (sempre por último).
 - `ClientsListScreen`: botão copiar usa `copyTextToClipboard`.
 - CSS: `table-layout: fixed` + `width: 100%` para ocupar a tela; larguras fixas para Telefone/Etiquetas/Ações.
-- `data-build="20260526-clients-phone-col-v7"`.
+- Commit `8733c50` — telefone + copiar.
+- Commit `6572e3f` — fix layout: `colgroup` %, track 100%, sem scroll horizontal quando cabe; `data-build="20260526-clients-table-fit-v8"`.
 
 ## 2026-05-20 - Lista de clientes: coluna Etiquetas
 

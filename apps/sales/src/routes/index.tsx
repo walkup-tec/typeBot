@@ -33,7 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { createSalesSubscription, resolvePainelUrl } from "@/lib/salesApi";
+import { createSalesSubscription, fetchSalesPlans, resolvePainelUrl } from "@/lib/salesApi";
 import { digitsFromCpfCnpj, maskCpfCnpjInput } from "@/lib/maskCpfCnpj";
 import { cn } from "@/lib/utils";
 
@@ -569,14 +569,36 @@ function Pricing() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", cpfCnpj: "" });
+  const [paymentConfigured, setPaymentConfigured] = useState(true);
+  const [monthly, setMonthly] = useState(190);
+  const [yearlyTotal, setYearlyTotal] = useState(1188);
 
-  const monthly = 190;
-  const yearlyTotal = 1188;
+  useEffect(() => {
+    void fetchSalesPlans()
+      .then(({ plans, paymentConfigured: configured }) => {
+        setPaymentConfigured(configured);
+        const monthlyPlan = plans.find((plan) => plan.billingCycle === "MONTHLY");
+        const yearlyPlan = plans.find((plan) => plan.billingCycle === "YEARLY");
+        if (monthlyPlan) setMonthly(monthlyPlan.priceCents / 100);
+        if (yearlyPlan) setYearlyTotal(yearlyPlan.priceCents / 100);
+      })
+      .catch(() => {
+        // Mantém valores padrão da UI se a API estiver indisponível no carregamento.
+      });
+  }, []);
+
+  const formatCurrency = (value: number): string =>
+    value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const yearlyMonthly = (yearlyTotal / 12).toFixed(2).replace(".", ",");
   const savings = monthly * 12 - yearlyTotal;
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!paymentConfigured) {
+      setError("Pagamentos temporariamente indisponíveis. Tente novamente em instantes.");
+      return;
+    }
     const docDigits = digitsFromCpfCnpj(form.cpfCnpj);
     if (docDigits.length !== 11 && docDigits.length !== 14) {
       setError("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) completo.");
@@ -678,13 +700,13 @@ function Pricing() {
 
           <div className="mt-6 flex items-baseline gap-1">
             <span className="text-5xl font-bold">
-              R$ {yearly ? yearlyMonthly : "190,00"}
+              R$ {yearly ? yearlyMonthly : formatCurrency(monthly)}
             </span>
             <span className="text-sm text-muted-foreground">/mês</span>
           </div>
           {yearly ? (
             <p className="mt-1 text-xs text-primary">
-              R$ 1.188,00 cobrados anualmente
+              R$ {formatCurrency(yearlyTotal)} cobrados anualmente
             </p>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">cobrança mensal recorrente</p>
@@ -712,10 +734,16 @@ function Pricing() {
           <Button
             size="lg"
             onClick={() => setOpen(true)}
+            disabled={!paymentConfigured}
             className="mt-8 bg-primary text-primary-foreground shadow-[var(--shadow-glow)] hover:bg-primary/90"
           >
             Assinar agora <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
+          {!paymentConfigured ? (
+            <p className="mt-3 text-center text-xs text-amber-400">
+              Checkout em configuração. Aguarde alguns minutos ou fale com o suporte.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -729,8 +757,8 @@ function Pricing() {
             <DialogTitle>Assinar plano Business</DialogTitle>
             <DialogDescription>
               {yearly
-                ? "R$ 1.188,00 cobrados anualmente (equivalente a R$ 99,00/mês)."
-                : "R$ 190,00/mês — cobrança recorrente."}
+                ? `R$ ${formatCurrency(yearlyTotal)} cobrados anualmente (equivalente a R$ ${yearlyMonthly}/mês).`
+                : `R$ ${formatCurrency(monthly)}/mês — cobrança recorrente.`}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubscribe} className="space-y-4">
