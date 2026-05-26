@@ -20,6 +20,16 @@ type ClientsListScreenProps = {
 
 const TABLE_COLUMNS = ["Nome", "CPF", "Telefone", "Fluxo/Produto", "Atualizado em", "Etiquetas", "Ações"] as const;
 
+const TABLE_COLUMN_CLASS: Record<(typeof TABLE_COLUMNS)[number], string | undefined> = {
+  Nome: "clients-table-col-name",
+  CPF: "clients-table-col-cpf",
+  Telefone: "clients-table-col-phone",
+  "Fluxo/Produto": "clients-table-col-flow",
+  "Atualizado em": "clients-table-col-date",
+  Etiquetas: "clients-table-col-labels",
+  Ações: "clients-table-col-actions",
+};
+
 const formatClientDate = (value: string): string => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
@@ -59,7 +69,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   };
 
   return (
-    <section className="card clients-list-card" data-build="20260526-clients-phone-col-v7">
+    <section className="card clients-list-card" data-build="20260526-clients-table-fit-v8">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
         <button
@@ -131,22 +141,15 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
 
       <ClientsTableScrollArea>
         <table className="clients-table">
+          <colgroup>
+            {TABLE_COLUMNS.map((column) => (
+              <col key={column} className={TABLE_COLUMN_CLASS[column]} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               {TABLE_COLUMNS.map((column) => (
-                <th
-                  key={column}
-                  scope="col"
-                  className={
-                    column === "Ações"
-                      ? "clients-table-col-actions"
-                      : column === "Telefone"
-                        ? "clients-table-col-phone"
-                      : column === "Etiquetas"
-                        ? "clients-table-col-labels"
-                        : undefined
-                  }
-                >
+                <th key={column} scope="col" className={TABLE_COLUMN_CLASS[column]}>
                   {column}
                 </th>
               ))}
@@ -155,8 +158,8 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
           <tbody>
             {filteredRows.map((row) => (
               <tr key={row.contactId}>
-                <td>{row.contactName || "-"}</td>
-                <td>{row.cpf || "-"}</td>
+                <td className="clients-table-col-name">{row.contactName || "-"}</td>
+                <td className="clients-table-col-cpf">{row.cpf || "-"}</td>
                 <td className="clients-table-col-phone">
                   {row.whatsapp ? (
                     <span className="clients-table-phone">
@@ -180,8 +183,8 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
                     "-"
                   )}
                 </td>
-                <td>{row.flowProductName || "-"}</td>
-                <td>{formatClientDate(row.updatedAt)}</td>
+                <td className="clients-table-col-flow">{row.flowProductName || "-"}</td>
+                <td className="clients-table-col-date">{formatClientDate(row.updatedAt)}</td>
                 <td className="clients-table-col-labels">
                   {row.leadLabels.length > 0 ? (
                     <span className="clients-table-labels">

@@ -2926,8 +2926,8 @@ button:disabled {
 }
 
 .clients-table-inner-track {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   will-change: transform;
 }
 
@@ -3023,12 +3023,40 @@ button:disabled {
 
 .clients-table {
   width: 100%;
-  min-width: 100%;
+  max-width: 100%;
   border-collapse: separate;
   border-spacing: 0 2px;
   font-size: 14px;
   line-height: 1.4;
   table-layout: fixed;
+}
+
+.clients-table col.clients-table-col-name {
+  width: 16%;
+}
+
+.clients-table col.clients-table-col-cpf {
+  width: 11%;
+}
+
+.clients-table col.clients-table-col-phone {
+  width: 14%;
+}
+
+.clients-table col.clients-table-col-flow {
+  width: 18%;
+}
+
+.clients-table col.clients-table-col-date {
+  width: 15%;
+}
+
+.clients-table col.clients-table-col-labels {
+  width: 18%;
+}
+
+.clients-table col.clients-table-col-actions {
+  width: 8%;
 }
 
 .clients-table thead th {
@@ -3059,9 +3087,6 @@ button:disabled {
 
 .clients-table th.clients-table-col-phone,
 .clients-table td.clients-table-col-phone {
-  width: 170px;
-  min-width: 170px;
-  max-width: 170px;
   overflow: visible;
 }
 
@@ -3070,9 +3095,6 @@ button:disabled {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
-  width: 240px;
-  min-width: 240px;
-  max-width: 240px;
   vertical-align: middle;
 }
 
@@ -3126,9 +3148,6 @@ button:disabled {
 
 .clients-table th.clients-table-col-actions,
 .clients-table td.clients-table-col-actions {
-  width: 108px;
-  min-width: 108px;
-  max-width: 108px;
   text-align: center;
   overflow: visible;
   padding-inline: 6px;

@@ -13,11 +13,21 @@ export function ClientsTableScrollArea({ children }: ClientsTableScrollAreaProps
   const barRef = useRef<HTMLDivElement>(null);
   const spacerRef = useRef<HTMLDivElement>(null);
 
-  const syncSpacerWidth = useCallback(() => {
+  const syncHorizontalScroll = useCallback(() => {
     const inner = innerRef.current;
+    const main = mainRef.current;
+    const bar = barRef.current;
     const spacer = spacerRef.current;
-    if (!inner || !spacer) return;
-    spacer.style.width = `${inner.scrollWidth}px`;
+    if (!inner || !main || !bar || !spacer) return;
+
+    const needsHorizontal = inner.scrollWidth > main.clientWidth + 1;
+    bar.hidden = !needsHorizontal;
+    spacer.style.width = needsHorizontal ? `${inner.scrollWidth}px` : "0";
+
+    if (!needsHorizontal) {
+      bar.scrollLeft = 0;
+      inner.style.transform = "";
+    }
   }, []);
 
   const applyHorizontalOffset = useCallback((scrollLeft: number) => {
@@ -27,28 +37,28 @@ export function ClientsTableScrollArea({ children }: ClientsTableScrollAreaProps
   }, []);
 
   useLayoutEffect(() => {
-    syncSpacerWidth();
+    syncHorizontalScroll();
     const inner = innerRef.current;
     const main = mainRef.current;
     if (!inner || !main) return;
 
     const observer = new ResizeObserver(() => {
-      syncSpacerWidth();
-      if (barRef.current) {
+      syncHorizontalScroll();
+      if (barRef.current && !barRef.current.hidden) {
         applyHorizontalOffset(barRef.current.scrollLeft);
       }
     });
     observer.observe(inner);
     observer.observe(main);
 
-    const onWindowResize = () => syncSpacerWidth();
+    const onWindowResize = () => syncHorizontalScroll();
     window.addEventListener("resize", onWindowResize);
 
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", onWindowResize);
     };
-  }, [applyHorizontalOffset, children, syncSpacerWidth]);
+  }, [applyHorizontalOffset, children, syncHorizontalScroll]);
 
   const handleBarScroll = () => {
     const scrollLeft = barRef.current?.scrollLeft ?? 0;
