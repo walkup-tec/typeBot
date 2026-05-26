@@ -1,10 +1,15 @@
-## 2026-05-20 - Lista de clientes: etiquetas inline no Nome
+## 2026-05-26 - Lista de clientes: coluna Telefone + tabela ocupa tela toda
 
-- Coluna **Nome** exibe `LabelTag` para cada etiqueta do lead (`labels[]` ou legado `labelName`).
-- `clientDirectory.ts`: `resolveClientLeadLabels`, `leadLabels` em `ClientDirectoryRow`; busca por nome de etiqueta.
-- Export Excel: coluna **Etiquetas** (nomes separados por vírgula).
-- CSS: `.clients-table-cell-name`, `.clients-table-labels`.
-- `data-build="20260520-clients-labels-v4"` — rebuild **painel-typebot-crm** (API já normaliza labels em `queueService.listAll`).
+- Colunas: Nome | CPF | **Telefone (copiar)** | Fluxo/Produto | Atualizado em | Etiquetas | **Ações** (sempre por último).
+- `ClientsListScreen`: botão copiar usa `copyTextToClipboard`.
+- CSS: `table-layout: fixed` + `width: 100%` para ocupar a tela; larguras fixas para Telefone/Etiquetas/Ações.
+- `data-build="20260526-clients-phone-col-v7"`.
+
+## 2026-05-20 - Lista de clientes: coluna Etiquetas
+
+- Colunas: Nome | CPF | Fluxo/Produto | Atualizado em | **Etiquetas** | **Ações** (Ações sempre por último).
+- `data-build="20260520-clients-actions-last-v6"`.
+- Rebuild **painel-typebot-crm** + Ctrl+F5.
 
 ## 2026-05-20 - Lista de clientes: colunas fixas + nome do fluxo
 

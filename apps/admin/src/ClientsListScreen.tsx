@@ -10,6 +10,7 @@ import {
 import { LabelTag } from "./LabelTag";
 import { ClientsTableScrollArea } from "./ClientsTableScrollArea";
 import { LeadWhatsappOpenButton } from "./LeadWhatsappOpenButton";
+import { copyTextToClipboard } from "./copyToClipboard";
 import { downloadClientDirectoryExcel } from "./exportClientDirectoryExcel";
 
 type ClientsListScreenProps = {
@@ -17,7 +18,7 @@ type ClientsListScreenProps = {
   onOpenContact: (contactId: string) => void;
 };
 
-const TABLE_COLUMNS = ["Nome", "CPF", "Fluxo/Produto", "Atualizado em", "Etiquetas", "Ações"] as const;
+const TABLE_COLUMNS = ["Nome", "CPF", "Telefone", "Fluxo/Produto", "Atualizado em", "Etiquetas", "Ações"] as const;
 
 const formatClientDate = (value: string): string => {
   const parsed = new Date(value);
@@ -58,7 +59,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
   };
 
   return (
-    <section className="card clients-list-card" data-build="20260520-clients-actions-last-v6">
+    <section className="card clients-list-card" data-build="20260526-clients-phone-col-v7">
       <div className="section-title-row">
         <h3>Lista de Clientes</h3>
         <button
@@ -79,7 +80,7 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
         <input
           className="clients-list-search"
           type="search"
-          placeholder="Pesquisar por Nome, CPF, Fluxo/Produto ou Etiqueta"
+          placeholder="Pesquisar por Nome, CPF, Telefone, Fluxo/Produto ou Etiqueta"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           aria-label="Pesquisar clientes"
@@ -139,6 +140,8 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
                   className={
                     column === "Ações"
                       ? "clients-table-col-actions"
+                      : column === "Telefone"
+                        ? "clients-table-col-phone"
                       : column === "Etiquetas"
                         ? "clients-table-col-labels"
                         : undefined
@@ -154,6 +157,29 @@ export function ClientsListScreen({ contacts, onOpenContact }: ClientsListScreen
               <tr key={row.contactId}>
                 <td>{row.contactName || "-"}</td>
                 <td>{row.cpf || "-"}</td>
+                <td className="clients-table-col-phone">
+                  {row.whatsapp ? (
+                    <span className="clients-table-phone">
+                      <span className="clients-table-phone-text">{row.whatsapp}</span>
+                      <button
+                        type="button"
+                        className="queue-icon-btn clients-table-copy-btn"
+                        title="Copiar telefone"
+                        aria-label="Copiar telefone"
+                        onClick={() => void copyTextToClipboard(row.whatsapp)}
+                      >
+                        <svg className="queue-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path
+                            d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm4 4H8a2 2 0 0 0-2 2v16h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 18H8V7h12v16Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </button>
+                    </span>
+                  ) : (
+                    "-"
+                  )}
+                </td>
                 <td>{row.flowProductName || "-"}</td>
                 <td>{formatClientDate(row.updatedAt)}</td>
                 <td className="clients-table-col-labels">

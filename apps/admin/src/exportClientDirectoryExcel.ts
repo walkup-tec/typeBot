@@ -9,6 +9,7 @@ const formatClientDateForExport = (value: string): string => {
 const CLIENT_DIRECTORY_EXPORT_HEADERS = [
   "Nome",
   "CPF",
+  "Telefone",
   "Fluxo/Produto",
   "Atualizado em",
   "Etiquetas",
@@ -18,6 +19,7 @@ const buildClientDirectoryExportRows = (rows: ClientDirectoryRow[]): string[][] 
   rows.map((row) => [
     row.contactName || "",
     row.cpf || "",
+    row.whatsapp || "",
     row.flowProductName || "",
     formatClientDateForExport(row.updatedAt),
     row.leadLabels.map((label) => label.name).join(", "),

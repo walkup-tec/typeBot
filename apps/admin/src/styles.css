@@ -3022,13 +3022,13 @@ button:disabled {
 }
 
 .clients-table {
-  width: max-content;
-  min-width: min(100%, 720px);
+  width: 100%;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0 2px;
   font-size: 14px;
   line-height: 1.4;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .clients-table thead th {
@@ -3057,14 +3057,47 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.clients-table th.clients-table-col-phone,
+.clients-table td.clients-table-col-phone {
+  width: 170px;
+  min-width: 170px;
+  max-width: 170px;
+  overflow: visible;
+}
+
 .clients-table th.clients-table-col-labels,
 .clients-table td.clients-table-col-labels {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
-  min-width: 140px;
-  max-width: 280px;
+  width: 240px;
+  min-width: 240px;
+  max-width: 240px;
   vertical-align: middle;
+}
+
+.clients-table-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.clients-table-phone-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clients-table-copy-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.clients-table-copy-btn .queue-icon-svg {
+  width: 16px;
+  height: 16px;
 }
 
 .clients-table-labels {
