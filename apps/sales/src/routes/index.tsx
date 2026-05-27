@@ -818,14 +818,19 @@ function Pricing() {
                 id="whatsapp"
                 required
                 type="tel"
-                inputMode="numeric"
+                inputMode="tel"
                 autoComplete="tel"
                 placeholder="(11) 99999-9999"
-                maxLength={16}
+                maxLength={15}
                 value={form.whatsapp}
                 onChange={(e) =>
                   setForm({ ...form, whatsapp: maskBrazilMobileInput(e.target.value) })
                 }
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pasted = e.clipboardData.getData("text");
+                  setForm({ ...form, whatsapp: maskBrazilMobileInput(pasted) });
+                }}
               />
             </div>
             {error && (

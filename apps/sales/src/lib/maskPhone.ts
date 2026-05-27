@@ -1,13 +1,25 @@
-/** Mantém só dígitos (máx. 11: DDD + celular BR). */
-export const digitsFromPhone = (value: string): string => value.replace(/\D/g, "").slice(0, 11);
+const digitsOnly = (value: string): string => value.replace(/\D/g, "");
 
-/** Máscara (XX) 9XXXX-XXXX */
-export const maskBrazilMobileInput = (value: string): string => {
-  const digits = digitsFromPhone(value);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+/** Extrai até 11 dígitos (DDD + celular), removendo código do país 55 se colado. */
+export const digitsFromPhone = (value: string): string => {
+  let digits = digitsOnly(value);
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2);
+  }
+  return digits.slice(0, 11);
 };
+
+/**
+ * Máscara celular BR: (XX) 9XXXX-XXXX
+ * Aceita colar com ou sem +55 / pontuação.
+ */
+export function maskBrazilMobileInput(raw: string): string {
+  const d = digitsFromPhone(raw);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
 
 export const isValidBrazilMobileDigits = (digits: string): boolean =>
   digits.length === 11 && digits.charAt(2) === "9";
