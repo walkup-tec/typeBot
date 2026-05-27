@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { getSalesPlanByCycle, getSalesPlanById, listSalesPlans } from "./billing-plans";
 import { BillingOrderRepository, type BillingOrder } from "./billing-order.repository";
 import { createAsaasCustomer, createAsaasPayment, createAsaasSubscription, getAsaasPayment, isAsaasConfigured, listAsaasSubscriptionPayments } from "./asaas.client";
+import { formatBrazilMobileForAsaas } from "./phone";
 import type { CreateSalesCheckoutInput, CreateSalesSubscriptionInput } from "./billing.schemas";
 import { TenantService } from "../tenants/tenant.service";
 import type { AttendantRepository } from "../attendants/attendant.repository";
@@ -111,7 +112,7 @@ export class BillingService {
       planId: plan.id,
       customerName: input.customerName.trim(),
       ownerEmail,
-      whatsapp: normalizeDigits(input.whatsapp),
+      whatsapp: formatBrazilMobileForAsaas(input.whatsapp),
       cpfCnpj: normalizeDigits(input.cpfCnpj),
       billingType: input.billingType,
       valueCents: plan.priceCents,
@@ -123,7 +124,7 @@ export class BillingService {
     const customer = await createAsaasCustomer({
       name: order.customerName,
       email: order.ownerEmail,
-      mobilePhone: order.whatsapp,
+      mobilePhone: formatBrazilMobileForAsaas(order.whatsapp),
       cpfCnpj: order.cpfCnpj,
       externalReference: order.id,
     });
@@ -179,7 +180,7 @@ export class BillingService {
       planId: plan.id,
       customerName: input.customerName.trim(),
       ownerEmail,
-      whatsapp: normalizeDigits(input.whatsapp ?? ""),
+      whatsapp: formatBrazilMobileForAsaas(input.whatsapp),
       cpfCnpj: normalizeDigits(input.cpfCnpj),
       billingType: "PIX",
       valueCents: plan.priceCents,
@@ -191,7 +192,7 @@ export class BillingService {
     const customer = await createAsaasCustomer({
       name: order.customerName,
       email: order.ownerEmail,
-      mobilePhone: order.whatsapp || "11999999999",
+      mobilePhone: order.whatsapp,
       cpfCnpj: order.cpfCnpj,
       externalReference: order.id,
     });

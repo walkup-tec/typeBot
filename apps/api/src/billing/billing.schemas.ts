@@ -14,7 +14,7 @@ export const createSalesSubscriptionSchema = z.object({
   ownerEmail: z.string().email().max(160),
   cpfCnpj: z.string().min(11).max(18),
   cycle: z.enum(["MONTHLY", "YEARLY"]),
-  whatsapp: z.string().min(8).max(30).optional(),
+  whatsapp: z.string().min(8).max(30),
 });
 
 export type CreateSalesCheckoutInput = z.infer<typeof createSalesCheckoutSchema>;

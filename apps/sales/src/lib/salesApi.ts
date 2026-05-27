@@ -67,6 +67,7 @@ export const createSalesSubscription = async (input: {
   customerName: string;
   ownerEmail: string;
   cpfCnpj: string;
+  whatsapp: string;
   cycle: SalesSubscriptionCycle;
 }): Promise<{ subscriptionId: string; invoiceUrl: string | null }> => {
   const base = resolveApiBase();

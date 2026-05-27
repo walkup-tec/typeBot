@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { createSalesSubscription, fetchSalesPlans, resolvePainelUrl } from "@/lib/salesApi";
 import { digitsFromCpfCnpj, maskCpfCnpjInput } from "@/lib/maskCpfCnpj";
+import { digitsFromPhone, isValidBrazilMobileDigits, maskBrazilMobileInput } from "@/lib/maskPhone";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -568,7 +569,7 @@ function Pricing() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", cpfCnpj: "" });
+  const [form, setForm] = useState({ name: "", email: "", cpfCnpj: "", whatsapp: "" });
   const [paymentConfigured, setPaymentConfigured] = useState(true);
   const [monthly, setMonthly] = useState(290);
   const [yearlyTotal, setYearlyTotal] = useState(2280);
@@ -604,6 +605,11 @@ function Pricing() {
       setError("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) completo.");
       return;
     }
+    const phoneDigits = digitsFromPhone(form.whatsapp);
+    if (!isValidBrazilMobileDigits(phoneDigits)) {
+      setError("Informe um celular válido com DDD (ex.: (11) 99999-9999).");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -611,6 +617,7 @@ function Pricing() {
         customerName: form.name,
         ownerEmail: form.email,
         cpfCnpj: digitsFromCpfCnpj(form.cpfCnpj),
+        whatsapp: phoneDigits,
         cycle: yearly ? "YEARLY" : "MONTHLY",
       });
       if (res.invoiceUrl) {
@@ -752,8 +759,8 @@ function Pricing() {
       </p>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="gap-6 sm:max-w-md">
+          <DialogHeader className="space-y-2">
             <DialogTitle>Assinar plano Business</DialogTitle>
             <DialogDescription>
               {yearly
@@ -761,9 +768,11 @@ function Pricing() {
                 : `R$ ${formatCurrency(monthly)}/mês — cobrança recorrente.`}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubscribe} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome completo</Label>
+          <form onSubmit={handleSubscribe} className="space-y-5">
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="name" className="leading-normal">
+                Nome completo
+              </Label>
               <Input
                 id="name"
                 required
@@ -771,8 +780,10 @@ function Pricing() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="email" className="leading-normal">
+                E-mail
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -781,8 +792,10 @@ function Pricing() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="cpfCnpj">CPF ou CNPJ</Label>
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="cpfCnpj" className="leading-normal">
+                CPF ou CNPJ
+              </Label>
               <Input
                 id="cpfCnpj"
                 required
@@ -794,6 +807,24 @@ function Pricing() {
                 value={form.cpfCnpj}
                 onChange={(e) =>
                   setForm({ ...form, cpfCnpj: maskCpfCnpjInput(e.target.value) })
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="whatsapp" className="leading-normal">
+                Celular (WhatsApp)
+              </Label>
+              <Input
+                id="whatsapp"
+                required
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                placeholder="(11) 99999-9999"
+                maxLength={16}
+                value={form.whatsapp}
+                onChange={(e) =>
+                  setForm({ ...form, whatsapp: maskBrazilMobileInput(e.target.value) })
                 }
               />
             </div>
