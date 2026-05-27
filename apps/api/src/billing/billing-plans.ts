@@ -16,8 +16,8 @@ const parsePlanPriceCents = (raw: string | undefined, fallback: number): number 
 };
 
 export const listSalesPlans = (): SalesPlan[] => {
-  const monthlyPriceCents = parsePlanPriceCents(process.env.SALES_PLAN_MONTHLY_VALUE, 19000);
-  const yearlyPriceCents = parsePlanPriceCents(process.env.SALES_PLAN_YEARLY_VALUE, 118800);
+  const monthlyPriceCents = parsePlanPriceCents(process.env.SALES_PLAN_MONTHLY_VALUE, 29000);
+  const yearlyPriceCents = parsePlanPriceCents(process.env.SALES_PLAN_YEARLY_VALUE, 228000);
 
   return [
     {

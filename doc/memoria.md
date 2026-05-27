@@ -1,3 +1,17 @@
+## 2026-05-27 - Ajuste de copy na landing (plano Business)
+
+- Substituído: `Analytics avançado e relatórios` → `Filtros e exportação para sua carteira de clientes`.
+- Substituído: `Suporte prioritário` → `Suporte via comunidade do WhatsApp`.
+- Arquivo: `apps/sales/src/routes/index.tsx`.
+
+## 2026-05-27 - Ajuste de preço assinatura (Asaas + landing)
+
+- Novo preço **mensal**: `R$ 290,00`.
+- Novo preço **anual**: `R$ 2.280,00` (equivalente a `R$ 190,00/mês`).
+- Economia exibida no toggle anual: `R$ 1.200,00`.
+- Ajustado em defaults da API (`billing-plans.ts`) e fallback da landing (`apps/sales/src/routes/index.tsx`).
+- Ajustado exemplos de ambiente: `.env.example` e `doc/EASYPANEL-AMBIENTE.env.example`.
+
 ## 2026-05-26 - Integração landing + Asaas (retomada)
 
 - **API:** `registerBillingRoutes` em `server.ts`; módulo `apps/api/src/billing/*` versionado.

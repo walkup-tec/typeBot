@@ -558,8 +558,8 @@ const BUSINESS_FEATURES = [
   "Excelente experiência: atendimento excepcional ao lead",
   "Chat humano em tempo real",
   "Gestão de leads (CRM integrado)",
-  "Analytics avançado e relatórios",
-  "Suporte prioritário",
+  "Filtros e exportação para sua carteira de clientes",
+  "Suporte via comunidade do WhatsApp",
   "Sem risco de bloqueios",
 ];
 
@@ -570,8 +570,8 @@ function Pricing() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", cpfCnpj: "" });
   const [paymentConfigured, setPaymentConfigured] = useState(true);
-  const [monthly, setMonthly] = useState(190);
-  const [yearlyTotal, setYearlyTotal] = useState(1188);
+  const [monthly, setMonthly] = useState(290);
+  const [yearlyTotal, setYearlyTotal] = useState(2280);
 
   useEffect(() => {
     void fetchSalesPlans()
