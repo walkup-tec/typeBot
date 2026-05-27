@@ -23,6 +23,7 @@ export const resolvePainelUrl = (): string => {
 };
 
 export type SalesSubscriptionCycle = "MONTHLY" | "YEARLY";
+export type SalesBillingType = "PIX" | "CREDIT_CARD";
 
 export type SalesPlanDto = {
   id: string;
@@ -68,8 +69,9 @@ export const createSalesSubscription = async (input: {
   ownerEmail: string;
   cpfCnpj: string;
   whatsapp: string;
+  billingType: SalesBillingType;
   cycle: SalesSubscriptionCycle;
-}): Promise<{ subscriptionId: string; invoiceUrl: string | null }> => {
+}): Promise<{ checkoutSessionId: string; invoiceUrl: string | null }> => {
   const base = resolveApiBase();
   if (!base) {
     throw new Error(
@@ -96,7 +98,12 @@ export const createSalesSubscription = async (input: {
   }
 
   const raw = await response.text();
-  let payload: { subscriptionId?: string; invoiceUrl?: string | null; message?: string };
+  let payload: {
+    checkoutSessionId?: string;
+    subscriptionId?: string;
+    invoiceUrl?: string | null;
+    message?: string;
+  };
   try {
     payload = raw ? (JSON.parse(raw) as typeof payload) : {};
   } catch {
@@ -109,7 +116,7 @@ export const createSalesSubscription = async (input: {
     throw new Error(payload.message ?? "Erro ao processar assinatura.");
   }
   return {
-    subscriptionId: String(payload.subscriptionId ?? ""),
+    checkoutSessionId: String(payload.checkoutSessionId ?? payload.subscriptionId ?? ""),
     invoiceUrl: payload.invoiceUrl ?? null,
   };
 };

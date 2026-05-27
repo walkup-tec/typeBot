@@ -6,7 +6,7 @@ export const createSalesCheckoutSchema = z.object({
   ownerEmail: z.string().email().max(160),
   whatsapp: z.string().min(8).max(30),
   cpfCnpj: z.string().min(11).max(18),
-  billingType: z.enum(["PIX", "BOLETO", "CREDIT_CARD"]),
+  billingType: z.enum(["PIX", "CREDIT_CARD"]),
 });
 
 export const createSalesSubscriptionSchema = z.object({
@@ -15,6 +15,7 @@ export const createSalesSubscriptionSchema = z.object({
   cpfCnpj: z.string().min(11).max(18),
   cycle: z.enum(["MONTHLY", "YEARLY"]),
   whatsapp: z.string().min(8).max(30),
+  billingType: z.enum(["PIX", "CREDIT_CARD"]),
 });
 
 export type CreateSalesCheckoutInput = z.infer<typeof createSalesCheckoutSchema>;

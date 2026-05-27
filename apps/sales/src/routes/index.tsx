@@ -33,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PaymentMethodSelector, type SalesBillingType } from "@/components/sales/PaymentMethodSelector";
 import { createSalesSubscription, fetchSalesPlans, resolvePainelUrl } from "@/lib/salesApi";
 import { digitsFromCpfCnpj, maskCpfCnpjInput } from "@/lib/maskCpfCnpj";
 import { digitsFromPhone, isValidBrazilMobileDigits, maskBrazilMobileInput } from "@/lib/maskPhone";
@@ -569,7 +570,13 @@ function Pricing() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", cpfCnpj: "", whatsapp: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    cpfCnpj: "",
+    whatsapp: "",
+    billingType: "PIX" as SalesBillingType,
+  });
   const [paymentConfigured, setPaymentConfigured] = useState(true);
   const [monthly, setMonthly] = useState(290);
   const [yearlyTotal, setYearlyTotal] = useState(2280);
@@ -618,6 +625,7 @@ function Pricing() {
         ownerEmail: form.email,
         cpfCnpj: digitsFromCpfCnpj(form.cpfCnpj),
         whatsapp: phoneDigits,
+        billingType: form.billingType,
         cycle: yearly ? "YEARLY" : "MONTHLY",
       });
       if (res.invoiceUrl) {
@@ -755,7 +763,7 @@ function Pricing() {
       </div>
 
       <p className="mt-8 text-center text-xs text-muted-foreground">
-        Pagamento seguro processado via Asaas • Pix, boleto e cartão
+        Pagamento seguro processado via Asaas • Pix e cartão de crédito
       </p>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -810,6 +818,10 @@ function Pricing() {
                 }
               />
             </div>
+            <PaymentMethodSelector
+              value={form.billingType}
+              onChange={(billingType) => setForm({ ...form, billingType })}
+            />
             <div className="flex flex-col gap-3">
               <Label htmlFor="whatsapp" className="leading-normal">
                 Celular (WhatsApp)

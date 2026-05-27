@@ -56,6 +56,7 @@ export const registerBillingRoutes = (app: Express) => {
         cpfCnpj: input.cpfCnpj,
         cycle: input.cycle,
         whatsapp: input.whatsapp,
+        billingType: input.billingType,
       });
       return res.status(201).json(checkout);
     } catch (error) {
@@ -86,8 +87,13 @@ export const registerBillingRoutes = (app: Express) => {
       const body = req.body as {
         event?: string;
         payment?: { id?: string; externalReference?: string; status?: string };
+        checkout?: { id?: string; externalReference?: string };
       };
-      const result = await billingService.handleAsaasWebhook(String(body.event ?? ""), body.payment ?? {});
+      const result = await billingService.handleAsaasWebhook(
+        String(body.event ?? ""),
+        body.payment ?? {},
+        body.checkout,
+      );
       return res.status(200).json(result);
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });

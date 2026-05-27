@@ -1,3 +1,46 @@
+## 2026-05-27 - Checkout Asaas: Pix ou Cartão (Checkout Session RECURRENT)
+
+- Migração de `POST /subscriptions` + `UNDEFINED` para `POST /checkoutSessions` com `chargeTypes: RECURRENT`.
+- Modal LP: seletor Pix / Cartão com ícones (`PaymentMethodSelector`); envia `billingType` à API.
+- API envia `billingTypes: [PIX|CREDIT_CARD]` — só a forma escolhida no checkout Asaas.
+- Env API: `SALES_LANDING_URL`, `SALES_CHECKOUT_SUCCESS_URL` (opcional cancel/expired).
+- Deploy: **api-typebot-crm** + **paginadevendas**.
+
+## 2026-05-27 - Checkout Asaas: campo celular no modal
+
+- Erro «O celular informado é inválido»: API enviava `11999999999` sem campo na LP.
+- Asaas exige `mobilePhone` válido em `POST /customers` (DDD + 9 dígitos).
+- Modal: **Celular (WhatsApp)**; API `formatBrazilMobileForAsaas`; schema `whatsapp` obrigatório.
+- Deploy: **api-typebot-crm** (typeBot) + **paginadevendas** (PV `dd8a77d`).
+
+## 2026-05-27 - DNS `api` criado (A → 72.60.51.127)
+
+- Removido CNAME antigo `soma-api-typebot-crm.achpyp.easypanel.host`.
+- Criado **A** `api.chattypebot.com` → `72.60.51.127` (igual painel/app).
+- Pendente: propagação DNS; Easypanel `api-typebot-crm` → domínio + TLS; teste `/health`; rebuild LP se necessário.
+
+## 2026-05-27 - DNS `api.chattypebot.com` inexistente (checkout landing)
+
+- Sintoma: «Sem ligação à API em https://api.chattypebot.com» + hint `/health`.
+- Teste: `api.chattypebot.com` → **NXDOMAIN**; `app.chattypebot.com/health` → **200 OK** (`typebot-saas-api`); `typebot-api-typebot-crm.achpyp.easypanel.host/health` → OK.
+- `painel` e `app` → A `72.60.51.127`; falta registo **A `api`** + domínio Easypanel no `api-typebot-crm`.
+- Doc: `doc/DNS-api-chattypebot-com.md`. Contorno build LP: `VITE_API_BASE_URL=https://app.chattypebot.com`.
+- `/api/public/sales/plans` ainda 404 em produção → redeploy API com billing.
+
+## 2026-05-27 - Modal assinatura: espaço label × input
+
+- Formulário checkout: grupos `flex flex-col gap-3` (antes `space-y-2`), form `space-y-5`, dialog `gap-6`, labels com `leading-normal`.
+- Arquivos: `apps/sales/src/routes/index.tsx` + push `PV-typebot-chat`.
+
+## 2026-05-27 - Deploy paginadevendas: repo correto é PV-typebot-chat
+
+- **Causa do “nada mudou”:** Easypanel `paginadevendas` aponta para `walkup-tec/PV-typebot-chat` (app na raiz), **não** para `walkup-tec/typeBot` / `apps/sales`.
+- Redeploy só puxava commit antigo `f3451d4` (Nixpacks fix) — preços/copy estavam só no monorepo local.
+- **Sync + push:** `_pv-typebot-chat-temp` → commit `8f6f6cf` em `main`: preços 290/2280, copy filtros/WhatsApp, `salesApi` sem localhost em prod, `check-prod-vite-api.mjs`, marcador `data-build="20260527-pv-preco-290-anual-2280-copy-filtros"` na seção `#planos`.
+- **Após redeploy:** no log do build deve aparecer `8f6f6cf` (não `f3451d4`). Na página, inspecionar `#planos` e o atributo `data-build`.
+- **Build env obrigatório:** `VITE_API_BASE_URL=https://api.chattypebot.com`, `VITE_PAINEL_URL=https://painel.chattypebot.com`.
+- Doc: `doc/EASYPANEL-PAGINA-VENDAS.md`.
+
 ## 2026-05-27 - Ajuste de copy na landing (plano Business)
 
 - Substituído: `Analytics avançado e relatórios` → `Filtros e exportação para sua carteira de clientes`.

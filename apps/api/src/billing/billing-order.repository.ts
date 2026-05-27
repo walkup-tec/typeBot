@@ -16,7 +16,8 @@ export type BillingOrder = {
   ownerEmail: string;
   whatsapp: string;
   cpfCnpj: string;
-  billingType: "PIX" | "BOLETO" | "CREDIT_CARD";
+  billingType: "PIX" | "CREDIT_CARD" | "BOLETO";
+  asaasCheckoutSessionId?: string;
   valueCents: number;
   status: BillingOrderStatus;
   tenantId?: string;
@@ -71,6 +72,12 @@ export class BillingOrderRepository {
     const normalized = String(paymentId ?? "").trim();
     if (!normalized) return null;
     return loadOrders().find((order) => order.asaasPaymentId === normalized) ?? null;
+  }
+
+  getByAsaasCheckoutSessionId(checkoutSessionId: string): BillingOrder | null {
+    const normalized = String(checkoutSessionId ?? "").trim();
+    if (!normalized) return null;
+    return loadOrders().find((order) => order.asaasCheckoutSessionId === normalized) ?? null;
   }
 
   create(order: BillingOrder): BillingOrder {

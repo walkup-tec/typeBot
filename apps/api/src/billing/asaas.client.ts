@@ -66,6 +66,79 @@ export type AsaasPaymentList = {
   data?: AsaasPaymentListItem[];
 };
 
+export type AsaasCheckoutBillingType = "PIX" | "CREDIT_CARD";
+
+export type AsaasCheckoutSession = {
+  id: string;
+  url?: string;
+  link?: string;
+};
+
+export const resolveAsaasCheckoutUrl = (session: AsaasCheckoutSession): string =>
+  String(session.url ?? session.link ?? "").trim();
+
+export const createAsaasCheckoutSession = async (input: {
+  billingTypes: AsaasCheckoutBillingType[];
+  cycle: "MONTHLY" | "YEARLY";
+  value: number;
+  description: string;
+  itemName: string;
+  externalReference: string;
+  customerData: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    phone: string;
+  };
+  callback: {
+    successUrl: string;
+    cancelUrl: string;
+    expiredUrl: string;
+  };
+  imageBase64: string;
+  minutesToExpire?: number;
+}): Promise<AsaasCheckoutSession> => {
+  return asaasRequest<AsaasCheckoutSession>("POST", "/checkoutSessions", {
+    billingTypes: input.billingTypes,
+    chargeTypes: ["RECURRENT"],
+    minutesToExpire: input.minutesToExpire ?? 60,
+    externalReference: input.externalReference,
+    callback: {
+      successUrl: input.callback.successUrl,
+      cancelUrl: input.callback.cancelUrl,
+      expiredUrl: input.callback.expiredUrl,
+      autoRedirect: true,
+    },
+    items: [
+      {
+        name: input.itemName,
+        description: input.description,
+        quantity: 1,
+        value: input.value,
+        imageBase64: input.imageBase64,
+      },
+    ],
+    customerData: {
+      name: input.customerData.name,
+      email: input.customerData.email,
+      cpfCnpj: input.customerData.cpfCnpj,
+      phone: input.customerData.phone,
+    },
+    subscription: {
+      cycle: input.cycle,
+      value: input.value,
+      nextDueDate: formatCheckoutDueDate(1),
+      description: input.description,
+    },
+  });
+};
+
+const formatCheckoutDueDate = (daysAhead: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysAhead);
+  return date.toISOString().slice(0, 10);
+};
+
 export const createAsaasCustomer = async (input: {
   name: string;
   email: string;

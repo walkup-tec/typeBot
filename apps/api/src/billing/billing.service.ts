@@ -1,7 +1,17 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { getSalesPlanByCycle, getSalesPlanById, listSalesPlans } from "./billing-plans";
 import { BillingOrderRepository, type BillingOrder } from "./billing-order.repository";
-import { createAsaasCustomer, createAsaasPayment, createAsaasSubscription, getAsaasPayment, isAsaasConfigured, listAsaasSubscriptionPayments } from "./asaas.client";
+import { ASAAS_CHECKOUT_ITEM_IMAGE_BASE64 } from "./asaas-checkout.constants";
+import {
+  createAsaasCheckoutSession,
+  createAsaasCustomer,
+  createAsaasPayment,
+  getAsaasPayment,
+  isAsaasConfigured,
+  listAsaasSubscriptionPayments,
+  resolveAsaasCheckoutUrl,
+} from "./asaas.client";
+import { resolveSalesCheckoutCallbacks } from "./checkout-callbacks";
 import { formatBrazilMobileForAsaas } from "./phone";
 import type { CreateSalesCheckoutInput, CreateSalesSubscriptionInput } from "./billing.schemas";
 import { TenantService } from "../tenants/tenant.service";
@@ -133,7 +143,7 @@ export class BillingService {
       customerId: customer.id,
       billingType: order.billingType,
       value: centsToCurrency(order.valueCents),
-      dueDate: formatDueDate(order.billingType === "BOLETO" ? 3 : 1),
+      dueDate: formatDueDate(1),
       description: `${plan.name} - assinatura ${plan.billingCycle === "YEARLY" ? "anual" : "mensal"}`,
       externalReference: order.id,
     });
@@ -175,6 +185,7 @@ export class BillingService {
 
     const now = new Date().toISOString();
     const orderId = randomUUID();
+    const planDescription = `${plan.name} - assinatura ${input.cycle === "YEARLY" ? "anual" : "mensal"}`;
     const order = this.billingOrderRepository.create({
       id: orderId,
       planId: plan.id,
@@ -182,48 +193,47 @@ export class BillingService {
       ownerEmail,
       whatsapp: formatBrazilMobileForAsaas(input.whatsapp),
       cpfCnpj: normalizeDigits(input.cpfCnpj),
-      billingType: "PIX",
+      billingType: input.billingType,
       valueCents: plan.priceCents,
       status: "pending_payment",
       createdAt: now,
       updatedAt: now,
     });
 
-    const customer = await createAsaasCustomer({
-      name: order.customerName,
-      email: order.ownerEmail,
-      mobilePhone: order.whatsapp,
-      cpfCnpj: order.cpfCnpj,
-      externalReference: order.id,
-    });
-
-    const subscription = await createAsaasSubscription({
-      customerId: customer.id,
+    const checkoutSession = await createAsaasCheckoutSession({
+      billingTypes: [input.billingType],
       cycle: input.cycle,
       value: centsToCurrency(order.valueCents),
-      dueDate: formatDueDate(1),
-      description: `${plan.name} - assinatura ${input.cycle === "YEARLY" ? "anual" : "mensal"}`,
+      description: planDescription,
+      itemName: plan.name,
       externalReference: order.id,
+      customerData: {
+        name: order.customerName,
+        email: order.ownerEmail,
+        cpfCnpj: order.cpfCnpj,
+        phone: order.whatsapp,
+      },
+      callback: resolveSalesCheckoutCallbacks(),
+      imageBase64: ASAAS_CHECKOUT_ITEM_IMAGE_BASE64,
     });
 
-    const payments = await listAsaasSubscriptionPayments(subscription.id);
-    const firstPayment = payments.data?.[0];
-    const paymentUrl = resolvePaymentUrl(firstPayment ?? {});
-    const firstPaymentId = String(firstPayment?.id ?? "").trim();
+    const paymentUrl = resolveAsaasCheckoutUrl(checkoutSession);
+    if (!paymentUrl) {
+      throw new Error("Checkout criado, mas o Asaas não retornou o link de pagamento.");
+    }
 
     const updated = this.billingOrderRepository.update(order.id, {
-      asaasCustomerId: customer.id,
-      asaasSubscriptionId: subscription.id,
-      asaasPaymentId: firstPaymentId || undefined,
+      asaasCheckoutSessionId: checkoutSession.id,
       paymentUrl,
     });
 
     return {
       orderId: updated?.id ?? order.id,
-      subscriptionId: subscription.id,
+      checkoutSessionId: checkoutSession.id,
       invoiceUrl: paymentUrl,
       status: updated?.status ?? order.status,
       plan,
+      billingType: input.billingType,
     };
   }
 
@@ -346,15 +356,42 @@ export class BillingService {
     return this.getOrderStatus(provisioned.id);
   }
 
-  async handleAsaasWebhook(event: string, payment: { id?: string; externalReference?: string; status?: string }) {
+  async handleAsaasWebhook(
+    event: string,
+    payment: { id?: string; externalReference?: string; status?: string },
+    checkout?: { id?: string; externalReference?: string },
+  ) {
+    const normalizedEvent = String(event ?? "").trim().toUpperCase();
     const paymentId = String(payment.id ?? "").trim();
-    const externalReference = String(payment.externalReference ?? "").trim();
+    const paymentExternalReference = String(payment.externalReference ?? "").trim();
+    const checkoutId = String(checkout?.id ?? "").trim();
+    const checkoutExternalReference = String(checkout?.externalReference ?? "").trim();
+
     const order =
       (paymentId ? this.billingOrderRepository.getByAsaasPaymentId(paymentId) : null) ??
-      (externalReference ? this.billingOrderRepository.getById(externalReference) : null);
+      (checkoutId ? this.billingOrderRepository.getByAsaasCheckoutSessionId(checkoutId) : null) ??
+      (paymentExternalReference ? this.billingOrderRepository.getById(paymentExternalReference) : null) ??
+      (checkoutExternalReference ? this.billingOrderRepository.getById(checkoutExternalReference) : null);
+
     if (!order) return { handled: false, reason: "order_not_found" as const };
 
-    const normalizedEvent = String(event ?? "").trim().toUpperCase();
+    if (
+      normalizedEvent === "CHECKOUT_CANCELED" ||
+      normalizedEvent === "CHECKOUT_EXPIRED"
+    ) {
+      this.billingOrderRepository.update(order.id, { status: "cancelled" });
+      return { handled: true, orderId: order.id, action: "cancelled" as const };
+    }
+
+    if (normalizedEvent === "CHECKOUT_PAID" && !paymentId) {
+      const reconciled = await this.reconcileOrderPayment(order.id);
+      return {
+        handled: true,
+        orderId: order.id,
+        action: reconciled?.status === "provisioned" ? ("provisioned" as const) : ("pending" as const),
+      };
+    }
+
     if (normalizedEvent === "PAYMENT_OVERDUE") {
       if (order.tenantId) {
         this.tenantService.updateStatus(order.tenantId, "blocked");
