@@ -1,3 +1,10 @@
+## 2026-05-28 - Fix bind host API (evitar 502 com upstream interno)
+
+- Ajuste em `apps/api/src/server.ts`: `app.listen(port, host)` com `HOST` (default `0.0.0.0`).
+- Antes, sem host explícito, o runtime podia ficar inacessível via rede interna do proxy (localhost ok, domínio 502).
+- Build API validado (`npm run build:api`).
+- Próximo passo: commit/push + deploy `api-typebot-crm`.
+
 ## 2026-05-28 - Fix Asaas 404 no checkout recorrente
 
 - Causa raiz: endpoint incorreto `POST /v3/checkoutSessions`.

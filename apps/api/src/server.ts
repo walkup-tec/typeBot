@@ -31,6 +31,7 @@ const app = express();
 /** Traefik/Easypanel enviam `X-Forwarded-Proto`; necessário para `req.secure` e cabeçalhos HTTPS. */
 app.set("trust proxy", 1);
 const port = Number(process.env.PORT ?? 3333);
+const host = String(process.env.HOST ?? "0.0.0.0").trim() || "0.0.0.0";
 const TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS =
   String(process.env.TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS ?? "true").trim().toLowerCase() !== "false";
 const TYPEBOT_AUTO_SYNC_INTERVAL_MS = Number(process.env.TYPEBOT_AUTO_SYNC_INTERVAL_MS ?? 20000);
@@ -292,9 +293,9 @@ async function startApi(): Promise<void> {
     );
   }
 
-  app.listen(port, () => {
+  app.listen(port, host, () => {
     // eslint-disable-next-line no-console
-    console.log(`API running on http://localhost:${port}`);
+    console.log(`API running on http://${host}:${port}`);
 
     if (TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS) {
       // Primeiro ciclo pouco após subir a API; depois segue intervalo contínuo.
