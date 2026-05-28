@@ -98,7 +98,7 @@ export const createAsaasCheckoutSession = async (input: {
   imageBase64: string;
   minutesToExpire?: number;
 }): Promise<AsaasCheckoutSession> => {
-  return asaasRequest<AsaasCheckoutSession>("POST", "/checkoutSessions", {
+  return asaasRequest<AsaasCheckoutSession>("POST", "/checkouts", {
     billingTypes: input.billingTypes,
     chargeTypes: ["RECURRENT"],
     minutesToExpire: input.minutesToExpire ?? 60,

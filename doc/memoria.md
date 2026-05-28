@@ -1,3 +1,10 @@
+## 2026-05-28 - Fix Asaas 404 no checkout recorrente
+
+- Causa raiz: endpoint incorreto `POST /v3/checkoutSessions`.
+- Correção: cliente Asaas alterado para `POST /v3/checkouts` (endpoint oficial do Checkout Asaas).
+- Arquivo: `apps/api/src/billing/asaas.client.ts`.
+- Ação: deploy necessário do serviço **api-typebot-crm**.
+
 ## 2026-05-28 - Modal: botões de pagamento ainda menores + estado do CTA
 
 - Seletor Pix/Cartão reduzido novamente (altura, ícone, tipografia e espaçamento).
