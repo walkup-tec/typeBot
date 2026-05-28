@@ -864,7 +864,12 @@ function Pricing() {
               type="submit"
               size="lg"
               disabled={loading || !hasAllInputs}
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              className={cn(
+                "w-full transition-colors",
+                loading || !hasAllInputs
+                  ? "bg-muted text-muted-foreground hover:bg-muted"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90",
+              )}
             >
               {loading ? "Processando…" : "Confirmar pagamento"}
             </Button>

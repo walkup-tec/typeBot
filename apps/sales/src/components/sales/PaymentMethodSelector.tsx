@@ -21,9 +21,9 @@ const OPTIONS: Array<{
 
 export function PaymentMethodSelector({ value, onChange }: Props) {
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2">
       <Label className="leading-normal">Forma de pagamento</Label>
-      <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Forma de pagamento">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Forma de pagamento">
         {OPTIONS.map((option) => {
           const selected = value === option.id;
           return (
@@ -34,7 +34,7 @@ export function PaymentMethodSelector({ value, onChange }: Props) {
               aria-checked={selected}
               onClick={() => onChange(option.id)}
               className={cn(
-                "flex min-h-[72px] items-center gap-2 rounded-lg border px-2.5 py-2.5 text-left transition-colors",
+                "flex min-h-[62px] items-center gap-1.5 rounded-md border px-2 py-2 text-left transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 selected
                   ? "border-primary/60 bg-primary/5"
@@ -42,18 +42,18 @@ export function PaymentMethodSelector({ value, onChange }: Props) {
               )}
             >
               {option.id === "PIX" ? (
-                <PixBrandIcon className="h-6 w-6" />
+                <PixBrandIcon className="h-5 w-5" />
               ) : (
                 <CreditCard
-                  className={cn("h-6 w-6 shrink-0", selected ? "text-primary" : "text-muted-foreground")}
+                  className={cn("h-5 w-5 shrink-0", selected ? "text-primary" : "text-muted-foreground")}
                   strokeWidth={1.75}
                 />
               )}
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className={cn("text-sm font-medium", selected && "text-foreground")}>
+                <span className={cn("text-xs font-medium", selected && "text-foreground")}>
                   {option.title}
                 </span>
-                <span className="text-[10px] leading-tight text-muted-foreground">
+                <span className="text-[9px] leading-tight text-muted-foreground">
                   {option.subtitle}
                 </span>
               </span>

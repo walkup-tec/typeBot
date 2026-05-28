@@ -1,3 +1,11 @@
+## 2026-05-28 - Modal: botões de pagamento ainda menores + estado do CTA
+
+- Seletor Pix/Cartão reduzido novamente (altura, ícone, tipografia e espaçamento).
+- Botão **Confirmar pagamento** agora muda de cor por estado:
+  - inativo: `bg-muted` + texto `muted-foreground`;
+  - ativo: volta para cor original primária.
+- Arquivos: `apps/sales/src/components/sales/PaymentMethodSelector.tsx` e `apps/sales/src/routes/index.tsx` (+ sync PV temp).
+
 ## 2026-05-27 - Modal: forma de pagamento no final + botão bloqueado
 
 - Ordem do formulário ajustada: Pix/Cartão agora aparece após o campo Celular.
