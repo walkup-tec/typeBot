@@ -1,3 +1,18 @@
+## 2026-05-27 - Modal: forma de pagamento no final + botão bloqueado
+
+- Ordem do formulário ajustada: Pix/Cartão agora aparece após o campo Celular.
+- Botão alterado para **Confirmar pagamento** e fica desabilitado até:
+  - nome, e-mail, CPF/CNPJ e celular válidos;
+  - forma de pagamento selecionada.
+- `billingType` inicia nulo e só habilita submit após escolha explícita do usuário.
+- Arquivos: `apps/sales/src/routes/index.tsx`, `apps/sales/src/components/sales/PaymentMethodSelector.tsx` (+ sync PV temp).
+
+## 2026-05-27 - Ajuste visual seletor Pix/Cartão (mais discreto)
+
+- Cards de pagamento reduzidos no modal: menor altura, ícones menores, borda simples, menos brilho.
+- Mantida a seleção visual com foco de acessibilidade e contraste.
+- Arquivos: `apps/sales/src/components/sales/PaymentMethodSelector.tsx` e cópia em `_pv-typebot-chat-temp`.
+
 ## 2026-05-27 - Checkout Asaas: Pix ou Cartão (Checkout Session RECURRENT)
 
 - Migração de `POST /subscriptions` + `UNDEFINED` para `POST /checkoutSessions` com `chargeTypes: RECURRENT`.

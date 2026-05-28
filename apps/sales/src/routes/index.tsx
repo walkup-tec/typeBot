@@ -575,7 +575,7 @@ function Pricing() {
     email: "",
     cpfCnpj: "",
     whatsapp: "",
-    billingType: "PIX" as SalesBillingType,
+    billingType: null as SalesBillingType | null,
   });
   const [paymentConfigured, setPaymentConfigured] = useState(true);
   const [monthly, setMonthly] = useState(290);
@@ -600,6 +600,14 @@ function Pricing() {
 
   const yearlyMonthly = (yearlyTotal / 12).toFixed(2).replace(".", ",");
   const savings = monthly * 12 - yearlyTotal;
+  const docDigits = digitsFromCpfCnpj(form.cpfCnpj);
+  const phoneDigits = digitsFromPhone(form.whatsapp);
+  const hasAllInputs =
+    form.name.trim().length >= 2 &&
+    form.email.trim().length > 0 &&
+    (docDigits.length === 11 || docDigits.length === 14) &&
+    isValidBrazilMobileDigits(phoneDigits) &&
+    Boolean(form.billingType);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -607,14 +615,16 @@ function Pricing() {
       setError("Pagamentos temporariamente indisponíveis. Tente novamente em instantes.");
       return;
     }
-    const docDigits = digitsFromCpfCnpj(form.cpfCnpj);
     if (docDigits.length !== 11 && docDigits.length !== 14) {
       setError("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) completo.");
       return;
     }
-    const phoneDigits = digitsFromPhone(form.whatsapp);
     if (!isValidBrazilMobileDigits(phoneDigits)) {
       setError("Informe um celular válido com DDD (ex.: (11) 99999-9999).");
+      return;
+    }
+    if (!form.billingType) {
+      setError("Selecione a forma de pagamento: Pix ou Cartão.");
       return;
     }
     setLoading(true);
@@ -818,10 +828,6 @@ function Pricing() {
                 }
               />
             </div>
-            <PaymentMethodSelector
-              value={form.billingType}
-              onChange={(billingType) => setForm({ ...form, billingType })}
-            />
             <div className="flex flex-col gap-3">
               <Label htmlFor="whatsapp" className="leading-normal">
                 Celular (WhatsApp)
@@ -845,6 +851,10 @@ function Pricing() {
                 }}
               />
             </div>
+            <PaymentMethodSelector
+              value={form.billingType}
+              onChange={(billingType) => setForm({ ...form, billingType })}
+            />
             {error && (
               <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -853,10 +863,10 @@ function Pricing() {
             <Button
               type="submit"
               size="lg"
-              disabled={loading}
+              disabled={loading || !hasAllInputs}
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              {loading ? "Processando…" : "Continuar para pagamento"}
+              {loading ? "Processando…" : "Confirmar pagamento"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
               Você será redirecionado para o checkout seguro do Asaas.
