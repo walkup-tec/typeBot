@@ -39,6 +39,7 @@ export const registerBillingRoutes = (app: Express) => {
         pixAutomaticMonthly: true,
         version: API_DEPLOY_MARKER,
         deployMarker: API_DEPLOY_MARKER,
+        asaasPixAutomaticMaxTextLength: 35,
       },
     });
   });

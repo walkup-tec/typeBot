@@ -1,5 +1,13 @@
 import { asaasRequest } from "./asaas.client";
-import { clampAsaasPixAutomaticText } from "./asaas-contract-id";
+import {
+  assertAsaasPixAutomaticFieldLengths,
+  buildAsaasPixAutomaticContractId,
+  buildAsaasPixAutomaticDescription,
+  clampAsaasPixAutomaticText,
+} from "./asaas-pix-automatic-fields";
+
+// Re-export for billing.service
+export { buildAsaasPixAutomaticContractId, buildAsaasPixAutomaticDescription };
 
 const resolvePixAutomaticAuthorizationsPath = (): string => {
   const fromEnv = String(process.env.ASAAS_PIX_AUTOMATIC_AUTH_PATH ?? "").trim();
@@ -50,19 +58,29 @@ const buildPixAutomaticAuthorizationBody = (input: {
   immediateValue: number;
   expirationSeconds?: number;
   paymentCreationMode: "SUBSCRIPTION" | "MANUAL";
-}) => ({
-  customerId: input.customerId,
-  contractId: clampAsaasPixAutomaticText(input.contractId),
-  frequency: input.frequency,
-  startDate: input.startDate,
-  value: input.value,
-  description: clampAsaasPixAutomaticText(input.description),
-  paymentCreationMode: input.paymentCreationMode,
-  immediateQrCode: {
-    originalValue: input.immediateValue,
-    expirationSeconds: input.expirationSeconds ?? 86400,
-  },
-});
+}) => {
+  const contractId = buildAsaasPixAutomaticContractId(input.contractId);
+  const description = buildAsaasPixAutomaticDescription(
+    input.frequency === "YEARLY" ? "YEARLY" : "MONTHLY",
+  );
+
+  const body = {
+    customerId: input.customerId,
+    contractId,
+    frequency: input.frequency,
+    startDate: input.startDate,
+    value: input.value,
+    description,
+    paymentCreationMode: input.paymentCreationMode,
+    immediateQrCode: {
+      originalValue: input.immediateValue,
+      expirationSeconds: input.expirationSeconds ?? 86400,
+    },
+  };
+
+  assertAsaasPixAutomaticFieldLengths(body);
+  return body;
+};
 
 const FALLBACK_PIX_AUTOMATIC_AUTH_PATH = "/pix/automaticRecurringAuthorizations";
 
@@ -72,7 +90,7 @@ export const createAsaasPixAutomaticAuthorization = async (input: {
   frequency: AsaasPixAutomaticFrequency;
   startDate: string;
   value: number;
-  description: string;
+  description?: string;
   immediateValue: number;
   expirationSeconds?: number;
   paymentCreationMode?: "SUBSCRIPTION" | "MANUAL";
@@ -86,7 +104,14 @@ export const createAsaasPixAutomaticAuthorization = async (input: {
       : "SUBSCRIPTION");
 
   const body = buildPixAutomaticAuthorizationBody({
-    ...input,
+    customerId: input.customerId,
+    contractId: input.contractId,
+    frequency: input.frequency,
+    startDate: input.startDate,
+    value: input.value,
+    description: input.description ?? "",
+    immediateValue: input.immediateValue,
+    expirationSeconds: input.expirationSeconds,
     paymentCreationMode,
   });
   const primaryPath = resolvePixAutomaticAuthorizationsPath();
@@ -119,7 +144,7 @@ export const createAsaasPixAutomaticRecurringPayment = async (input: {
       billingType: "PIX",
       value: input.value,
       dueDate: input.dueDate,
-      description: input.description,
+      description: clampAsaasPixAutomaticText(input.description, "Renovacao Drax"),
       externalReference: input.externalReference,
       pixAutomaticAuthorizationId: input.pixAutomaticAuthorizationId,
     },

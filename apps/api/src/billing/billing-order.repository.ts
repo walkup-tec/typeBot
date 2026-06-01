@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { getDataFilePath } from "../lib/data-path";
-import { orderMatchesAsaasPixAutomaticContractId } from "./asaas-contract-id";
+import { orderMatchesAsaasPixAutomaticContractId } from "./asaas-pix-automatic-fields";
 
 export type BillingOrderStatus =
   | "pending_payment"
