@@ -32,9 +32,15 @@ export type SalesPlanDto = {
   billingCycle: SalesSubscriptionCycle;
 };
 
+export type SalesBillingCapabilities = {
+  pixAutomaticMonthly?: boolean;
+  version?: string;
+};
+
 export const fetchSalesPlans = async (): Promise<{
   plans: SalesPlanDto[];
   paymentConfigured: boolean;
+  billingCapabilities?: SalesBillingCapabilities;
 }> => {
   const base = resolveApiBase();
   if (!base) {
@@ -47,7 +53,12 @@ export const fetchSalesPlans = async (): Promise<{
   });
 
   const raw = await response.text();
-  let payload: { plans?: SalesPlanDto[]; paymentConfigured?: boolean; message?: string };
+  let payload: {
+    plans?: SalesPlanDto[];
+    paymentConfigured?: boolean;
+    billingCapabilities?: SalesBillingCapabilities;
+    message?: string;
+  };
   try {
     payload = raw ? (JSON.parse(raw) as typeof payload) : {};
   } catch {
@@ -61,6 +72,7 @@ export const fetchSalesPlans = async (): Promise<{
   return {
     plans: Array.isArray(payload.plans) ? payload.plans : [],
     paymentConfigured: Boolean(payload.paymentConfigured),
+    billingCapabilities: payload.billingCapabilities,
   };
 };
 

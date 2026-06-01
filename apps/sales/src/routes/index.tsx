@@ -34,14 +34,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PaymentMethodSelector, type SalesBillingType } from "@/components/sales/PaymentMethodSelector";
+import { PagamentoPixContent } from "@/components/sales/PagamentoPixContent";
 import { createSalesSubscription, fetchSalesPlans, resolvePainelUrl } from "@/lib/salesApi";
 import { digitsFromCpfCnpj, maskCpfCnpjInput } from "@/lib/maskCpfCnpj";
 import { digitsFromPhone, isValidBrazilMobileDigits, maskBrazilMobileInput } from "@/lib/maskPhone";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  validateSearch: (search: Record<string, unknown>) => ({
+    orderId: String(search.orderId ?? "").trim(),
+    pix: String(search.pix ?? "").trim() === "1",
+  }),
+  component: IndexPage,
 });
+
+function IndexPage() {
+  const { orderId, pix } = Route.useSearch();
+  if (pix && orderId) {
+    return <PagamentoPixContent orderId={orderId} />;
+  }
+  return <Index />;
+}
 
 const NAV = [
   { href: "#sobre", label: "Sobre" },
@@ -578,13 +591,15 @@ function Pricing() {
     billingType: null as SalesBillingType | null,
   });
   const [paymentConfigured, setPaymentConfigured] = useState(true);
+  const [pixAutomaticMonthly, setPixAutomaticMonthly] = useState(false);
   const [monthly, setMonthly] = useState(290);
   const [yearlyTotal, setYearlyTotal] = useState(2280);
 
   useEffect(() => {
     void fetchSalesPlans()
-      .then(({ plans, paymentConfigured: configured }) => {
+      .then(({ plans, paymentConfigured: configured, billingCapabilities }) => {
         setPaymentConfigured(configured);
+        setPixAutomaticMonthly(Boolean(billingCapabilities?.pixAutomaticMonthly));
         const monthlyPlan = plans.find((plan) => plan.billingCycle === "MONTHLY");
         const yearlyPlan = plans.find((plan) => plan.billingCycle === "YEARLY");
         if (monthlyPlan) setMonthly(monthlyPlan.priceCents / 100);
@@ -595,12 +610,18 @@ function Pricing() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!pixEnabled && form.billingType === "PIX") {
+      setForm((prev) => ({ ...prev, billingType: "CREDIT_CARD" }));
+    }
+  }, [pixEnabled, form.billingType]);
+
   const formatCurrency = (value: number): string =>
     value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const yearlyMonthly = (yearlyTotal / 12).toFixed(2).replace(".", ",");
   const savings = monthly * 12 - yearlyTotal;
-  const pixEnabled = true;
+  const pixEnabled = yearly || pixAutomaticMonthly;
   const docDigits = digitsFromCpfCnpj(form.cpfCnpj);
   const phoneDigits = digitsFromPhone(form.whatsapp);
   const hasAllInputs =
@@ -652,7 +673,7 @@ function Pricing() {
             pixQrCodeBase64: res.pixQrCodeBase64 ?? "",
           }),
         );
-        window.location.href = `/pagamento?orderId=${encodeURIComponent(orderId)}`;
+        window.location.href = `/?orderId=${encodeURIComponent(orderId)}&pix=1`;
         return;
       }
       if (res.invoiceUrl) {
@@ -661,7 +682,14 @@ function Pricing() {
       }
       setError("Assinatura criada, mas não recebemos o link de pagamento. Verifique seu e-mail.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao processar assinatura.");
+      const message = err instanceof Error ? err.message : "Erro ao processar assinatura.";
+      if (/CREDIT_CARD.*RECURRENT|RECURRENT.*CREDIT_CARD/i.test(message)) {
+        setError(
+          "A API de pagamentos ainda não foi atualizada para Pix Automático mensal. Use cartão ou aguarde o redeploy da API (api-typebot-crm) e tente de novo.",
+        );
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
