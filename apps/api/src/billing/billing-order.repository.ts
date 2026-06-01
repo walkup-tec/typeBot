@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { getDataFilePath } from "../lib/data-path";
+import { orderMatchesAsaasPixAutomaticContractId } from "./asaas-contract-id";
 
 export type BillingOrderStatus =
   | "pending_payment"
@@ -74,6 +75,15 @@ export class BillingOrderRepository {
     const normalized = String(orderId ?? "").trim();
     if (!normalized) return null;
     return loadOrders().find((order) => order.id === normalized) ?? null;
+  }
+
+  getByPixAutomaticContractId(contractId: string): BillingOrder | null {
+    const normalized = String(contractId ?? "").trim();
+    if (!normalized) return null;
+    return (
+      loadOrders().find((order) => orderMatchesAsaasPixAutomaticContractId(order.id, normalized)) ??
+      null
+    );
   }
 
   getByAsaasPaymentId(paymentId: string): BillingOrder | null {

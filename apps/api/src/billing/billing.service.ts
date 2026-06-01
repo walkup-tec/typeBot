@@ -16,6 +16,7 @@ import {
   resolvePixAutomaticCopyPaste,
   resolvePixAutomaticQrCodeBase64,
 } from "./asaas-pix-automatic.client";
+import { buildAsaasPixAutomaticContractId } from "./asaas-contract-id";
 import { addCalendarMonths, formatDueDateDaysAhead, formatLocalDate } from "./billing-dates";
 import { PixAutomaticRenewalService } from "./pix-automatic-renewal.service";
 import { resolveSalesCheckoutCallbacks } from "./checkout-callbacks";
@@ -141,6 +142,8 @@ export class BillingService {
     if (contractId) {
       const byContract = this.billingOrderRepository.getById(contractId);
       if (byContract) return byContract;
+      const byPixContract = this.billingOrderRepository.getByPixAutomaticContractId(contractId);
+      if (byPixContract) return byPixContract;
     }
     if (paymentExternalReference) {
       const direct = this.billingOrderRepository.getById(paymentExternalReference);
@@ -273,7 +276,7 @@ export class BillingService {
         const startDate = formatDueDate(0);
         const authorization = await createAsaasPixAutomaticAuthorization({
           customerId: customer.id,
-          contractId: order.id,
+          contractId: buildAsaasPixAutomaticContractId(order.id),
           frequency: "MONTHLY",
           startDate,
           value: centsToCurrency(order.valueCents),
