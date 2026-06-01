@@ -610,18 +610,18 @@ function Pricing() {
       });
   }, []);
 
-  useEffect(() => {
-    if (!pixEnabled && form.billingType === "PIX") {
-      setForm((prev) => ({ ...prev, billingType: "CREDIT_CARD" }));
-    }
-  }, [pixEnabled, form.billingType]);
-
   const formatCurrency = (value: number): string =>
     value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const yearlyMonthly = (yearlyTotal / 12).toFixed(2).replace(".", ",");
   const savings = monthly * 12 - yearlyTotal;
   const pixEnabled = yearly || pixAutomaticMonthly;
+
+  useEffect(() => {
+    if (!pixEnabled && form.billingType === "PIX") {
+      setForm((prev) => ({ ...prev, billingType: "CREDIT_CARD" }));
+    }
+  }, [pixEnabled, form.billingType]);
   const docDigits = digitsFromCpfCnpj(form.cpfCnpj);
   const phoneDigits = digitsFromPhone(form.whatsapp);
   const hasAllInputs =
