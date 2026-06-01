@@ -84,11 +84,18 @@ export const createAsaasCheckoutSession = async (input: {
   description: string;
   itemName: string;
   externalReference: string;
-  customerData: {
+  /** Omitir = cliente preenche no checkout Asaas (incl. endereço para cartão). */
+  customerData?: {
     name: string;
     email: string;
     cpfCnpj: string;
     phone: string;
+    address: string;
+    addressNumber: string;
+    postalCode: string;
+    province: string;
+    city: number;
+    complement?: string;
   };
   callback: {
     successUrl: string;
@@ -122,12 +129,7 @@ export const createAsaasCheckoutSession = async (input: {
         imageBase64: input.imageBase64,
       },
     ],
-    customerData: {
-      name: input.customerData.name,
-      email: input.customerData.email,
-      cpfCnpj: input.customerData.cpfCnpj,
-      phone: input.customerData.phone,
-    },
+    ...(input.customerData ? { customerData: input.customerData } : {}),
     subscription: {
       cycle: input.cycle,
       value: input.value,

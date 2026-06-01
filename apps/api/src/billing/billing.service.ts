@@ -356,12 +356,6 @@ export class BillingService {
       description: planDescription,
       itemName: plan.name,
       externalReference: order.id,
-      customerData: {
-        name: order.customerName,
-        email: order.ownerEmail,
-        cpfCnpj: order.cpfCnpj,
-        phone: order.whatsapp,
-      },
       callback: resolveSalesCheckoutCallbacks(),
       imageBase64: ASAAS_CHECKOUT_ITEM_IMAGE_BASE64,
     });
