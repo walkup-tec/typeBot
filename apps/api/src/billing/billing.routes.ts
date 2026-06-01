@@ -86,13 +86,20 @@ export const registerBillingRoutes = (app: Express) => {
     try {
       const body = req.body as {
         event?: string;
-        payment?: { id?: string; externalReference?: string; status?: string };
+        payment?: {
+          id?: string;
+          externalReference?: string;
+          status?: string;
+          pixAutomaticAuthorizationId?: string;
+        };
         checkout?: { id?: string; externalReference?: string };
+        authorization?: { id?: string; contractId?: string; status?: string };
       };
       const result = await billingService.handleAsaasWebhook(
         String(body.event ?? ""),
         body.payment ?? {},
         body.checkout,
+        body.authorization,
       );
       return res.status(200).json(result);
     } catch (error) {

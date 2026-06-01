@@ -11,6 +11,13 @@ import {
   listAsaasSubscriptionPayments,
   resolveAsaasCheckoutUrl,
 } from "./asaas.client";
+import {
+  createAsaasPixAutomaticAuthorization,
+  resolvePixAutomaticCopyPaste,
+  resolvePixAutomaticQrCodeBase64,
+} from "./asaas-pix-automatic.client";
+import { addCalendarMonths, formatDueDateDaysAhead, formatLocalDate } from "./billing-dates";
+import { PixAutomaticRenewalService } from "./pix-automatic-renewal.service";
 import { resolveSalesCheckoutCallbacks } from "./checkout-callbacks";
 import { formatBrazilMobileForAsaas } from "./phone";
 import type { CreateSalesCheckoutInput, CreateSalesSubscriptionInput } from "./billing.schemas";
@@ -30,11 +37,7 @@ const normalizeEmail = (value: string): string => value.trim().toLowerCase();
 
 const normalizeDigits = (value: string): string => value.replace(/\D/g, "");
 
-const formatDueDate = (daysAhead: number): string => {
-  const date = new Date();
-  date.setDate(date.getDate() + daysAhead);
-  return date.toISOString().slice(0, 10);
-};
+const formatDueDate = (daysAhead: number): string => formatDueDateDaysAhead(daysAhead);
 
 const centsToCurrency = (valueCents: number): number => Number((valueCents / 100).toFixed(2));
 
@@ -60,6 +63,7 @@ const isPaidAsaasStatus = (status: string | undefined): boolean => {
 export class BillingService {
   private readonly tenantService: TenantService;
   private readonly flowService: FlowService;
+  private readonly pixAutomaticRenewalService: PixAutomaticRenewalService;
 
   constructor(
     private readonly billingOrderRepository: BillingOrderRepository,
@@ -77,6 +81,11 @@ export class BillingService {
       labelRepository,
     );
     this.flowService = new FlowService(flowRepository);
+    this.pixAutomaticRenewalService = new PixAutomaticRenewalService(billingOrderRepository);
+  }
+
+  runPixAutomaticRenewals() {
+    return this.pixAutomaticRenewalService.runRenewalCycle();
   }
 
   listPlans() {
@@ -94,7 +103,58 @@ export class BillingService {
       provisionError: order.provisionError ?? "",
       paidAt: order.paidAt ?? "",
       updatedAt: order.updatedAt,
+      billingKind: order.billingKind ?? "",
+      pixCopyPaste: order.pixCopyPaste ?? "",
+      pixQrCodeBase64: order.pixQrCodeBase64 ?? "",
+      pixAutomaticAuthorizationStatus: order.pixAutomaticAuthorizationStatus ?? "",
     };
+  }
+
+  private findOrderForWebhook(input: {
+    paymentId?: string;
+    paymentExternalReference?: string;
+    checkoutId?: string;
+    checkoutExternalReference?: string;
+    authorizationId?: string;
+    contractId?: string;
+  }) {
+    const paymentId = String(input.paymentId ?? "").trim();
+    const checkoutId = String(input.checkoutId ?? "").trim();
+    const paymentExternalReference = String(input.paymentExternalReference ?? "").trim();
+    const checkoutExternalReference = String(input.checkoutExternalReference ?? "").trim();
+    const authorizationId = String(input.authorizationId ?? "").trim();
+    const contractId = String(input.contractId ?? "").trim();
+
+    if (paymentId) {
+      const byPayment = this.billingOrderRepository.getByAsaasPaymentId(paymentId);
+      if (byPayment) return byPayment;
+    }
+    if (checkoutId) {
+      const byCheckout = this.billingOrderRepository.getByAsaasCheckoutSessionId(checkoutId);
+      if (byCheckout) return byCheckout;
+    }
+    if (authorizationId) {
+      const byAuthorization =
+        this.billingOrderRepository.getByPixAutomaticAuthorizationId(authorizationId);
+      if (byAuthorization) return byAuthorization;
+    }
+    if (contractId) {
+      const byContract = this.billingOrderRepository.getById(contractId);
+      if (byContract) return byContract;
+    }
+    if (paymentExternalReference) {
+      const direct = this.billingOrderRepository.getById(paymentExternalReference);
+      if (direct) return direct;
+      const renewalBase = paymentExternalReference.split("-renewal-")[0]?.trim();
+      if (renewalBase) {
+        const byRenewal = this.billingOrderRepository.getById(renewalBase);
+        if (byRenewal) return byRenewal;
+      }
+    }
+    if (checkoutExternalReference) {
+      return this.billingOrderRepository.getById(checkoutExternalReference);
+    }
+    return null;
   }
 
   async createCheckout(input: CreateSalesCheckoutInput) {
@@ -200,8 +260,94 @@ export class BillingService {
       updatedAt: now,
     });
 
+    if (input.billingType === "PIX") {
+      const customer = await createAsaasCustomer({
+        name: order.customerName,
+        email: order.ownerEmail,
+        mobilePhone: formatBrazilMobileForAsaas(order.whatsapp),
+        cpfCnpj: order.cpfCnpj,
+        externalReference: order.id,
+      });
+
+      if (input.cycle === "MONTHLY") {
+        const startDate = formatDueDate(0);
+        const authorization = await createAsaasPixAutomaticAuthorization({
+          customerId: customer.id,
+          contractId: order.id,
+          frequency: "MONTHLY",
+          startDate,
+          value: centsToCurrency(order.valueCents),
+          description: planDescription,
+          immediateValue: centsToCurrency(order.valueCents),
+        });
+
+        const authorizationId = String(authorization.id ?? "").trim();
+        const pixCopyPaste = resolvePixAutomaticCopyPaste(authorization);
+        const pixQrCodeBase64 = resolvePixAutomaticQrCodeBase64(authorization);
+        if (!authorizationId || !pixCopyPaste) {
+          throw new Error(
+            "Pix Automático criado, mas o Asaas não retornou autorização ou código Pix. Verifique se sua conta Asaas está habilitada para Pix Automático.",
+          );
+        }
+
+        const firstDueDate = formatDueDate(0);
+        const updatedPixAutomatic = this.billingOrderRepository.update(order.id, {
+          billingKind: "pix_automatic",
+          asaasCustomerId: customer.id,
+          asaasPixAutomaticAuthorizationId: authorizationId,
+          pixAutomaticAuthorizationStatus: String(authorization.status ?? "CREATED").trim(),
+          pixCopyPaste,
+          pixQrCodeBase64,
+          nextRecurringDueDate: formatLocalDate(addCalendarMonths(new Date(`${firstDueDate}T12:00:00`), 1)),
+        });
+
+        return {
+          orderId: updatedPixAutomatic?.id ?? order.id,
+          checkoutSessionId: authorizationId,
+          invoiceUrl: null,
+          pixCopyPaste,
+          pixQrCodeBase64,
+          status: updatedPixAutomatic?.status ?? order.status,
+          plan,
+          billingType: input.billingType,
+          billingKind: "pix_automatic" as const,
+        };
+      }
+
+      const payment = await createAsaasPayment({
+        customerId: customer.id,
+        billingType: "PIX",
+        value: centsToCurrency(order.valueCents),
+        dueDate: formatDueDate(1),
+        description: planDescription,
+        externalReference: order.id,
+      });
+
+      const paymentUrl = resolvePaymentUrl(payment);
+      if (!paymentUrl) {
+        throw new Error("Cobrança Pix criada, mas o Asaas não retornou o link de pagamento.");
+      }
+
+      const updatedPix = this.billingOrderRepository.update(order.id, {
+        billingKind: "pix_single",
+        asaasCustomerId: customer.id,
+        asaasPaymentId: payment.id,
+        paymentUrl,
+      });
+
+      return {
+        orderId: updatedPix?.id ?? order.id,
+        checkoutSessionId: payment.id,
+        invoiceUrl: paymentUrl,
+        status: updatedPix?.status ?? order.status,
+        plan,
+        billingType: input.billingType,
+        billingKind: "pix_single" as const,
+      };
+    }
+
     const checkoutSession = await createAsaasCheckoutSession({
-      billingTypes: [input.billingType],
+      billingTypes: ["CREDIT_CARD"],
       cycle: input.cycle,
       value: centsToCurrency(order.valueCents),
       description: planDescription,
@@ -223,6 +369,7 @@ export class BillingService {
     }
 
     const updated = this.billingOrderRepository.update(order.id, {
+      billingKind: "credit_card_checkout",
       asaasCheckoutSessionId: checkoutSession.id,
       paymentUrl,
     });
@@ -234,6 +381,7 @@ export class BillingService {
       status: updated?.status ?? order.status,
       plan,
       billingType: input.billingType,
+      billingKind: "credit_card_checkout" as const,
     };
   }
 
@@ -358,22 +506,52 @@ export class BillingService {
 
   async handleAsaasWebhook(
     event: string,
-    payment: { id?: string; externalReference?: string; status?: string },
+    payment: { id?: string; externalReference?: string; status?: string; pixAutomaticAuthorizationId?: string },
     checkout?: { id?: string; externalReference?: string },
+    authorization?: { id?: string; contractId?: string; status?: string },
   ) {
     const normalizedEvent = String(event ?? "").trim().toUpperCase();
     const paymentId = String(payment.id ?? "").trim();
     const paymentExternalReference = String(payment.externalReference ?? "").trim();
     const checkoutId = String(checkout?.id ?? "").trim();
     const checkoutExternalReference = String(checkout?.externalReference ?? "").trim();
+    const authorizationId = String(authorization?.id ?? payment.pixAutomaticAuthorizationId ?? "").trim();
+    const contractId = String(authorization?.contractId ?? "").trim();
+    const authorizationStatus = String(authorization?.status ?? "").trim();
 
-    const order =
-      (paymentId ? this.billingOrderRepository.getByAsaasPaymentId(paymentId) : null) ??
-      (checkoutId ? this.billingOrderRepository.getByAsaasCheckoutSessionId(checkoutId) : null) ??
-      (paymentExternalReference ? this.billingOrderRepository.getById(paymentExternalReference) : null) ??
-      (checkoutExternalReference ? this.billingOrderRepository.getById(checkoutExternalReference) : null);
+    const order = this.findOrderForWebhook({
+      paymentId,
+      paymentExternalReference,
+      checkoutId,
+      checkoutExternalReference,
+      authorizationId,
+      contractId,
+    });
 
     if (!order) return { handled: false, reason: "order_not_found" as const };
+
+    if (
+      normalizedEvent === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED" ||
+      normalizedEvent === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED"
+    ) {
+      this.billingOrderRepository.update(order.id, {
+        pixAutomaticAuthorizationStatus: authorizationStatus || "ACTIVE",
+        asaasPixAutomaticAuthorizationId: authorizationId || order.asaasPixAutomaticAuthorizationId,
+      });
+      return { handled: true, orderId: order.id, action: "authorization_active" as const };
+    }
+
+    if (
+      normalizedEvent === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REFUSED" ||
+      normalizedEvent === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED" ||
+      normalizedEvent === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_EXPIRED"
+    ) {
+      this.billingOrderRepository.update(order.id, {
+        status: "cancelled",
+        pixAutomaticAuthorizationStatus: authorizationStatus || "CANCELLED",
+      });
+      return { handled: true, orderId: order.id, action: "cancelled" as const };
+    }
 
     if (
       normalizedEvent === "CHECKOUT_CANCELED" ||
@@ -395,8 +573,9 @@ export class BillingService {
     if (normalizedEvent === "PAYMENT_OVERDUE") {
       if (order.tenantId) {
         this.tenantService.updateStatus(order.tenantId, "blocked");
+      } else {
+        this.billingOrderRepository.update(order.id, { status: "cancelled" });
       }
-      this.billingOrderRepository.update(order.id, { status: "cancelled" });
       return { handled: true, orderId: order.id, action: "blocked" as const };
     }
 
@@ -404,11 +583,33 @@ export class BillingService {
       return { handled: true, orderId: order.id, action: "ignored" as const };
     }
 
+    const isRenewal = paymentExternalReference.includes("-renewal-");
+    if (isRenewal && order.tenantId) {
+      this.billingOrderRepository.update(order.id, {
+        paidAt: new Date().toISOString(),
+        asaasPaymentId: paymentId || order.asaasPaymentId,
+        lastRenewalPaymentId: paymentId || order.lastRenewalPaymentId,
+      });
+      this.tenantService.updateStatus(order.tenantId, "active");
+      return { handled: true, orderId: order.id, action: "renewed" as const };
+    }
+
+    if (order.status === "provisioned" && order.tenantId) {
+      this.billingOrderRepository.update(order.id, {
+        paidAt: new Date().toISOString(),
+        asaasPaymentId: paymentId || order.asaasPaymentId,
+        lastRenewalPaymentId: paymentId || order.lastRenewalPaymentId,
+      });
+      this.tenantService.updateStatus(order.tenantId, "active");
+      return { handled: true, orderId: order.id, action: "renewed" as const };
+    }
+
     const paidOrder =
       this.billingOrderRepository.update(order.id, {
         status: "paid",
         paidAt: new Date().toISOString(),
         asaasPaymentId: paymentId || order.asaasPaymentId,
+        pixAutomaticAuthorizationStatus: order.pixAutomaticAuthorizationStatus || "ACTIVE",
       }) ?? order;
     const provisioned = await this.provisionPaidOrder(paidOrder);
     return { handled: true, orderId: provisioned.id, action: "provisioned" as const };

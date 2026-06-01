@@ -15,6 +15,8 @@ import { flowRepository, tenantRepository } from "./lib/repositories";
 import { getDataFilePath } from "./lib/data-path";
 import { registerAuthRoutes } from "./auth/auth.routes";
 import { registerBillingRoutes } from "./billing/billing.routes";
+import { BillingOrderRepository } from "./billing/billing-order.repository";
+import { PixAutomaticRenewalService } from "./billing/pix-automatic-renewal.service";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
@@ -43,6 +45,30 @@ const TYPEBOT_TARGET_BUILDER_API_TOKEN = String(
 ).trim();
 let isMasterAutoSyncRunning = false;
 let isTenantFlowWatcherRunning = false;
+let isPixAutomaticRenewalRunning = false;
+
+const billingOrderRepositoryForRenewal = new BillingOrderRepository();
+const pixAutomaticRenewalService = new PixAutomaticRenewalService(billingOrderRepositoryForRenewal);
+const BILLING_PIX_RENEWAL_INTERVAL_MS = Number(process.env.BILLING_PIX_RENEWAL_INTERVAL_MS ?? 43_200_000);
+
+const runPixAutomaticRenewal = async () => {
+  if (isPixAutomaticRenewalRunning) return;
+  isPixAutomaticRenewalRunning = true;
+  try {
+    const result = await pixAutomaticRenewalService.runRenewalCycle();
+    if (result.processed > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[billing-pix-automatic] processed=${result.processed} created=${result.created} skipped=${result.skipped}`,
+      );
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("[billing-pix-automatic] renewal cycle failed:", error);
+  } finally {
+    isPixAutomaticRenewalRunning = false;
+  }
+};
 
 const runMasterAutoSync = async () => {
   if (isMasterAutoSyncRunning) return;
@@ -324,6 +350,22 @@ async function startApi(): Promise<void> {
       }, watcherIntervalMs);
       // eslint-disable-next-line no-console
       console.log(`[typebot-tenant-flow-sync] enabled intervalMs=${watcherIntervalMs}`);
+    }
+
+    if (
+      String(process.env.BILLING_PIX_AUTOMATIC_PAYMENT_MODE ?? "SUBSCRIPTION").trim().toUpperCase() ===
+      "MANUAL"
+    ) {
+      setTimeout(() => {
+        void runPixAutomaticRenewal();
+      }, 10_000);
+      setInterval(() => {
+        void runPixAutomaticRenewal();
+      }, Math.max(3_600_000, BILLING_PIX_RENEWAL_INTERVAL_MS));
+      // eslint-disable-next-line no-console
+      console.log(
+        `[billing-pix-automatic] renewal job enabled intervalMs=${Math.max(3_600_000, BILLING_PIX_RENEWAL_INTERVAL_MS)}`,
+      );
     }
   });
 }

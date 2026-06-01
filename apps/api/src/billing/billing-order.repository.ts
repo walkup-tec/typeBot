@@ -17,6 +17,8 @@ export type BillingOrder = {
   whatsapp: string;
   cpfCnpj: string;
   billingType: "PIX" | "CREDIT_CARD" | "BOLETO";
+  /** `pix_automatic` = mensal com Pix Automático; ausente = fluxo legado. */
+  billingKind?: "pix_automatic" | "credit_card_checkout" | "pix_single";
   asaasCheckoutSessionId?: string;
   valueCents: number;
   status: BillingOrderStatus;
@@ -24,6 +26,12 @@ export type BillingOrder = {
   asaasCustomerId?: string;
   asaasPaymentId?: string;
   asaasSubscriptionId?: string;
+  asaasPixAutomaticAuthorizationId?: string;
+  pixAutomaticAuthorizationStatus?: string;
+  pixCopyPaste?: string;
+  pixQrCodeBase64?: string;
+  nextRecurringDueDate?: string;
+  lastRenewalPaymentId?: string;
   paymentUrl?: string;
   provisionError?: string;
   createdAt: string;
@@ -78,6 +86,22 @@ export class BillingOrderRepository {
     const normalized = String(checkoutSessionId ?? "").trim();
     if (!normalized) return null;
     return loadOrders().find((order) => order.asaasCheckoutSessionId === normalized) ?? null;
+  }
+
+  getByPixAutomaticAuthorizationId(authorizationId: string): BillingOrder | null {
+    const normalized = String(authorizationId ?? "").trim();
+    if (!normalized) return null;
+    return loadOrders().find((order) => order.asaasPixAutomaticAuthorizationId === normalized) ?? null;
+  }
+
+  listPixAutomaticRenewalCandidates(): BillingOrder[] {
+    return loadOrders().filter(
+      (order) =>
+        order.billingKind === "pix_automatic" &&
+        order.status === "provisioned" &&
+        Boolean(order.asaasPixAutomaticAuthorizationId) &&
+        Boolean(order.nextRecurringDueDate),
+    );
   }
 
   create(order: BillingOrder): BillingOrder {

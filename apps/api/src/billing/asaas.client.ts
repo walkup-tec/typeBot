@@ -98,8 +98,12 @@ export const createAsaasCheckoutSession = async (input: {
   imageBase64: string;
   minutesToExpire?: number;
 }): Promise<AsaasCheckoutSession> => {
+  if (input.billingTypes.some((type) => type !== "CREDIT_CARD")) {
+    throw new Error("Checkout recorrente aceita apenas cartão de crédito.");
+  }
+
   return asaasRequest<AsaasCheckoutSession>("POST", "/checkouts", {
-    billingTypes: input.billingTypes,
+    billingTypes: ["CREDIT_CARD"],
     chargeTypes: ["RECURRENT"],
     minutesToExpire: input.minutesToExpire ?? 60,
     externalReference: input.externalReference,

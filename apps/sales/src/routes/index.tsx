@@ -600,6 +600,7 @@ function Pricing() {
 
   const yearlyMonthly = (yearlyTotal / 12).toFixed(2).replace(".", ",");
   const savings = monthly * 12 - yearlyTotal;
+  const pixEnabled = true;
   const docDigits = digitsFromCpfCnpj(form.cpfCnpj);
   const phoneDigits = digitsFromPhone(form.whatsapp);
   const hasAllInputs =
@@ -627,6 +628,10 @@ function Pricing() {
       setError("Selecione a forma de pagamento: Pix ou Cartão.");
       return;
     }
+    if (!pixEnabled && form.billingType === "PIX") {
+      setError("Pix temporariamente indisponível. Use cartão de crédito.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -638,13 +643,23 @@ function Pricing() {
         billingType: form.billingType,
         cycle: yearly ? "YEARLY" : "MONTHLY",
       });
+      const orderId = String(res.orderId ?? "").trim();
+      if (res.pixCopyPaste && orderId) {
+        sessionStorage.setItem(
+          `pix-pay-${orderId}`,
+          JSON.stringify({
+            pixCopyPaste: res.pixCopyPaste,
+            pixQrCodeBase64: res.pixQrCodeBase64 ?? "",
+          }),
+        );
+        window.location.href = `/pagamento?orderId=${encodeURIComponent(orderId)}`;
+        return;
+      }
       if (res.invoiceUrl) {
         window.location.href = res.invoiceUrl;
-      } else {
-        setError(
-          "Assinatura criada, mas não recebemos o link de cobrança. Verifique seu e-mail.",
-        );
+        return;
       }
+      setError("Assinatura criada, mas não recebemos o link de pagamento. Verifique seu e-mail.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao processar assinatura.");
     } finally {
@@ -853,6 +868,8 @@ function Pricing() {
             </div>
             <PaymentMethodSelector
               value={form.billingType}
+              pixEnabled={pixEnabled}
+              yearlyPlan={yearly}
               onChange={(billingType) => setForm({ ...form, billingType })}
             />
             {error && (

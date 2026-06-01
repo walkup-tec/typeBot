@@ -8,37 +8,52 @@ export type SalesBillingType = "PIX" | "CREDIT_CARD";
 type Props = {
   value: SalesBillingType | null;
   onChange: (value: SalesBillingType) => void;
+  /** Quando false, Pix fica desabilitado (ex.: manutenção). */
+  pixEnabled?: boolean;
+  /** Mensal = Pix Automático; anual = Pix avulso. */
+  yearlyPlan?: boolean;
 };
 
 const OPTIONS: Array<{
   id: SalesBillingType;
   title: string;
-  subtitle: string;
+  subtitleMonthly: string;
+  subtitleYearly: string;
 }> = [
-  { id: "PIX", title: "Pix", subtitle: "Pagamento instantâneo" },
-  { id: "CREDIT_CARD", title: "Cartão", subtitle: "Crédito recorrente" },
+  {
+    id: "PIX",
+    title: "Pix",
+    subtitleMonthly: "Recorrente automático",
+    subtitleYearly: "Pagamento único anual",
+  },
+  { id: "CREDIT_CARD", title: "Cartão", subtitleMonthly: "Crédito recorrente", subtitleYearly: "Crédito recorrente" },
 ];
 
-export function PaymentMethodSelector({ value, onChange }: Props) {
+export function PaymentMethodSelector({ value, onChange, pixEnabled = true, yearlyPlan = false }: Props) {
   return (
     <div className="flex flex-col gap-2">
       <Label className="leading-normal">Forma de pagamento</Label>
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Forma de pagamento">
         {OPTIONS.map((option) => {
           const selected = value === option.id;
+          const disabled = option.id === "PIX" && !pixEnabled;
           return (
             <button
               key={option.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              onClick={() => onChange(option.id)}
+              disabled={disabled}
+              onClick={() => {
+                if (!disabled) onChange(option.id);
+              }}
               className={cn(
                 "flex min-h-[62px] items-center gap-1.5 rounded-md border px-2 py-2 text-left transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 selected
                   ? "border-primary/60 bg-primary/5"
                   : "border-border/80 bg-secondary/25 hover:border-primary/30 hover:bg-secondary/45",
+                disabled && "cursor-not-allowed opacity-45 hover:border-border/80 hover:bg-secondary/25",
               )}
             >
               {option.id === "PIX" ? (
@@ -54,7 +69,11 @@ export function PaymentMethodSelector({ value, onChange }: Props) {
                   {option.title}
                 </span>
                 <span className="text-[9px] leading-tight text-muted-foreground">
-                  {option.subtitle}
+                  {option.id === "PIX" && disabled
+                    ? "Indisponível no momento"
+                    : yearlyPlan
+                      ? option.subtitleYearly
+                      : option.subtitleMonthly}
                 </span>
               </span>
             </button>

@@ -71,7 +71,14 @@ export const createSalesSubscription = async (input: {
   whatsapp: string;
   billingType: SalesBillingType;
   cycle: SalesSubscriptionCycle;
-}): Promise<{ checkoutSessionId: string; invoiceUrl: string | null }> => {
+}): Promise<{
+  orderId?: string;
+  checkoutSessionId: string;
+  invoiceUrl: string | null;
+  pixCopyPaste?: string | null;
+  pixQrCodeBase64?: string | null;
+  billingKind?: string;
+}> => {
   const base = resolveApiBase();
   if (!base) {
     throw new Error(
@@ -99,9 +106,13 @@ export const createSalesSubscription = async (input: {
 
   const raw = await response.text();
   let payload: {
+    orderId?: string;
     checkoutSessionId?: string;
     subscriptionId?: string;
     invoiceUrl?: string | null;
+    pixCopyPaste?: string | null;
+    pixQrCodeBase64?: string | null;
+    billingKind?: string;
     message?: string;
   };
   try {
@@ -116,7 +127,53 @@ export const createSalesSubscription = async (input: {
     throw new Error(payload.message ?? "Erro ao processar assinatura.");
   }
   return {
+    orderId: String(payload.orderId ?? ""),
     checkoutSessionId: String(payload.checkoutSessionId ?? payload.subscriptionId ?? ""),
     invoiceUrl: payload.invoiceUrl ?? null,
+    pixCopyPaste: payload.pixCopyPaste ?? null,
+    pixQrCodeBase64: payload.pixQrCodeBase64 ?? null,
+    billingKind: payload.billingKind ?? "",
+  };
+};
+
+export type SalesOrderStatusDto = {
+  id: string;
+  status: string;
+  paymentUrl: string;
+  tenantId: string;
+  pixCopyPaste: string;
+  pixQrCodeBase64: string;
+};
+
+export const fetchSalesOrderStatus = async (orderId: string): Promise<SalesOrderStatusDto> => {
+  const base = resolveApiBase();
+  if (!base) {
+    throw new Error("API não configurada (VITE_API_BASE_URL).");
+  }
+
+  const response = await fetch(`${base}/api/public/sales/orders/${encodeURIComponent(orderId)}`, {
+    method: "GET",
+    headers: { accept: "application/json" },
+  });
+
+  const raw = await response.text();
+  let payload: Partial<SalesOrderStatusDto> & { message?: string };
+  try {
+    payload = raw ? (JSON.parse(raw) as typeof payload) : {};
+  } catch {
+    throw new Error("Resposta inválida ao consultar pedido.");
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.message ?? "Erro ao consultar pedido.");
+  }
+
+  return {
+    id: String(payload.id ?? orderId),
+    status: String(payload.status ?? "pending_payment"),
+    paymentUrl: String(payload.paymentUrl ?? ""),
+    tenantId: String(payload.tenantId ?? ""),
+    pixCopyPaste: String(payload.pixCopyPaste ?? ""),
+    pixQrCodeBase64: String(payload.pixQrCodeBase64 ?? ""),
   };
 };

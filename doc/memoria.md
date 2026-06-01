@@ -1,3 +1,49 @@
+## 2026-06-01 - Pix Automático (assinatura mensal)
+
+- Landing (`apps/sales`): PIX no plano mensal; checkout redireciona para `/pagamento` com QR/copia-e-cola.
+- API: autorização Pix Automático (`asaas-pix-automatic.client.ts`), pedido `billingKind=pix_automatic`.
+- Renovações: `BILLING_PIX_AUTOMATIC_PAYMENT_MODE=SUBSCRIPTION` (padrão); `MANUAL` ativa job em `server.ts`.
+- Webhooks: eventos `PIX_AUTOMATIC_RECURRING_*` + renovação reativa tenant `active`.
+- Snapshot: `doc/LOG-2026-06-01__124500__pix-automatico-assinatura-mensal.md`.
+
+## 2026-05-29 - Monitoria diária Traefik + e-mail
+
+- Script `scripts/monitor-traefik-proxy.sh`: testa API/LP/Painel, detecta anomalias, aplica fix, envia e-mail.
+- Destino: `wakup@walkuptec.com.br` via SMTP (`/root/monitor-traefik.env`).
+- Cron sugerido: `0 8 * * *` + fix `*/5` já ativo no VPS.
+- Doc: `doc/MONITOR-TRAEFIK-PROXY-VPS.md`.
+
+## 2026-05-29 - Estabilização Traefik (LP + Painel + API)
+
+- **Causa:** DNS Swarm (`typebot_*`) → IP morto; Traefik fora de `easypanel-typebot`; `172.17.0.1:3000` = Easypanel.
+- **Fix LP:** `main.yaml` linhas `typebot_paginadevendas-0/1` → IP dinâmico na rede `easypanel-typebot` (ex. `10.0.4.115:3000/`).
+- **Fix Painel:** mesmo padrão para `typebot_painel-typebot-crm`.
+- **Fix API:** `172.17.0.1:3333` (porta publicada estável).
+- Script + cron: `scripts/fix-traefik-easypanel-502.sh`, doc `doc/FIX-EASYPANEL-TRAEFIK-ESTAVEL.md`.
+
+## 2026-05-28 - Backup completo D → E (espelho seletivo)
+
+- Executado `C:\Scripts\backup-d-para-e.ps1` com sucesso (`exit 0`, ~4 min).
+- Pastas espelhadas: Meu Drive/Drive Profissional, Projeto Bruno LV, Site Credilix, SOMA Promotora, Waba.
+- Log: `D:\Backup-Logs\backup_seletivo_para_E_2026-05-28__211451.log`.
+- Snapshot: `doc/LOG-2026-05-28__211859__backup-completo-d-para-e.md`.
+
+## 2026-05-28 - Pausa sessão: proxy Traefik corrigido (API + LP OK, painel 502)
+
+- Fix SSH em `main.yaml`: upstreams `http://172.17.0.1:3333` (API), `:3000` (LP), `:3001` (painel tentativa).
+- Novo serviço Easypanel **`api`** com `app.chattypebot.com`, volume `/app/apps/api/data`.
+- **OK:** `app.chattypebot.com/health`, `chattypebot.com` (200).
+- **Pendente:** `painel.chattypebot.com` — `wget 172.17.0.1:3001` → connection reset; validar container painel e URL no `main.yaml`.
+- Snapshot: `doc/LOG-2026-05-28__190000__snapshot-pausa-proxy-traefik.md`.
+
+## 2026-05-28 - Easypanel: destino de domínio não editável + 502 API
+
+- UI Domínios: destino `http://typebot_api-typebot-crm:3333/` é **automático** (normal); utilizador não altera manualmente.
+- Testes no contentor: `api-typebot-crm:3333` OK; `typebot_api-typebot-crm:3333` falha → proxy usa hostname que não conecta.
+- Externo ainda 502 em `app.chattypebot.com` e host `*.easypanel.host`.
+- Doc operacional: `doc/FIX-EASYPANEL-API-502-DOMINIO.md` (renomear serviço para `api` ou validar `HOST=0.0.0.0` + porta 3333 na engrenagem).
+- `EASYPANEL-AMBIENTE.env.example`: incluído `HOST=0.0.0.0`.
+
 ## 2026-05-28 - Fix bind host API (evitar 502 com upstream interno)
 
 - Ajuste em `apps/api/src/server.ts`: `app.listen(port, host)` com `HOST` (default `0.0.0.0`).
