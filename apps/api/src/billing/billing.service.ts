@@ -16,7 +16,7 @@ import {
   resolvePixAutomaticCopyPaste,
   resolvePixAutomaticQrCodeBase64,
 } from "./asaas-pix-automatic.client";
-import { buildAsaasPixAutomaticContractId } from "./asaas-contract-id";
+import { buildAsaasPixAutomaticContractId, buildAsaasPixAutomaticDescription } from "./asaas-contract-id";
 import { addCalendarMonths, formatDueDateDaysAhead, formatLocalDate } from "./billing-dates";
 import { PixAutomaticRenewalService } from "./pix-automatic-renewal.service";
 import { resolveSalesCheckoutCallbacks } from "./checkout-callbacks";
@@ -280,7 +280,7 @@ export class BillingService {
           frequency: "MONTHLY",
           startDate,
           value: centsToCurrency(order.valueCents),
-          description: planDescription,
+          description: buildAsaasPixAutomaticDescription("MONTHLY"),
           immediateValue: centsToCurrency(order.valueCents),
         });
 

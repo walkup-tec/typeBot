@@ -1,4 +1,5 @@
 import { asaasRequest } from "./asaas.client";
+import { clampAsaasPixAutomaticText } from "./asaas-contract-id";
 
 const resolvePixAutomaticAuthorizationsPath = (): string => {
   const fromEnv = String(process.env.ASAAS_PIX_AUTOMATIC_AUTH_PATH ?? "").trim();
@@ -51,11 +52,11 @@ const buildPixAutomaticAuthorizationBody = (input: {
   paymentCreationMode: "SUBSCRIPTION" | "MANUAL";
 }) => ({
   customerId: input.customerId,
-  contractId: input.contractId,
+  contractId: clampAsaasPixAutomaticText(input.contractId),
   frequency: input.frequency,
   startDate: input.startDate,
   value: input.value,
-  description: input.description,
+  description: clampAsaasPixAutomaticText(input.description),
   paymentCreationMode: input.paymentCreationMode,
   immediateQrCode: {
     originalValue: input.immediateValue,
