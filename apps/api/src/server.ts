@@ -28,6 +28,7 @@ import {
   logAuthPersistenceMode,
 } from "./bootstrap/auth-data-bootstrap";
 import { isAuthPostgresEnabled } from "./lib/auth-postgres";
+import { API_DEPLOY_MARKER } from "./deploy-marker";
 
 const app = express();
 /** Traefik/Easypanel enviam `X-Forwarded-Proto`; necessário para `req.secure` e cabeçalhos HTTPS. */
@@ -190,6 +191,7 @@ app.get("/health", (_req, res) => {
   res.status(200).json({
     status: "ok",
     service: "typebot-saas-api",
+    deployMarker: API_DEPLOY_MARKER,
     authTenantsAttendants: isAuthPostgresEnabled() ? "postgres" : "json",
     /** Postgres cobre só login/assinantes/atendentes. Fluxos, fila e bibliotecas continuam em JSON no disco. */
     flowsSavedCount: flowsTotal,

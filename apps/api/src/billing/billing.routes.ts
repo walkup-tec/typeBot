@@ -8,6 +8,7 @@ import {
 } from "../lib/repositories";
 import { BillingOrderRepository } from "./billing-order.repository";
 import { BillingService } from "./billing.service";
+import { API_DEPLOY_MARKER } from "../deploy-marker";
 import { createSalesCheckoutSchema, createSalesSubscriptionSchema } from "./billing.schemas";
 
 const billingOrderRepository = new BillingOrderRepository();
@@ -36,7 +37,8 @@ export const registerBillingRoutes = (app: Express) => {
       paymentConfigured: Boolean(process.env.ASAAS_API_KEY?.trim()),
       billingCapabilities: {
         pixAutomaticMonthly: true,
-        version: "2026-06-01-pix-automatic",
+        version: API_DEPLOY_MARKER,
+        deployMarker: API_DEPLOY_MARKER,
       },
     });
   });
