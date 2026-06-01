@@ -34,6 +34,10 @@ export const registerBillingRoutes = (app: Express) => {
     return res.status(200).json({
       plans: billingService.listPlans(),
       paymentConfigured: Boolean(process.env.ASAAS_API_KEY?.trim()),
+      billingCapabilities: {
+        pixAutomaticMonthly: true,
+        version: "2026-06-01-pix-automatic",
+      },
     });
   });
 
