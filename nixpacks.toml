@@ -1,3 +1,15 @@
-# Easypanel / Nixpacks: monorepo root installs all workspaces (incl. apps/sales → Vite 7 / Node 22).
+# Easypanel / Nixpacks — API (monorepo typeBot)
 [variables]
 NIXPACKS_NODE_VERSION = "22"
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = [
+  "npm run build:api",
+  "test -f apps/api/dist/deploy-marker.js || (echo 'ERRO: build sem deploy-marker — git desatualizado' && exit 1)",
+]
+
+[start]
+cmd = "npm run start:api"
