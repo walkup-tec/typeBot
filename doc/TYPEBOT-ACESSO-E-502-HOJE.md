@@ -142,6 +142,20 @@ bash /tmp/fix-redis.sh
 
 Restart builder + viewer → `curl -sI .../signin` deve retornar **307** (não 502).
 
+### REDIS_URL certo mas log ainda mostra `10.11.227.126`
+
+Sintoma: `grep REDIS_URL` no container mostra `typebot_typebot-walkup-redis`, mas `docker logs` continua `EHOSTUNREACH 10.11.227.126:6379`.
+
+**Causa:** DNS do Swarm resolve o hostname para **IP antigo** inalcançável.
+
+**Correção rápida:** usar **IP atual** do Redis na rede `easypanel-typebot`:
+
+```bash
+bash fix-typebot-redis-dns-vps.sh   # imprime REDIS_URL com IP 10.0.4.x
+```
+
+Colar no Easypanel (builder + viewer) → `docker service update --force` nos dois serviços.
+
 ---
 
 ## Variáveis na API SaaS (`api`)
