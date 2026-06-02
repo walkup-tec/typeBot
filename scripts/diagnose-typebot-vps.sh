@@ -111,8 +111,23 @@ if [[ -n "$VIEWER_CID" ]]; then
   echo ""
 fi
 
+echo "--- 7) Traefik alcança builder (se 502 público e app OK interno) ---"
+TRAEFIK=$(docker ps -q -f name=easypanel-traefik -f status=running | head -1)
+if [[ -n "$TRAEFIK" && -n "${BUILDER_IP:-}" ]]; then
+  if docker exec "$TRAEFIK" wget -qO- --timeout=4 "http://typebot_typebot-walkup-builder:3000/signin" >/dev/null 2>&1; then
+    echo "  OK: Traefik -> typebot_typebot-walkup-builder:3000"
+  elif docker exec "$TRAEFIK" wget -qO- --timeout=4 "http://${BUILDER_IP}:3000/signin" >/dev/null 2>&1; then
+    echo "  OK: Traefik -> ${BUILDER_IP}:3000 (hostname Swarm falhou no Traefik)"
+  else
+    echo "  FALHA: Traefik não alcança builder — rode: bash fix-typebot-builder-proxy-502-vps.sh"
+  fi
+else
+  echo "  (Traefik ou builder IP indisponível — pular)"
+fi
+echo ""
+
 echo "=== Interpretação rápida ==="
-echo "- App OK internamente + 502 público → Domínios Easypanel (porta 3000) ou proxy Traefik"
+echo "- App OK internamente + 502 público → proxy Traefik/Easypanel: bash fix-typebot-builder-proxy-502-vps.sh"
 echo "- App FALHA em 127.0.0.1:3000 → env (REDIS/DB/ENCRYPTION) ou crash no start — ver logs acima"
 echo "- Container não Running → Restart no Easypanel; subir db + redis antes"
 echo ""
