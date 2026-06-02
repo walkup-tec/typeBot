@@ -20,7 +20,7 @@ Script: [`scripts/traefik-permanent-vps.sh`](../scripts/traefik-permanent-vps.sh
 cp scripts/traefik-permanent-vps.sh /root/
 chmod +x /root/traefik-permanent-vps.sh
 
-# 2) Instalar (cron 2 min + rede Swarm no Traefik + correção imediata)
+# 2) Instalar (cron 1 min + rede Swarm no Traefik + correção imediata)
 /root/traefik-permanent-vps.sh install
 ```
 
@@ -29,10 +29,28 @@ O que o `install` faz:
 | Ação | Efeito |
 |------|--------|
 | `docker service update --network-add easypanel-typebot` no Traefik | Traefik **sempre** na rede dos apps |
-| Cron `/etc/cron.d/traefik-permanent-fix` | A cada **2 min** atualiza IPs no `main.yaml` |
+| Cron `/etc/cron.d/traefik-permanent-fix` | A cada **1 min** atualiza IPs no `main.yaml` |
 | **Sem** restart Traefik na rotina | Evita queda a cada correção |
 | Restart Traefik | **Só** se LP ainda 502 após patch |
 | Detecta LP com tela Typebot "Entrar" | Reaplica upstream da LP |
+
+## Erro `cannot execute: required file not found`
+
+Arquivo baixado com finais de linha Windows (CRLF). No servidor:
+
+```bash
+sed -i 's/\r$//' /root/traefik-permanent-vps.sh
+chmod +x /root/traefik-permanent-vps.sh
+/root/traefik-permanent-vps.sh install
+```
+
+Ou baixar de novo (repo já com LF):
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/typeBot/master/scripts/traefik-permanent-vps.sh" -o /root/traefik-permanent-vps.sh
+chmod +x /root/traefik-permanent-vps.sh
+/root/traefik-permanent-vps.sh install
+```
 
 ## Verificação
 
@@ -44,7 +62,7 @@ tail -20 /var/log/traefik-permanent-fix.log
 
 ## Após redeploy no Easypanel
 
-**Não precisa** SSH manual — no máximo **2 minutos** o cron corrige.
+**Não precisa** SSH manual — no máximo **1 minuto** o cron corrige.
 
 Opcional: rodar na hora:
 

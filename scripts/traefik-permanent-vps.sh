@@ -6,7 +6,7 @@
 #   chmod +x /root/traefik-permanent-vps.sh
 #   /root/traefik-permanent-vps.sh install
 #
-# O cron roda a cada 2 min e corrige IPs sem derrubar o site (sem restart Traefik na rotina).
+# O cron roda a cada 1 min e corrige IPs sem derrubar o site (sem restart Traefik na rotina).
 set -euo pipefail
 
 INSTALL_PATH="/root/traefik-permanent-vps.sh"
@@ -226,7 +226,7 @@ EOF
   echo ""
   echo "Instalado:"
   echo "  Script: ${dest}"
-  echo "  Cron:   ${CRON_FILE} (a cada 2 min)"
+  echo "  Cron:   ${CRON_FILE} (a cada 1 min)"
   echo "  Log:    ${LOG}"
   echo ""
   echo "Teste manual: ${dest} run"

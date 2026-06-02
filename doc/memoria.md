@@ -1,324 +1,334 @@
-﻿## 2026-06-02 - Biblioteca Master: recuperação automática + fallback por proprietário
+﻿## 2026-06-02 - Traefik permanente VPS (fim 502 LP/painel)
 
-- **Sintoma de produção:** `deployMarker=biblioteca-v7` e `flowsSavedCount=0` com tenants existentes no Postgres.
-- **Causa:** volume operacional vazio após redeploy e regressão antiga de listagem (sem fallback multi-tenant completo).
-- **Correções aplicadas:**
-  - API `source-flows`: fallback histórico restaurado com `appendPersistedFlowsFallback` (dedupe por URL, inclui `ownerEmail/ownerName`).
-  - Bootstrap novo `seedOperationalDataOnEmptyIfNeeded`: em `NODE_ENV=production` + tenants>0 + flows=0, restaura `saved-flows.json` e `system-master-library.json` de `apps/api/data-seed`, realinhando `tenantId` por e-mail.
-  - `flowRepository.reloadFromStorage()` para recarregar cache sem restart.
-  - Admin Biblioteca Master: coluna **Proprietário** e lista completa de fluxos (com ação bloqueada quando já publicado).
-  - Marker API atualizado para `DEPLOY-2026-06-01-api-biblioteca-v8`.
-- **Teste local executado:** `node scripts/test-biblioteca-master-source-flows.mjs` => `restored=true`, `flowsSavedCount=16`, `sourceFlowsCount=16`, proprietários: walkup/drax/mozart/somaconecta.
-- **Log:** `doc/LOG-2026-06-02__115531__fix-biblioteca-master-seed-operacional-v8.md`
-## 2026-06-01 - Biblioteca Master vazia (fallback multi-proprietÃ¡rio)
+- **Problema:** Swarm troca IP a cada redeploy; `main.yaml` desatualizado; Traefik fora da rede `easypanel-typebot`; `sed` global quebrou LP (tela Typebot).
+- **Solução:** `scripts/traefik-permanent-vps.sh install` — cron 1 min + `docker service update --network-add easypanel-typebot` no Traefik + patch por nome de serviço.
+- **Doc:** `doc/TRAEFIK-PERMANENTE-VPS.md`
+- **Ops obrigatório no VPS:** `/root/traefik-permanent-vps.sh install` uma vez.
 
-- **Sintoma:** Biblioteca Master sem fluxos; produÃ§Ã£o com `flowsSavedCount: 0` e API ainda em `biblioteca-v7` / `pix-v6`.
-- **Causa (cÃ³digo):** `listMasterLibrarySourceFlows` retornava `[]` se tenant `walkup@` inexistente ou sem fluxos, **sem** fallback `listAll()` de outros assinantes (regressÃ£o vs `doc/LOG-2026-04-22__110155__`).
-- **CorreÃ§Ã£o:** `appendPersistedFlowsFallback` em `source-master-sync.service.ts` â€” merge Typebot matriz + todos os fluxos em `saved-flows.json` deduplicados por URL, com `ownerEmail`/`ownerName`. Catch em `source-flows` usa o mesmo fallback. Admin: tabela com coluna **ProprietÃ¡rio** e todos os fluxos (nÃ£o sÃ³ â€œnÃ£o publicadosâ€). Marker API: `DEPLOY-2026-06-01-api-biblioteca-v8`.
-- **Ops:** redeploy serviÃ§o **`api`**; `curl /health` â†’ `biblioteca-v8` e `flowsSavedCount > 0`. Se volume vazio, restaurar `saved-flows.json` do backup `backups/predeploy-*` ou sync Typebot (`TYPEBOT_SOURCE_*`).
+## 2026-06-02 - Typebot fix completo migração walkup (consolidado)
+
+- **Pedido:** reaplicar correções soma→walkup (upload `generateUploadUrl`, 502, login, viewer).
+- **Doc único:** `doc/TYPEBOT-MIGRACAO-WALKUP-FIX-COMPLETO.md` (S3 sem @, Gmail SMTP, DB/Redis por IP, Traefik, MinIO).
+- **Script VPS:** `scripts/fix-typebot-migracao-walkup-completo-vps.sh` (Traefik IPs + auditoria env).
+- **Upload:** `S3_ACCESS_KEY=typebotstorage` (nunca e-mail); remover `S3_PUBLIC_CUSTOM_DOMAIN`; bucket `typebot` no MinIO.
+
+## 2026-06-02 - Typebot builder 502 (app OK, HTTPS 502)
+
+- **Sintoma:** `curl` na rede `easypanel-typebot` → HTTP 200 em `typebot_typebot-walkup-builder:3000/signin`; HTTPS público e API `typebotBuilderReachable: false` (502).
+- **Causa:** proxy Traefik/Easypanel não alcança upstream (rede ou `main.yaml` com hostname/IP Swarm morto).
+- **Correção (repo):** `scripts/fix-typebot-builder-proxy-502-vps.sh` (passos 12–16); `fix-traefik-easypanel-502.sh` inclui builder/viewer; doc `TYPEBOT-ACESSO-E-502-HOJE.md`.
+- **Ops:** rodar script no VPS após push; se persistir 502 → Easypanel Domínios com IP atual do builder.
+- **Log:** `doc/LOG-2026-06-02__180500__fix-typebot-builder-proxy-502-traefik.md`
+
+## 2026-06-01 - Biblioteca Master vazia (fallback multi-proprietário)
+
+- **Sintoma:** Biblioteca Master sem fluxos; produção com `flowsSavedCount: 0` e API ainda em `biblioteca-v7` / `pix-v6`.
+- **Causa (código):** `listMasterLibrarySourceFlows` retornava `[]` se tenant `walkup@` inexistente ou sem fluxos, **sem** fallback `listAll()` de outros assinantes (regressão vs `doc/LOG-2026-04-22__110155__`).
+- **Correção:** `appendPersistedFlowsFallback` em `source-master-sync.service.ts` — merge Typebot matriz + todos os fluxos em `saved-flows.json` deduplicados por URL, com `ownerEmail`/`ownerName`. Catch em `source-flows` usa o mesmo fallback. Admin: tabela com coluna **Proprietário** e todos os fluxos (não só “não publicados”). Marker API: `DEPLOY-2026-06-01-api-biblioteca-v8`.
+- **Ops:** redeploy serviço **`api`**; `curl /health` → `biblioteca-v8` e `flowsSavedCount > 0`. Se volume vazio, restaurar `saved-flows.json` do backup `backups/predeploy-*` ou sync Typebot (`TYPEBOT_SOURCE_*`).
 - **Log:** `doc/LOG-2026-06-01__233000__fix-biblioteca-master-fallback-proprietarios.md`
 
 ## 2026-06-02 - Fluxos vazios Drax (`draxsistemas@gmail.com`)
 
 - **Sintoma:** Etapa 6 (Biblioteca de Fluxos) vazia ao logar como `draxsistemas@gmail.com` / Drax Sistemas.
-- **Causa:** Conta com Typebot **provisionado** (`typebotWorkspaceId`); API filtrava sÃ³ fluxos com `typebotRemoteId` no workspace; fluxos salvos sÃ³ com URL/`publicId` sumiam; painel ocultava seÃ§Ã£o da biblioteca e listava sÃ³ `workspaceOnlyFlows` (sem `librarySourceId`).
-- **CorreÃ§Ã£o:** `typebot-flow-viewer-url-sync.ts` â€” vÃ­nculo por `publicId`, filtro/prune/align ampliados; `ensureTenantFlowsLinkedToWorkspace` na listagem; `App.tsx` â€” etapa 6 usa todos os fluxos do tenant quando provisionado; mensagens claras no sync (`builder_api_token_missing`, workspace vazio).
-- **Ops:** redeploy API + painel; Etapa 6 â†’ **Atualizar lista**; conferir `TYPEBOT_TARGET_BUILDER_API_TOKEN` e workspace `cmohgh7ll0014ru1cwhg90xnp` (Drax).
+- **Causa:** Conta com Typebot **provisionado** (`typebotWorkspaceId`); API filtrava só fluxos com `typebotRemoteId` no workspace; fluxos salvos só com URL/`publicId` sumiam; painel ocultava seção da biblioteca e listava só `workspaceOnlyFlows` (sem `librarySourceId`).
+- **Correção:** `typebot-flow-viewer-url-sync.ts` — vínculo por `publicId`, filtro/prune/align ampliados; `ensureTenantFlowsLinkedToWorkspace` na listagem; `App.tsx` — etapa 6 usa todos os fluxos do tenant quando provisionado; mensagens claras no sync (`builder_api_token_missing`, workspace vazio).
+- **Ops:** redeploy API + painel; Etapa 6 → **Atualizar lista**; conferir `TYPEBOT_TARGET_BUILDER_API_TOKEN` e workspace `cmohgh7ll0014ru1cwhg90xnp` (Drax).
 - **Log:** `doc/LOG-2026-06-02__fluxos-vazios-drax-provisionado.md`
 
 ## 2026-06-01 - Biblioteca de fluxos (conta matriz)
 
-- **Conta matriz sistema:** `walkup@walkuptec.com.br` (nome tenant **Drax Sistemas**). `draxsistemas@gmail.com` = assinante operacional Drax, nÃ£o master do sistema.
-- **Fix biblioteca vazia:** fallback `source-flows` do disco; sem filtro workspace na matriz; admin mostra fluxos ativos matriz + catÃ¡logo ativo na etapa 6.
+- **Conta matriz sistema:** `walkup@walkuptec.com.br` (nome tenant **Drax Sistemas**). `draxsistemas@gmail.com` = assinante operacional Drax, não master do sistema.
+- **Fix biblioteca vazia:** fallback `source-flows` do disco; sem filtro workspace na matriz; admin mostra fluxos ativos matriz + catálogo ativo na etapa 6.
 - Snapshot: `doc/LOG-2026-06-01__220000__fix-biblioteca-fluxos-matriz-ativos.md`.
 
-## 2026-06-01 - Pix AutomÃ¡tico (assinatura mensal)
+## 2026-06-01 - Pix Automático (assinatura mensal)
 
-- **LP porta host removida (Etapa 46):** Easypanel `paginadevendas` â†’ aba **Portas** â†’ removido `3000:3000` (conflito com Easypanel na 3000). HTTP sÃ³ via **DomÃ­nios** â†’ `typebot_paginadevendas:3000` interno.
-- **PÃ³s-remoÃ§Ã£o porta 3000:** Traefik OK (`app:200 lp:307 painel:200`). API `deployMarker=DEPLOY-2026-06-01-api-pix-v6`. LP bundle novo `index-CXJi_hvW.js` contÃ©m `pixCopyPaste`, `billingKind`, `pix_automatic` â€” **deploy LP OK**.
-- **Fix LP recarrega no Pix (2026-06-01):** SSR TanStack convertia `/?orderId=x&pix=1` â†’ 307 â†’ `pix=false` (landing de novo). CorreÃ§Ã£o: redirect checkout para `/pagamento?orderId=x` + rota dedicada + redirect legado no `serve-production.mjs`. **Commit PV:** `50b4894` â€” `DEPLOY-2026-06-01-lp-pix-pagamento` (`walkup-tec/PV-typebot-chat` `main`).
-- **DiagnÃ³stico produÃ§Ã£o:** `GET https://app.chattypebot.com/api/public/sales/plans` **sem** `billingCapabilities` â†’ API antiga (checkout RECURRENT+PIX â†’ erro Asaas CREDIT_CARD obrigatÃ³rio).
-- **Commits API:** `b833624` (marcador deploy) + `59869d2` (Pix AutomÃ¡tico). **LP:** `PV-typebot-chat` `8f29f57` (Pix mensal sÃ³ se `pixAutomaticMonthly`).
-- **ProduÃ§Ã£o OK (2026-06-01):** `deployMarker=DEPLOY-2026-06-01-api-pix-v2`, `billingCapabilities.pixAutomaticMonthly=true` em `app.chattypebot.com`.
-- **Causa raiz 502/cÃ³digo antigo:** Swarm `typebot_api` nÃ£o trocava task na 3333 (porta em host-mode presa ao container velho). Fix: `scale 0` â†’ porta livre â†’ `scale 1`.
+- **LP porta host removida (Etapa 46):** Easypanel `paginadevendas` → aba **Portas** → removido `3000:3000` (conflito com Easypanel na 3000). HTTP só via **Domínios** → `typebot_paginadevendas:3000` interno.
+- **Pós-remoção porta 3000:** Traefik OK (`app:200 lp:307 painel:200`). API `deployMarker=DEPLOY-2026-06-01-api-pix-v6`. LP bundle novo `index-CXJi_hvW.js` contém `pixCopyPaste`, `billingKind`, `pix_automatic` — **deploy LP OK**.
+- **Fix LP recarrega no Pix (2026-06-01):** SSR TanStack convertia `/?orderId=x&pix=1` → 307 → `pix=false` (landing de novo). Correção: redirect checkout para `/pagamento?orderId=x` + rota dedicada + redirect legado no `serve-production.mjs`. **Commit PV:** `50b4894` — `DEPLOY-2026-06-01-lp-pix-pagamento` (`walkup-tec/PV-typebot-chat` `main`).
+- **Diagnóstico produção:** `GET https://app.chattypebot.com/api/public/sales/plans` **sem** `billingCapabilities` → API antiga (checkout RECURRENT+PIX → erro Asaas CREDIT_CARD obrigatório).
+- **Commits API:** `b833624` (marcador deploy) + `59869d2` (Pix Automático). **LP:** `PV-typebot-chat` `8f29f57` (Pix mensal só se `pixAutomaticMonthly`).
+- **Produção OK (2026-06-01):** `deployMarker=DEPLOY-2026-06-01-api-pix-v2`, `billingCapabilities.pixAutomaticMonthly=true` em `app.chattypebot.com`.
+- **Causa raiz 502/código antigo:** Swarm `typebot_api` não trocava task na 3333 (porta em host-mode presa ao container velho). Fix: `scale 0` → porta livre → `scale 1`.
 - **Build Easypanel:** exigir `test -f apps/api/dist/deploy-marker.js` no comando de build; commit `4a68e9e`.
-- **ServiÃ§o definitivo:** `api` (domÃ­nio `app.chattypebot.com`). `api-typebot-crm` pode ser excluÃ­do apÃ³s confirmar dados/env no `api`.
+- **Serviço definitivo:** `api` (domínio `app.chattypebot.com`). `api-typebot-crm` pode ser excluído após confirmar dados/env no `api`.
 - **Guia paridade:** `doc/EASYPANEL-PARIDADE-SERVICO-API.md`.
 - Redeploy: `doc/REDEPLOY-PIX-AUTOMATICO.md`.
 - Landing (`apps/sales`): PIX no plano mensal; checkout redireciona para `/pagamento` com QR/copia-e-cola.
-- API: autorizaÃ§Ã£o Pix AutomÃ¡tico (`asaas-pix-automatic.client.ts`), pedido `billingKind=pix_automatic`.
-- RenovaÃ§Ãµes: `BILLING_PIX_AUTOMATIC_PAYMENT_MODE=SUBSCRIPTION` (padrÃ£o); `MANUAL` ativa job em `server.ts`.
-- Webhooks: eventos `PIX_AUTOMATIC_RECURRING_*` + renovaÃ§Ã£o reativa tenant `active`.
+- API: autorização Pix Automático (`asaas-pix-automatic.client.ts`), pedido `billingKind=pix_automatic`.
+- Renovações: `BILLING_PIX_AUTOMATIC_PAYMENT_MODE=SUBSCRIPTION` (padrão); `MANUAL` ativa job em `server.ts`.
+- Webhooks: eventos `PIX_AUTOMATIC_RECURRING_*` + renovação reativa tenant `active`.
 - Snapshot: `doc/LOG-2026-06-01__124500__pix-automatico-assinatura-mensal.md`.
 
-## 2026-05-29 - Monitoria diÃ¡ria Traefik + e-mail
+## 2026-05-29 - Monitoria diária Traefik + e-mail
 
 - Script `scripts/monitor-traefik-proxy.sh`: testa API/LP/Painel, detecta anomalias, aplica fix, envia e-mail.
 - Destino: `wakup@walkuptec.com.br` via SMTP (`/root/monitor-traefik.env`).
-- Cron sugerido: `0 8 * * *` + fix `*/5` jÃ¡ ativo no VPS.
+- Cron sugerido: `0 8 * * *` + fix `*/5` já ativo no VPS.
 - Doc: `doc/MONITOR-TRAEFIK-PROXY-VPS.md`.
 
-## 2026-05-29 - EstabilizaÃ§Ã£o Traefik (LP + Painel + API)
+## 2026-05-29 - Estabilização Traefik (LP + Painel + API)
 
-- **Causa:** DNS Swarm (`typebot_*`) â†’ IP morto; Traefik fora de `easypanel-typebot`; `172.17.0.1:3000` = Easypanel.
-- **Fix LP:** `main.yaml` linhas `typebot_paginadevendas-0/1` â†’ IP dinÃ¢mico na rede `easypanel-typebot` (ex. `10.0.4.115:3000/`).
-- **Fix Painel:** mesmo padrÃ£o para `typebot_painel-typebot-crm`.
-- **Fix API:** `172.17.0.1:3333` (porta publicada estÃ¡vel).
+- **Causa:** DNS Swarm (`typebot_*`) → IP morto; Traefik fora de `easypanel-typebot`; `172.17.0.1:3000` = Easypanel.
+- **Fix LP:** `main.yaml` linhas `typebot_paginadevendas-0/1` → IP dinâmico na rede `easypanel-typebot` (ex. `10.0.4.115:3000/`).
+- **Fix Painel:** mesmo padrão para `typebot_painel-typebot-crm`.
+- **Fix API:** `172.17.0.1:3333` (porta publicada estável).
 - Script + cron: `scripts/fix-traefik-easypanel-502.sh`, doc `doc/FIX-EASYPANEL-TRAEFIK-ESTAVEL.md`.
 
-## 2026-05-28 - Backup completo D â†’ E (espelho seletivo)
+## 2026-05-28 - Backup completo D → E (espelho seletivo)
 
 - Executado `C:\Scripts\backup-d-para-e.ps1` com sucesso (`exit 0`, ~4 min).
 - Pastas espelhadas: Meu Drive/Drive Profissional, Projeto Bruno LV, Site Credilix, SOMA Promotora, Waba.
 - Log: `D:\Backup-Logs\backup_seletivo_para_E_2026-05-28__211451.log`.
 - Snapshot: `doc/LOG-2026-05-28__211859__backup-completo-d-para-e.md`.
 
-## 2026-05-28 - Pausa sessÃ£o: proxy Traefik corrigido (API + LP OK, painel 502)
+## 2026-05-28 - Pausa sessão: proxy Traefik corrigido (API + LP OK, painel 502)
 
 - Fix SSH em `main.yaml`: upstreams `http://172.17.0.1:3333` (API), `:3000` (LP), `:3001` (painel tentativa).
-- Novo serviÃ§o Easypanel **`api`** com `app.chattypebot.com`, volume `/app/apps/api/data`.
+- Novo serviço Easypanel **`api`** com `app.chattypebot.com`, volume `/app/apps/api/data`.
 - **OK:** `app.chattypebot.com/health`, `chattypebot.com` (200).
-- **Pendente:** `painel.chattypebot.com` â€” `wget 172.17.0.1:3001` â†’ connection reset; validar container painel e URL no `main.yaml`.
+- **Pendente:** `painel.chattypebot.com` — `wget 172.17.0.1:3001` → connection reset; validar container painel e URL no `main.yaml`.
 - Snapshot: `doc/LOG-2026-05-28__190000__snapshot-pausa-proxy-traefik.md`.
 
-## 2026-05-28 - Easypanel: destino de domÃ­nio nÃ£o editÃ¡vel + 502 API
+## 2026-05-28 - Easypanel: destino de domínio não editável + 502 API
 
-- UI DomÃ­nios: destino `http://typebot_api-typebot-crm:3333/` Ã© **automÃ¡tico** (normal); utilizador nÃ£o altera manualmente.
-- Testes no contentor: `api-typebot-crm:3333` OK; `typebot_api-typebot-crm:3333` falha â†’ proxy usa hostname que nÃ£o conecta.
+- UI Domínios: destino `http://typebot_api-typebot-crm:3333/` é **automático** (normal); utilizador não altera manualmente.
+- Testes no contentor: `api-typebot-crm:3333` OK; `typebot_api-typebot-crm:3333` falha → proxy usa hostname que não conecta.
 - Externo ainda 502 em `app.chattypebot.com` e host `*.easypanel.host`.
-- Doc operacional: `doc/FIX-EASYPANEL-API-502-DOMINIO.md` (renomear serviÃ§o para `api` ou validar `HOST=0.0.0.0` + porta 3333 na engrenagem).
-- `EASYPANEL-AMBIENTE.env.example`: incluÃ­do `HOST=0.0.0.0`.
+- Doc operacional: `doc/FIX-EASYPANEL-API-502-DOMINIO.md` (renomear serviço para `api` ou validar `HOST=0.0.0.0` + porta 3333 na engrenagem).
+- `EASYPANEL-AMBIENTE.env.example`: incluído `HOST=0.0.0.0`.
 
 ## 2026-05-28 - Fix bind host API (evitar 502 com upstream interno)
 
 - Ajuste em `apps/api/src/server.ts`: `app.listen(port, host)` com `HOST` (default `0.0.0.0`).
-- Antes, sem host explÃ­cito, o runtime podia ficar inacessÃ­vel via rede interna do proxy (localhost ok, domÃ­nio 502).
+- Antes, sem host explícito, o runtime podia ficar inacessível via rede interna do proxy (localhost ok, domínio 502).
 - Build API validado (`npm run build:api`).
-- PrÃ³ximo passo: commit/push + deploy `api-typebot-crm`.
+- Próximo passo: commit/push + deploy `api-typebot-crm`.
 
 ## 2026-05-28 - Fix Asaas 404 no checkout recorrente
 
 - Causa raiz: endpoint incorreto `POST /v3/checkoutSessions`.
-- CorreÃ§Ã£o: cliente Asaas alterado para `POST /v3/checkouts` (endpoint oficial do Checkout Asaas).
+- Correção: cliente Asaas alterado para `POST /v3/checkouts` (endpoint oficial do Checkout Asaas).
 - Arquivo: `apps/api/src/billing/asaas.client.ts`.
-- AÃ§Ã£o: deploy necessÃ¡rio do serviÃ§o **api-typebot-crm**.
+- Ação: deploy necessário do serviço **api-typebot-crm**.
 
-## 2026-05-28 - Modal: botÃµes de pagamento ainda menores + estado do CTA
+## 2026-05-28 - Modal: botões de pagamento ainda menores + estado do CTA
 
-- Seletor Pix/CartÃ£o reduzido novamente (altura, Ã­cone, tipografia e espaÃ§amento).
-- BotÃ£o **Confirmar pagamento** agora muda de cor por estado:
+- Seletor Pix/Cartão reduzido novamente (altura, ícone, tipografia e espaçamento).
+- Botão **Confirmar pagamento** agora muda de cor por estado:
   - inativo: `bg-muted` + texto `muted-foreground`;
-  - ativo: volta para cor original primÃ¡ria.
+  - ativo: volta para cor original primária.
 - Arquivos: `apps/sales/src/components/sales/PaymentMethodSelector.tsx` e `apps/sales/src/routes/index.tsx` (+ sync PV temp).
 
-## 2026-05-27 - Modal: forma de pagamento no final + botÃ£o bloqueado
+## 2026-05-27 - Modal: forma de pagamento no final + botão bloqueado
 
-- Ordem do formulÃ¡rio ajustada: Pix/CartÃ£o agora aparece apÃ³s o campo Celular.
-- BotÃ£o alterado para **Confirmar pagamento** e fica desabilitado atÃ©:
-  - nome, e-mail, CPF/CNPJ e celular vÃ¡lidos;
+- Ordem do formulário ajustada: Pix/Cartão agora aparece após o campo Celular.
+- Botão alterado para **Confirmar pagamento** e fica desabilitado até:
+  - nome, e-mail, CPF/CNPJ e celular válidos;
   - forma de pagamento selecionada.
-- `billingType` inicia nulo e sÃ³ habilita submit apÃ³s escolha explÃ­cita do usuÃ¡rio.
+- `billingType` inicia nulo e só habilita submit após escolha explícita do usuário.
 - Arquivos: `apps/sales/src/routes/index.tsx`, `apps/sales/src/components/sales/PaymentMethodSelector.tsx` (+ sync PV temp).
 
-## 2026-05-27 - Ajuste visual seletor Pix/CartÃ£o (mais discreto)
+## 2026-05-27 - Ajuste visual seletor Pix/Cartão (mais discreto)
 
-- Cards de pagamento reduzidos no modal: menor altura, Ã­cones menores, borda simples, menos brilho.
-- Mantida a seleÃ§Ã£o visual com foco de acessibilidade e contraste.
-- Arquivos: `apps/sales/src/components/sales/PaymentMethodSelector.tsx` e cÃ³pia em `_pv-typebot-chat-temp`.
+- Cards de pagamento reduzidos no modal: menor altura, ícones menores, borda simples, menos brilho.
+- Mantida a seleção visual com foco de acessibilidade e contraste.
+- Arquivos: `apps/sales/src/components/sales/PaymentMethodSelector.tsx` e cópia em `_pv-typebot-chat-temp`.
 
-## 2026-05-27 - Checkout Asaas: Pix ou CartÃ£o (Checkout Session RECURRENT)
+## 2026-05-27 - Checkout Asaas: Pix ou Cartão (Checkout Session RECURRENT)
 
-- MigraÃ§Ã£o de `POST /subscriptions` + `UNDEFINED` para `POST /checkoutSessions` com `chargeTypes: RECURRENT`.
-- Modal LP: seletor Pix / CartÃ£o com Ã­cones (`PaymentMethodSelector`); envia `billingType` Ã  API.
-- API envia `billingTypes: [PIX|CREDIT_CARD]` â€” sÃ³ a forma escolhida no checkout Asaas.
+- Migração de `POST /subscriptions` + `UNDEFINED` para `POST /checkoutSessions` com `chargeTypes: RECURRENT`.
+- Modal LP: seletor Pix / Cartão com ícones (`PaymentMethodSelector`); envia `billingType` à API.
+- API envia `billingTypes: [PIX|CREDIT_CARD]` — só a forma escolhida no checkout Asaas.
 - Env API: `SALES_LANDING_URL`, `SALES_CHECKOUT_SUCCESS_URL` (opcional cancel/expired).
 - Deploy: **api-typebot-crm** + **paginadevendas**.
 
 ## 2026-05-27 - Checkout Asaas: campo celular no modal
 
-- Erro Â«O celular informado Ã© invÃ¡lidoÂ»: API enviava `11999999999` sem campo na LP.
-- Asaas exige `mobilePhone` vÃ¡lido em `POST /customers` (DDD + 9 dÃ­gitos).
-- Modal: **Celular (WhatsApp)**; API `formatBrazilMobileForAsaas`; schema `whatsapp` obrigatÃ³rio.
+- Erro «O celular informado é inválido»: API enviava `11999999999` sem campo na LP.
+- Asaas exige `mobilePhone` válido em `POST /customers` (DDD + 9 dígitos).
+- Modal: **Celular (WhatsApp)**; API `formatBrazilMobileForAsaas`; schema `whatsapp` obrigatório.
 - Deploy: **api-typebot-crm** (typeBot) + **paginadevendas** (PV `dd8a77d`).
 
-## 2026-05-27 - DNS `api` criado (A â†’ 72.60.51.127)
+## 2026-05-27 - DNS `api` criado (A → 72.60.51.127)
 
 - Removido CNAME antigo `soma-api-typebot-crm.achpyp.easypanel.host`.
-- Criado **A** `api.chattypebot.com` â†’ `72.60.51.127` (igual painel/app).
-- Pendente: propagaÃ§Ã£o DNS; Easypanel `api-typebot-crm` â†’ domÃ­nio + TLS; teste `/health`; rebuild LP se necessÃ¡rio.
+- Criado **A** `api.chattypebot.com` → `72.60.51.127` (igual painel/app).
+- Pendente: propagação DNS; Easypanel `api-typebot-crm` → domínio + TLS; teste `/health`; rebuild LP se necessário.
 
 ## 2026-05-27 - DNS `api.chattypebot.com` inexistente (checkout landing)
 
-- Sintoma: Â«Sem ligaÃ§Ã£o Ã  API em https://api.chattypebot.comÂ» + hint `/health`.
-- Teste: `api.chattypebot.com` â†’ **NXDOMAIN**; `app.chattypebot.com/health` â†’ **200 OK** (`typebot-saas-api`); `typebot-api-typebot-crm.achpyp.easypanel.host/health` â†’ OK.
-- `painel` e `app` â†’ A `72.60.51.127`; falta registo **A `api`** + domÃ­nio Easypanel no `api-typebot-crm`.
+- Sintoma: «Sem ligação à API em https://api.chattypebot.com» + hint `/health`.
+- Teste: `api.chattypebot.com` → **NXDOMAIN**; `app.chattypebot.com/health` → **200 OK** (`typebot-saas-api`); `typebot-api-typebot-crm.achpyp.easypanel.host/health` → OK.
+- `painel` e `app` → A `72.60.51.127`; falta registo **A `api`** + domínio Easypanel no `api-typebot-crm`.
 - Doc: `doc/DNS-api-chattypebot-com.md`. Contorno build LP: `VITE_API_BASE_URL=https://app.chattypebot.com`.
-- `/api/public/sales/plans` ainda 404 em produÃ§Ã£o â†’ redeploy API com billing.
+- `/api/public/sales/plans` ainda 404 em produção → redeploy API com billing.
 
-## 2026-05-27 - Modal assinatura: espaÃ§o label Ã— input
+## 2026-05-27 - Modal assinatura: espaço label × input
 
-- FormulÃ¡rio checkout: grupos `flex flex-col gap-3` (antes `space-y-2`), form `space-y-5`, dialog `gap-6`, labels com `leading-normal`.
+- Formulário checkout: grupos `flex flex-col gap-3` (antes `space-y-2`), form `space-y-5`, dialog `gap-6`, labels com `leading-normal`.
 - Arquivos: `apps/sales/src/routes/index.tsx` + push `PV-typebot-chat`.
 
-## 2026-05-27 - Deploy paginadevendas: repo correto Ã© PV-typebot-chat
+## 2026-05-27 - Deploy paginadevendas: repo correto é PV-typebot-chat
 
-- **Causa do â€œnada mudouâ€:** Easypanel `paginadevendas` aponta para `walkup-tec/PV-typebot-chat` (app na raiz), **nÃ£o** para `walkup-tec/typeBot` / `apps/sales`.
-- Redeploy sÃ³ puxava commit antigo `f3451d4` (Nixpacks fix) â€” preÃ§os/copy estavam sÃ³ no monorepo local.
-- **Sync + push:** `_pv-typebot-chat-temp` â†’ commit `8f6f6cf` em `main`: preÃ§os 290/2280, copy filtros/WhatsApp, `salesApi` sem localhost em prod, `check-prod-vite-api.mjs`, marcador `data-build="20260527-pv-preco-290-anual-2280-copy-filtros"` na seÃ§Ã£o `#planos`.
-- **ApÃ³s redeploy:** no log do build deve aparecer `8f6f6cf` (nÃ£o `f3451d4`). Na pÃ¡gina, inspecionar `#planos` e o atributo `data-build`.
-- **Build env obrigatÃ³rio:** `VITE_API_BASE_URL=https://api.chattypebot.com`, `VITE_PAINEL_URL=https://painel.chattypebot.com`.
+- **Causa do “nada mudou”:** Easypanel `paginadevendas` aponta para `walkup-tec/PV-typebot-chat` (app na raiz), **não** para `walkup-tec/typeBot` / `apps/sales`.
+- Redeploy só puxava commit antigo `f3451d4` (Nixpacks fix) — preços/copy estavam só no monorepo local.
+- **Sync + push:** `_pv-typebot-chat-temp` → commit `8f6f6cf` em `main`: preços 290/2280, copy filtros/WhatsApp, `salesApi` sem localhost em prod, `check-prod-vite-api.mjs`, marcador `data-build="20260527-pv-preco-290-anual-2280-copy-filtros"` na seção `#planos`.
+- **Após redeploy:** no log do build deve aparecer `8f6f6cf` (não `f3451d4`). Na página, inspecionar `#planos` e o atributo `data-build`.
+- **Build env obrigatório:** `VITE_API_BASE_URL=https://api.chattypebot.com`, `VITE_PAINEL_URL=https://painel.chattypebot.com`.
 - Doc: `doc/EASYPANEL-PAGINA-VENDAS.md`.
 
 ## 2026-05-27 - Ajuste de copy na landing (plano Business)
 
-- SubstituÃ­do: `Analytics avanÃ§ado e relatÃ³rios` â†’ `Filtros e exportaÃ§Ã£o para sua carteira de clientes`.
-- SubstituÃ­do: `Suporte prioritÃ¡rio` â†’ `Suporte via comunidade do WhatsApp`.
+- Substituído: `Analytics avançado e relatórios` → `Filtros e exportação para sua carteira de clientes`.
+- Substituído: `Suporte prioritário` → `Suporte via comunidade do WhatsApp`.
 - Arquivo: `apps/sales/src/routes/index.tsx`.
 
-## 2026-05-27 - Ajuste de preÃ§o assinatura (Asaas + landing)
+## 2026-05-27 - Ajuste de preço assinatura (Asaas + landing)
 
-- Novo preÃ§o **mensal**: `R$ 290,00`.
-- Novo preÃ§o **anual**: `R$ 2.280,00` (equivalente a `R$ 190,00/mÃªs`).
+- Novo preço **mensal**: `R$ 290,00`.
+- Novo preço **anual**: `R$ 2.280,00` (equivalente a `R$ 190,00/mês`).
 - Economia exibida no toggle anual: `R$ 1.200,00`.
 - Ajustado em defaults da API (`billing-plans.ts`) e fallback da landing (`apps/sales/src/routes/index.tsx`).
 - Ajustado exemplos de ambiente: `.env.example` e `doc/EASYPANEL-AMBIENTE.env.example`.
 
-## 2026-05-26 - IntegraÃ§Ã£o landing + Asaas (retomada)
+## 2026-05-26 - Integração landing + Asaas (retomada)
 
-- **API:** `registerBillingRoutes` em `server.ts`; mÃ³dulo `apps/api/src/billing/*` versionado.
+- **API:** `registerBillingRoutes` em `server.ts`; módulo `apps/api/src/billing/*` versionado.
 - Rotas: `GET /api/public/sales/plans`, `POST /api/public/sales/subscriptions`, `POST /api/webhooks/asaas`.
-- **Landing** (`apps/sales`): preÃ§os via `fetchSalesPlans`; checkout â†’ redirect `invoiceUrl` Asaas.
-- **Fix:** `asaasPaymentId` gravado na assinatura; reconciliaÃ§Ã£o por subscription.
+- **Landing** (`apps/sales`): preços via `fetchSalesPlans`; checkout → redirect `invoiceUrl` Asaas.
+- **Fix:** `asaasPaymentId` gravado na assinatura; reconciliação por subscription.
 - **Env API (Easypanel):** `ASAAS_API_KEY`, `ASAAS_API_BASE_URL`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `SALES_PLAN_*`, `SYSTEM_LOGIN_URL`, SMTP.
 - **Webhook Asaas:** `POST https://api.chattypebot.com/api/webhooks/asaas` + header `asaas-access-token`.
-- **Landing env:** sÃ³ `VITE_API_BASE_URL`, `VITE_PAINEL_URL` (sem chaves Asaas).
-- Pendente: configurar secrets em produÃ§Ã£o + teste E2E sandbox.
+- **Landing env:** só `VITE_API_BASE_URL`, `VITE_PAINEL_URL` (sem chaves Asaas).
+- Pendente: configurar secrets em produção + teste E2E sandbox.
 
 ## 2026-05-26 - Lista de clientes: coluna Telefone + tabela ocupa tela toda
 
-- Colunas: Nome | CPF | **Telefone (copiar)** | Fluxo/Produto | Atualizado em | Etiquetas | **AÃ§Ãµes** (sempre por Ãºltimo).
-- `ClientsListScreen`: botÃ£o copiar usa `copyTextToClipboard`.
-- CSS: `table-layout: fixed` + `width: 100%` para ocupar a tela; larguras fixas para Telefone/Etiquetas/AÃ§Ãµes.
-- Commit `8733c50` â€” telefone + copiar.
-- Commit `6572e3f` â€” fix layout: `colgroup` %, track 100%, sem scroll horizontal quando cabe; `data-build="20260526-clients-table-fit-v8"`.
+- Colunas: Nome | CPF | **Telefone (copiar)** | Fluxo/Produto | Atualizado em | Etiquetas | **Ações** (sempre por último).
+- `ClientsListScreen`: botão copiar usa `copyTextToClipboard`.
+- CSS: `table-layout: fixed` + `width: 100%` para ocupar a tela; larguras fixas para Telefone/Etiquetas/Ações.
+- Commit `8733c50` — telefone + copiar.
+- Commit `6572e3f` — fix layout: `colgroup` %, track 100%, sem scroll horizontal quando cabe; `data-build="20260526-clients-table-fit-v8"`.
 
 ## 2026-05-20 - Lista de clientes: coluna Etiquetas
 
-- Colunas: Nome | CPF | Fluxo/Produto | Atualizado em | **Etiquetas** | **AÃ§Ãµes** (AÃ§Ãµes sempre por Ãºltimo).
+- Colunas: Nome | CPF | Fluxo/Produto | Atualizado em | **Etiquetas** | **Ações** (Ações sempre por último).
 - `data-build="20260520-clients-actions-last-v6"`.
 - Rebuild **painel-typebot-crm** + Ctrl+F5.
 
 ## 2026-05-20 - Lista de clientes: colunas fixas + nome do fluxo
 
-- Colunas: Nome, CPF, Fluxo/Produto, Atualizado em, AÃ§Ãµes (WhatsApp + lupa).
-- Fluxo/Produto usa `displayLabel` (nome cadastrado), nÃ£o nickname/alias.
+- Colunas: Nome, CPF, Fluxo/Produto, Atualizado em, Ações (WhatsApp + lupa).
+- Fluxo/Produto usa `displayLabel` (nome cadastrado), não nickname/alias.
 - API master `/queue/contacts` passa `sourceFlowDisplayName`.
-- Commit `4dc5372` â€” rebuild **painel** + **api**.
+- Commit `4dc5372` — rebuild **painel** + **api**.
 
 ## 2026-05-20 - Lista de clientes: barra horizontal fixa (v2)
 
 - `ClientsTableScrollArea`: scroll vertical na tabela + **barra horizontal separada** sempre na base (sincronizada com `translateX`).
-- `content--client-list` com `height: 100dvh` e `overflow: hidden` (sem scroll da pÃ¡gina).
-- Commit `a9207b2` â€” rebuild painel + Ctrl+F5; conferir `data-build="20260520-clients-hscroll-v2"` no HTML.
+- `content--client-list` com `height: 100dvh` e `overflow: hidden` (sem scroll da página).
+- Commit `a9207b2` — rebuild painel + Ctrl+F5; conferir `data-build="20260520-clients-hscroll-v2"` no HTML.
 
 ## 2026-05-20 - Fix Kanban por etiqueta (labelIds do lead)
 
-- **Causa:** quadro sÃ³ lia `kanbanColumnId` manual (ex. colunas personalizadas Segundaâ€“Sexta); ao mudar para "Ordem de etiquetas" os IDs nÃ£o batiam â†’ "Coluna nÃ£o encontrada".
-- **CorreÃ§Ã£o:** `buildKanbanBoard` usa `labelIds`/`labels` do contato quando `organizeBy === "labels"`; prioridade usa `priorityId`; personalizado mantÃ©m coluna manual.
+- **Causa:** quadro só lia `kanbanColumnId` manual (ex. colunas personalizadas Segunda–Sexta); ao mudar para "Ordem de etiquetas" os IDs não batiam → "Coluna não encontrada".
+- **Correção:** `buildKanbanBoard` usa `labelIds`/`labels` do contato quando `organizeBy === "labels"`; prioridade usa `priorityId`; personalizado mantém coluna manual.
 - Colunas auxiliares: "Sem etiqueta", "Etapa manual desatualizada".
 
 ## 2026-05-20 - Modal lead: WhatsApp ao lado do nome (exceto fila ao vivo)
 
-- BotÃ£o verde inline no topo do `LeadDetailModal` quando hÃ¡ WhatsApp; oculto em `activeScreen === "liveQueue"`.
-- `LeadWhatsappOpenButton.tsx` â€” abre WhatsApp Web com saudaÃ§Ã£o.
+- Botão verde inline no topo do `LeadDetailModal` quando há WhatsApp; oculto em `activeScreen === "liveQueue"`.
+- `LeadWhatsappOpenButton.tsx` — abre WhatsApp Web com saudação.
 
 ## 2026-05-20 - Kanban operacional (leads nas colunas)
 
-- **Antes:** `KanbanBoardPreview` sÃ³ mostrava colunas vazias (prÃ©via).
+- **Antes:** `KanbanBoardPreview` só mostrava colunas vazias (prévia).
 - **Agora:** `KanbanBoard` agrupa `queueItems` por `kanbanColumnId`/`kanbanColumnName`; layout `content--kanban` em tela cheia.
-- Commit `3fb8d7c` â€” rebuild **painel-typebot-crm**; Ctrl+F5. Atribuir coluna no handoff (Ã­cone Kanban) e **Atualizar** no quadro.
+- Commit `3fb8d7c` — rebuild **painel-typebot-crm**; Ctrl+F5. Atribuir coluna no handoff (ícone Kanban) e **Atualizar** no quadro.
 
-## 2026-05-20 - Fix botÃµes Copiar (nome/WhatsApp/CPF)
+## 2026-05-20 - Fix botões Copiar (nome/WhatsApp/CPF)
 
-- **Causa:** `navigator.clipboard` falha em iframe da Fila ao vivo sem permissÃ£o; erro era silencioso.
-- **CorreÃ§Ã£o:** `copyToClipboard.ts` com fallback `execCommand`; `allow="clipboard-write"` no iframe; feedback no drawer/modal.
-- Commit `b17043e` â€” rebuild **api-typebot-crm** + **painel-typebot-crm**.
+- **Causa:** `navigator.clipboard` falha em iframe da Fila ao vivo sem permissão; erro era silencioso.
+- **Correção:** `copyToClipboard.ts` com fallback `execCommand`; `allow="clipboard-write"` no iframe; feedback no drawer/modal.
+- Commit `b17043e` — rebuild **api-typebot-crm** + **painel-typebot-crm**.
 
-## 2026-05-20 - Handoff: Ã­cones Kanban/Agenda sem label lateral
+## 2026-05-20 - Handoff: ícones Kanban/Agenda sem label lateral
 
 - Removidos badges `leadKanbanBadge` / `leadScheduleBadge` (ex.: "Segunda", "22/05, 06:27").
-- Ãcones com classe `.is-set` (verde) quando hÃ¡ coluna ou agendamento.
+- Ícones com classe `.is-set` (verde) quando há coluna ou agendamento.
 - Clique abre menu: valor atual + remover + definir novo.
-- Commit `6bfc0f8`, push `origin/master` OK â€” rebuild **api-typebot-crm** no Easypanel; Ctrl+F5 na Fila ao vivo.
+- Commit `6bfc0f8`, push `origin/master` OK — rebuild **api-typebot-crm** no Easypanel; Ctrl+F5 na Fila ao vivo.
 
 ## 2026-05-20 - Fila ao vivo: filtros em dropdown (estilo Chatwoot)
 
-- Toolbar inline: `[Pesquisa][Ã­cone filtro]`; opÃ§Ãµes em dropdown (propriedades, etiquetas, produtos).
-- `LiveInboxToolbar.tsx`, `styles.css` â€” deploy painel.
+- Toolbar inline: `[Pesquisa][ícone filtro]`; opções em dropdown (propriedades, etiquetas, produtos).
+- `LiveInboxToolbar.tsx`, `styles.css` — deploy painel.
 
 ## 2026-05-20 - Fila ao vivo: scroll finalizado, Kanban no lead, filtros
 
-1. **Scroll histÃ³rico (finalizado):** `.is-ended .widget-chat` com `overflow-y:auto` e `pointer-events:auto`; sÃ³ o input permanece bloqueado.
-2. **Kanban no lead:** Ã­cone de colunas ao lado do calendÃ¡rio no handoff; `kanbanColumnId`/`kanbanColumnName` no contato; colunas conforme config do tenant (prioridade/etiquetas/personalizado).
-3. **Filtros na fila:** barra acima das abas â€” busca (nome, WhatsApp, CPF, contexto), chips de propriedades, etiquetas e produtos (fluxos); Limpar filtros.
+1. **Scroll histórico (finalizado):** `.is-ended .widget-chat` com `overflow-y:auto` e `pointer-events:auto`; só o input permanece bloqueado.
+2. **Kanban no lead:** ícone de colunas ao lado do calendário no handoff; `kanbanColumnId`/`kanbanColumnName` no contato; colunas conforme config do tenant (prioridade/etiquetas/personalizado).
+3. **Filtros na fila:** barra acima das abas — busca (nome, WhatsApp, CPF, contexto), chips de propriedades, etiquetas e produtos (fluxos); Limpar filtros.
 4. **Deploy:** rebuild **api-typebot-crm** + **painel-typebot-crm**.
 
-## 2026-05-20 - Agendamento: botÃ£o Limpar filtros
+## 2026-05-20 - Agendamento: botão Limpar filtros
 
-- Toolbar: `Limpar filtros` restaura Essa semana, datas De/AtÃ© hoje, aba Todos, sem etiquetas, prioridade padrÃ£o (primeira do cadastro).
-- Desabilitado quando jÃ¡ estÃ¡ no estado padrÃ£o.
+- Toolbar: `Limpar filtros` restaura Essa semana, datas De/Até hoje, aba Todos, sem etiquetas, prioridade padrão (primeira do cadastro).
+- Desabilitado quando já está no estado padrão.
 
 ## 2026-05-20 - Push deploy agendamento (230944c)
 
-- **Problema:** commit `607ae37` ficou sÃ³ local (`ahead 1`); Easypanel nÃ£o via cÃ³digo novo.
-- **CorreÃ§Ã£o:** amend â†’ `230944c`, mensagem `deploy[painel-typebot-crm+api-typebot-crm]: ...`, `git push origin master` OK.
+- **Problema:** commit `607ae37` ficou só local (`ahead 1`); Easypanel não via código novo.
+- **Correção:** amend → `230944c`, mensagem `deploy[painel-typebot-crm+api-typebot-crm]: ...`, `git push origin master` OK.
 - **Marcador:** `data-build="20260520-agendamento-card-v2"` em `SchedulingScreen`.
 - Rebuild **painel-typebot-crm** + **api-typebot-crm**; Ctrl+F5 no Agendamento.
 
 ## 2026-05-20 - Layout card Agendamento (alinhamento mockup)
 
-- Card em duas colunas: esquerda (nome â†’ WhatsApp â†’ tags); direita (data/hora ciano + botÃ£o Ver lead centralizado).
+- Card em duas colunas: esquerda (nome → WhatsApp → tags); direita (data/hora ciano + botão Ver lead centralizado).
 - Ordem tags: prioridade, atendente, fluxo, etiquetas (sem pill de status no card).
-- `SchedulingScreen.tsx`, `styles.css` â€” deploy **painel-typebot-crm**.
+- `SchedulingScreen.tsx`, `styles.css` — deploy **painel-typebot-crm**.
 
-## 2026-05-20 - Fix nome prioridade/etiqueta apÃ³s renomear no cadastro
+## 2026-05-20 - Fix nome prioridade/etiqueta após renomear no cadastro
 
-- **Causa:** `priorityName`/`labelName` eram snapshot no lead; editar no catÃ¡logo nÃ£o atualizava `queue-state.json`.
-- **Leitura:** `withNormalizedQueueContact` resolve nome/cor pelo `priorityId`/`labelIds` no repositÃ³rio do tenant.
+- **Causa:** `priorityName`/`labelName` eram snapshot no lead; editar no catálogo não atualizava `queue-state.json`.
+- **Leitura:** `withNormalizedQueueContact` resolve nome/cor pelo `priorityId`/`labelIds` no repositório do tenant.
 - **Escrita:** ao `PATCH` prioridade/etiqueta, `queueRepository.propagatePriorityRename` / `propagateLabelRename` atualiza contatos afetados.
 - **Arquivos:** `lead-agent-notes.ts`, `queue.repository.ts`, `priority.routes.ts`, `label.routes.ts`.
-- **Deploy:** rebuild **api-typebot-crm** (sem mudanÃ§a no painel).
+- **Deploy:** rebuild **api-typebot-crm** (sem mudança no painel).
 
 ## 2026-05-20 - Menu Agendamento (painel)
 
-- Tela `SchedulingScreen`: leads com `scheduledAt` no perÃ­odo.
-- Filtros inline: Essa semana (+7d), 15 dias, 30 dias, perÃ­odo custom De/AtÃ©.
-- Abas: Prioridades (select), Etiquetas (multi), Todos; ordenaÃ§Ã£o por data/hora.
+- Tela `SchedulingScreen`: leads com `scheduledAt` no período.
+- Filtros inline: Essa semana (+7d), 15 dias, 30 dias, período custom De/Até.
+- Abas: Prioridades (select), Etiquetas (multi), Todos; ordenação por data/hora.
 
 ## 2026-05-20 - Fix troca de abas Fila ao vivo + sidebar mais larga
 
-- Removido `useEffect` que forÃ§ava aba Hoje/Minhas conforme lead selecionado (bug ao clicar NÃ£o atribuÃ­das).
-- `handleTabChange`: respeita fila escolhida e reseleciona sÃ³ contatos daquela fila.
-- Sidebar filas: ~480px / 44vw; abas com scroll horizontal se necessÃ¡rio.
+- Removido `useEffect` que forçava aba Hoje/Minhas conforme lead selecionado (bug ao clicar Não atribuídas).
+- `handleTabChange`: respeita fila escolhida e reseleciona só contatos daquela fila.
+- Sidebar filas: ~480px / 44vw; abas com scroll horizontal se necessário.
 
 ## 2026-05-20 - Chat abre em lead finalizado (somente leitura)
 
-- Fila ao vivo: iframe do handoff abre tambÃ©m para `status: closed`.
-- Handoff: banner de encerrado; input/anexo bloqueados; histÃ³rico e drawer do lead ativos.
+- Fila ao vivo: iframe do handoff abre também para `status: closed`.
+- Handoff: banner de encerrado; input/anexo bloqueados; histórico e drawer do lead ativos.
 
 ## 2026-05-20 - Aba Hoje na Fila ao vivo
 
 - Nova aba **Hoje** antes de Minhas: leads com `scheduledAt` no dia atual (America/Sao_Paulo).
-- OrdenaÃ§Ã£o por horÃ¡rio do agendamento; na lista mostra hora do retorno em vez de "Xm".
+- Ordenação por horário do agendamento; na lista mostra hora do retorno em vez de "Xm".
 
 ## 2026-05-20 - Fix fuso agendamento lead (label vs input)
 
-- **Causa:** `datetime-local` enviado sem timezone; API em UTC gravava 11:03 como UTC â†’ badge 08:03 no Brasil.
-- **CorreÃ§Ã£o:** browser converte para ISO (`datetimeLocalToIso`); API `normalizeScheduledAtStorage` com fallback `-03:00` para datetime-local legado.
+- **Causa:** `datetime-local` enviado sem timezone; API em UTC gravava 11:03 como UTC → badge 08:03 no Brasil.
+- **Correção:** browser converte para ISO (`datetimeLocalToIso`); API `normalizeScheduledAtStorage` com fallback `-03:00` para datetime-local legado.
 
 ## 2026-05-20 - UI fila: margem etiquetas + baixar imagem anexo
 
-- `.live-inbox-tags` â€” `margin-top: 12px` (afasta do pill Em atendimento).
+- `.live-inbox-tags` — `margin-top: 12px` (afasta do pill Em atendimento).
 - Anexos imagem: link **Baixar** igual aos docs (`handoff-view`, `LeadDetailModal`, `LeadDrawerPanel`).
 
 ## 2026-05-20 - Deploy fila ao vivo (commit d45d5b2)
@@ -329,94 +339,94 @@
 
 ## 2026-05-20 - Anexos PDF/Word no detalhamento do lead
 
-- **Causa:** limite de 260 KB (base64) valia tambÃ©m para documentos; PDF/Word estouravam no cliente e na API (max 300 KB).
-- **CorreÃ§Ã£o:** imagens ~280 KB comprimidas; documentos atÃ© 4 MB / 6 MB base64; MIME por extensÃ£o; mensagens de erro claras.
+- **Causa:** limite de 260 KB (base64) valia também para documentos; PDF/Word estouravam no cliente e na API (max 300 KB).
+- **Correção:** imagens ~280 KB comprimidas; documentos até 4 MB / 6 MB base64; MIME por extensão; mensagens de erro claras.
 - **Arquivos:** `lead-attachment-limits.ts`, `queue.service.ts`, `queue.routes.ts`, `WidgetApp.tsx`.
 
 ## 2026-05-20 - Pill "Em atendimento" + salvar nome do lead
 
-- **Padding:** `.live-inbox-status-pill` â€” `padding: 5px 10px`, `line-height: 1.2`, `margin-top: 6px`.
-- **Nome do lead:** `contactNameOverride` + `nome_contato` com prioridade sobre `nome_completo`/variÃ¡veis Typebot; campo `contactName` do registro antes de fallback `nome`/`Nome`; chaves `nome contato` / `nomeContato` reconhecidas.
-- **Handoff drawer:** `resolveLeadContactNameDisplay` no preenchimento; **Salvar alteraÃ§Ãµes** grava nome antes da nota (evita nota resetar input); `notifyParentQueueUpdated` apÃ³s PATCH profile.
+- **Padding:** `.live-inbox-status-pill` — `padding: 5px 10px`, `line-height: 1.2`, `margin-top: 6px`.
+- **Nome do lead:** `contactNameOverride` + `nome_contato` com prioridade sobre `nome_completo`/variáveis Typebot; campo `contactName` do registro antes de fallback `nome`/`Nome`; chaves `nome contato` / `nomeContato` reconhecidas.
+- **Handoff drawer:** `resolveLeadContactNameDisplay` no preenchimento; **Salvar alterações** grava nome antes da nota (evita nota resetar input); `notifyParentQueueUpdated` após PATCH profile.
 - **Arquivos:** `lead-contact-name.ts`, `leadContactData.ts`, `queue.routes.ts`, `styles.css`.
 - **Build:** `build:api` OK.
 
 ## 2026-05-20 - Menu lead na Fila ao vivo (etiquetas, propriedade, atendente, fixar)
 
-- **Header chat:** menu (â˜°) + agendamento; submenus no hover.
-- **Etiquetas:** mÃºltipla seleÃ§Ã£o (`labelIds` / `labels`).
-- **Propriedade:** prioridades do tenant (antes â€œprioridadeâ€).
-- **Atendente:** atribuiÃ§Ã£o via menu; removida do drawer/modal detalhes.
+- **Header chat:** menu (☰) + agendamento; submenus no hover.
+- **Etiquetas:** múltipla seleção (`labelIds` / `labels`).
+- **Propriedade:** prioridades do tenant (antes “prioridade”).
+- **Atendente:** atribuição via menu; removida do drawer/modal detalhes.
 - **Fixar:** `isPinned` + alfinete na lista; fixados no topo.
 - **Deploy:** api-typebot-crm + painel-typebot-crm.
 
-## 2026-05-20 - Ãcone encerrar atendimento (Fila ao vivo)
+## 2026-05-20 - Ícone encerrar atendimento (Fila ao vivo)
 
-- **UI:** botÃ£o `#leadEndServiceButton` no header (Ãºltimo Ã  direita), Ã­cone `call_end` (telefone desligar), tom vermelho, confirmaÃ§Ã£o.
-- **Fix visual:** SVG antigo (cÃ­rculo+X quebrado) substituÃ­do por path Material limpo.
-- **API:** `POST /api/chat/queue/:contactId/complete` â†’ `status: closed`, mensagem de sistema, some da fila ativa.
-- **Painel:** `postMessage` `chattypebot-queue-ended` â†’ `LiveInboxScreen` limpa seleÃ§Ã£o e atualiza lista.
-- **Commit:** `264a5b1` â€” deploy **api-typebot-crm** + **painel-typebot-crm**.
+- **UI:** botão `#leadEndServiceButton` no header (último à direita), ícone `call_end` (telefone desligar), tom vermelho, confirmação.
+- **Fix visual:** SVG antigo (círculo+X quebrado) substituído por path Material limpo.
+- **API:** `POST /api/chat/queue/:contactId/complete` → `status: closed`, mensagem de sistema, some da fila ativa.
+- **Painel:** `postMessage` `chattypebot-queue-ended` → `LiveInboxScreen` limpa seleção e atualiza lista.
+- **Commit:** `264a5b1` — deploy **api-typebot-crm** + **painel-typebot-crm**.
 
-## 2026-05-20 - Tela do lead (handoff-view) nÃ£o abria
+## 2026-05-20 - Tela do lead (handoff-view) não abria
 
-- **Causa:** `HANDOFF_PUBLIC_BASE_URL=https://api.chattypebot.com` (DNS inativo); chat do lead sÃ³ liberava em `in_service` sem estado inicial.
-- **CorreÃ§Ã£o:** canonicaliza `api.*` â†’ `app.chattypebot.com`; tenantId da fila prioriza contato; libera chat se `in_service` ou `waiting`+atendente; POST handoff usa Host da requisiÃ§Ã£o.
+- **Causa:** `HANDOFF_PUBLIC_BASE_URL=https://api.chattypebot.com` (DNS inativo); chat do lead só liberava em `in_service` sem estado inicial.
+- **Correção:** canonicaliza `api.*` → `app.chattypebot.com`; tenantId da fila prioriza contato; libera chat se `in_service` ou `waiting`+atendente; POST handoff usa Host da requisição.
 - **Env:** `HANDOFF_PUBLIC_BASE_URL=https://app.chattypebot.com`
 - **Deploy:** rebuild `api-typebot-crm`.
 
 ## 2026-05-20 - Chat Fila ao vivo / Lead: iframe bloqueado (X-Frame-Options)
 
-- **Sintoma:** Ã­cone de imagem quebrada no painel (Fila ao vivo); lead sem chat.
-- **Causa:** `X-Frame-Options: SAMEORIGIN` na API â€” painel `painel.*` embute `app.*/handoff-view` (origem diferente). Opcional: `VITE_WIDGET_BASE_URL` â†’ `widget.chattypebot.com` sem DNS.
-- **CorreÃ§Ã£o:** `/handoff-view` usa CSP `frame-ancestors` (painel, app, api); Fila ao vivo sempre `apiBase/handoff-view`; fallback API painel â†’ `https://app.chattypebot.com`.
+- **Sintoma:** ícone de imagem quebrada no painel (Fila ao vivo); lead sem chat.
+- **Causa:** `X-Frame-Options: SAMEORIGIN` na API — painel `painel.*` embute `app.*/handoff-view` (origem diferente). Opcional: `VITE_WIDGET_BASE_URL` → `widget.chattypebot.com` sem DNS.
+- **Correção:** `/handoff-view` usa CSP `frame-ancestors` (painel, app, api); Fila ao vivo sempre `apiBase/handoff-view`; fallback API painel → `https://app.chattypebot.com`.
 - **Deploy:** rebuild **api-typebot-crm** + **painel-typebot-crm** (commit handoff iframe).
 
 ## 2026-05-20 - Handoff: GET /api/typebot/handoff (Redirect Typebot)
 
-- **Causa:** bloco **Redirect** do Typebot abre URL no browser com **GET**; endpoint sÃ³ tinha **POST** â†’ 404 em `https://app.chattypebot.com/api/typebot/handoff`.
-- **CorreÃ§Ã£o:** `GET` e `POST` no mesmo handler; GET faz **302** para `/handoff-view?...`; query params aceitos (`leadContext` JSON string).
-- **GET** usa host da requisiÃ§Ã£o para `handoffUrl` (ex. `app.chattypebot.com`); **POST** mantÃ©m `HANDOFF_PUBLIC_BASE_URL`.
-- **Typebot ideal:** Webhook **POST** â†’ mapear `url_direct`; Redirect **`{{url_direct}}`** (nÃ£o a URL do webhook).
+- **Causa:** bloco **Redirect** do Typebot abre URL no browser com **GET**; endpoint só tinha **POST** → 404 em `https://app.chattypebot.com/api/typebot/handoff`.
+- **Correção:** `GET` e `POST` no mesmo handler; GET faz **302** para `/handoff-view?...`; query params aceitos (`leadContext` JSON string).
+- **GET** usa host da requisição para `handoffUrl` (ex. `app.chattypebot.com`); **POST** mantém `HANDOFF_PUBLIC_BASE_URL`.
+- **Typebot ideal:** Webhook **POST** → mapear `url_direct`; Redirect **`{{url_direct}}`** (não a URL do webhook).
 - **Deploy:** rebuild `api-typebot-crm`.
 
-## 2026-05-20 - Metadados compartilhamento (tÃ­tulo + descriÃ§Ã£o)
+## 2026-05-20 - Metadados compartilhamento (título + descrição)
 
-- **Causa:** viewer com `<meta robots content="noindex">` quando `settings.metadata.allowIndexing` nÃ£o estÃ¡ true; WhatsApp/FB ignoram ou cacheiam preview vazio.
+- **Causa:** viewer com `<meta robots content="noindex">` quando `settings.metadata.allowIndexing` não está true; WhatsApp/FB ignoram ou cacheiam preview vazio.
 - **Teste URL Drax:** og:title, og:description e og:image **presentes** no HTML do viewer (servidor OK).
-- **CorreÃ§Ã£o API:** sync forÃ§a `allowIndexing: true`, alinha title/description, republica; `/r/:code` repassa HTML para crawlers; `GET .../flows/:id/share-preview` diagnÃ³stico.
+- **Correção API:** sync força `allowIndexing: true`, alinha title/description, republica; `/r/:code` repassa HTML para crawlers; `GET .../flows/:id/share-preview` diagnóstico.
 - **Commit:** `fix(api): metadados-compartilhamento-allowIndexing-titulo-descricao-og`
 
-## 2026-05-20 - Viewer Typebot HTTP 500 â€” env ausente (confirmado)
+## 2026-05-20 - Viewer Typebot HTTP 500 — env ausente (confirmado)
 
-- **Log viewer:** `Invalid environment variables` â†’ `DATABASE_URL`, `ENCRYPTION_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_VIEWER_URL` Required.
-- **CorreÃ§Ã£o:** copiar env do builder para `typebot-walkup-viewer`; `NEXTAUTH_URL` = URL do viewer; restart.
+- **Log viewer:** `Invalid environment variables` → `DATABASE_URL`, `ENCRYPTION_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_VIEWER_URL` Required.
+- **Correção:** copiar env do builder para `typebot-walkup-viewer`; `NEXTAUTH_URL` = URL do viewer; restart.
 - **Doc:** `doc/EASYPANEL-TYPEBOT-ENV-REFERENCIA.md` (bloco viewer completo).
 
 ## 2026-05-20 - Biblioteca fluxos assinante = workspace Typebot (filtro por workspaceId)
 
-- **Sintoma:** Drax 1 bot no builder; painel 4 fluxos + catÃ¡logo Master (CLT, Type Bot).
-- **Causa raiz:** listagem Typebot `?workspaceId=` devolvia bots de outros workspaces; catÃ¡logo Master na etapa 6.
-- **CorreÃ§Ã£o:** confirma `workspaceId` no detalhe de cada typebot; prune estrito; GET filtra resposta; painel oculta biblioteca Master se assinante tem workspace.
+- **Sintoma:** Drax 1 bot no builder; painel 4 fluxos + catálogo Master (CLT, Type Bot).
+- **Causa raiz:** listagem Typebot `?workspaceId=` devolvia bots de outros workspaces; catálogo Master na etapa 6.
+- **Correção:** confirma `workspaceId` no detalhe de cada typebot; prune estrito; GET filtra resposta; painel oculta biblioteca Master se assinante tem workspace.
 - **Commit:** `deploy(api+painel): filtra-typebots-por-workspace-remove-fluxos-antigos-drax`
-- **Deploy:** API + painel; Drax etapa 6 â†’ Atualizar lista (deve mostrar 1 fluxo).
+- **Deploy:** API + painel; Drax etapa 6 → Atualizar lista (deve mostrar 1 fluxo).
 
 ## 2026-05-20 - Importar fluxo Drax (`drax-sistemas-px5k4a3`) no Typebot
 
 - **Pedido:** importar viewer `.../drax-sistemas-px5k4a3` para workspace Drax `cmohgh7ll0014ru1cwhg90xnp` (builder vazio).
 - **Registro SaaS (backup):** `typebotRemoteId` `cmopzmivk0025ru1czpx5k4a3`, `publicId` `drax-sistemas-px5k4a3`.
-- **Script:** `scripts/import-typebot-fluxo-para-drax.ps1` â€” GET schema â†’ POST `/v1/typebots/import` â†’ PATCH `publicId` â†’ publish â†’ opcional `sync-workspace` no tenant Drax.
-- **ExecuÃ§Ã£o:** requer `TYPEBOT_TOKEN` (mesmo `TYPEBOT_BUILDER_API_TOKEN` da API). NÃ£o rodado nesta sessÃ£o (token ausente no shell).
+- **Script:** `scripts/import-typebot-fluxo-para-drax.ps1` — GET schema → POST `/v1/typebots/import` → PATCH `publicId` → publish → opcional `sync-workspace` no tenant Drax.
+- **Execução:** requer `TYPEBOT_TOKEN` (mesmo `TYPEBOT_BUILDER_API_TOKEN` da API). Não rodado nesta sessão (token ausente no shell).
 - **Log:** `doc/LOG-2026-05-20__import-fluxo-drax-typebot.md`
 
 ## 2026-05-20 - Biblioteca Master vazia (sync bloqueante + painel antigo)
 
-- **Sintoma:** painel sem botÃ£o Atualizar/Sincronizar; lista vazia; mensagem UI antiga em produÃ§Ã£o.
-- **API:** `GET source-flows` aguardava sync Typebot (sem timeout) â†’ timeout no browser; corrigido sync em background + `POST sync-source` + fetch 12s.
-- **Painel:** botÃµes Sincronizar/Atualizar na Biblioteca Master; timeouts e statusMessage.
+- **Sintoma:** painel sem botão Atualizar/Sincronizar; lista vazia; mensagem UI antiga em produção.
+- **API:** `GET source-flows` aguardava sync Typebot (sem timeout) → timeout no browser; corrigido sync em background + `POST sync-source` + fetch 12s.
+- **Painel:** botões Sincronizar/Atualizar na Biblioteca Master; timeouts e statusMessage.
 - **Deploy:** rebuild `api-typebot-crm` + `painel-typebot-crm`. Viewer 500 ainda marca fluxos como Inativo.
 - **Log:** `doc/LOG-2026-05-20__110800__fix-biblioteca-master-sync-background.md`
-- **Commits (histÃ³rico Easypanel):**
+- **Commits (histórico Easypanel):**
   - `06e30ec` deploy(api): biblioteca-master-sync-background-POST-sync-source-fluxos-inativos
   - `182b376` deploy(api): viewer-url-fallback-migracao-hosts-typebot-walkup
   - `18a2466` deploy(painel): biblioteca-master-botoes-sincronizar-etapa6-fluxos-inativos
@@ -427,195 +437,195 @@
 
 ## 2026-05-19 - MinIO + Typebot upload/avatar resolvido (Easypanel)
 
-- **MinIO** reinstalado: imagem `minio/minio:RELEASE.2025-02-03T21-03-04Z-cpuv1`; domÃ­nio API `typebot-minio` porta **9000**; console `console-typebot-minio`.
+- **MinIO** reinstalado: imagem `minio/minio:RELEASE.2025-02-03T21-03-04Z-cpuv1`; domínio API `typebot-minio` porta **9000**; console `console-typebot-minio`.
 - **Bucket** `typebot`; access key gerada (ex. `uW8cuKbPHx1LvDLCRed7`); **Anonymous** prefixo `public/` readonly; bucket Access Public.
 - **Builder/viewer:** `S3_ENDPOINT=typebot-minio.achpyp.easypanel.host`, `S3_PORT=443`, `S3_SSL=true`, `S3_ACCESS_KEY` + `S3_SECRET_KEY` da key MinIO, `S3_BUCKET=typebot`.
-- **NÃ£o usar** `S3_PUBLIC_CUSTOM_DOMAIN` se igual ao endpoint (causou **500** no builder); remover corrigiu `/signin`.
+- **Não usar** `S3_PUBLIC_CUSTOM_DOMAIN` se igual ao endpoint (causou **500** no builder); remover corrigiu `/signin`.
 - **Viewer:** `PORT=3000`, `HOSTNAME=0.0.0.0`.
 - **Status final:** utilizador confirmou tudo resolvido (login, upload avatar, builder OK).
 - **Docs:** `doc/FIX-MINIO-EASYPANEL-502.md`, `doc/REINSTALAR-MINIO-EASYPANEL.md`, `scripts/test-typebot-easypanel.ps1`.
 
 ## 2026-05-18 - Snapshot encerramento: Typebot Easypanel (login OK, imagens pendente)
 
-- **Chat:** diagnÃ³stico passo a passo builder/viewer apÃ³s migraÃ§Ã£o `soma` â†’ `typebot`.
-- **Resolvido:** `PORT=3000` + `HOSTNAME=0.0.0.0` (fim do 502); Redis `redis://:senha@typebot_typebot-walkup-redis:6379`; login via **SMTP Gmail** (`smtp.gmail.com` + senha de app) â€” caixa `walkup@` Ã© Google Workspace, nÃ£o cPanel.
-- **Pendente:** upload imagens/avatar â€” erro `generateUploadUrl` / `invalid hostname`; criar `S3_ACCESS_KEY` **sem `@`** (ex. `typebotstorage`) em builder/viewer + bucket `typebot` no MinIO.
+- **Chat:** diagnóstico passo a passo builder/viewer após migração `soma` → `typebot`.
+- **Resolvido:** `PORT=3000` + `HOSTNAME=0.0.0.0` (fim do 502); Redis `redis://:senha@typebot_typebot-walkup-redis:6379`; login via **SMTP Gmail** (`smtp.gmail.com` + senha de app) — caixa `walkup@` é Google Workspace, não cPanel.
+- **Pendente:** upload imagens/avatar — erro `generateUploadUrl` / `invalid hostname`; criar `S3_ACCESS_KEY` **sem `@`** (ex. `typebotstorage`) em builder/viewer + bucket `typebot` no MinIO.
 - **Docs retomada:** `doc/LOG-2026-05-18__205226__snapshot-encerramento-typebot-easypanel.md`, `doc/EASYPANEL-TYPEBOT-ENV-REFERENCIA.md`.
-- **Git pushed nesta sessÃ£o:** `6e75171` (prioridades), `c78a876` (kanban). **Local nÃ£o commitado:** `masterWizardProgress.ts` (menu bloqueado wizard).
+- **Git pushed nesta sessão:** `6e75171` (prioridades), `c78a876` (kanban). **Local não commitado:** `masterWizardProgress.ts` (menu bloqueado wizard).
 
-## 2026-05-18 - Kanban: parametrizaÃ§Ã£o e prÃ©via (etapa 5 + menu)
+## 2026-05-18 - Kanban: parametrização e prévia (etapa 5 + menu)
 
-- API: `GET/PUT /api/master/tenants/:tenantId/kanban-config` â†’ `tenant-kanban-config.json`.
-- `organizeBy`: `priority` | `labels` | `custom`; colunas personalizadas (2â€“12) com nomes Ãºnicos.
+- API: `GET/PUT /api/master/tenants/:tenantId/kanban-config` → `tenant-kanban-config.json`.
+- `organizeBy`: `priority` | `labels` | `custom`; colunas personalizadas (2–12) com nomes únicos.
 - Admin: `TenantKanbanStep` (wizard), `KanbanScreen` (menu Kanban), `KanbanBoardPreview`.
 - **Deploy:** API + painel.
-- **Push:** `c78a876` â€” redeploy **api-typebot-crm** e **painel-typebot-crm**.
+- **Push:** `c78a876` — redeploy **api-typebot-crm** e **painel-typebot-crm**.
 
 ## 2026-05-18 - Prioridades no Master Console (etapa 4)
 
-- API: CRUD `/api/master/tenants/:tenantId/priorities`; persistÃªncia `tenant-priorities.json`.
-- PadrÃµes na 1Âª listagem: **Alta**, **MÃ©dia**, **Baixa** (`isDefault: true`); editar e adicionar novas.
-- Admin: `TenantPrioritiesStep.tsx` â€” input + Adicionar, lista com Editar/Remover.
+- API: CRUD `/api/master/tenants/:tenantId/priorities`; persistência `tenant-priorities.json`.
+- Padrões na 1ª listagem: **Alta**, **Média**, **Baixa** (`isDefault: true`); editar e adicionar novas.
+- Admin: `TenantPrioritiesStep.tsx` — input + Adicionar, lista com Editar/Remover.
 - **Deploy:** API + painel.
-- **Push:** `6e75171` â€” redeploy **api-typebot-crm** e **painel-typebot-crm**.
+- **Push:** `6e75171` — redeploy **api-typebot-crm** e **painel-typebot-crm**.
 
-## 2026-05-18 - Menu bloqueado atÃ© Master Console completo
+## 2026-05-18 - Menu bloqueado até Master Console completo
 
-- `apps/admin/src/masterWizardProgress.ts`: progresso das etapas 2â€“5 em `master-wizard-confirmed-by-tenant` (migra legado `master-step2-confirmed-by-tenant`).
-- `isMasterConsoleFullyConfigured`: etapas 1â€“2 OK + fluxos na biblioteca + confirmaÃ§Ã£o explÃ­cita das etapas 3, 4 e 5 (Continuar).
-- Assinante master: `allowedScreens` sÃ³ `master` atÃ© concluir; menu Kanban/Fila/Agendamento/Clientes visÃ­vel mas `menu-btn--locked` atÃ© liberar; redirect se tentar outra tela.
-- Wizard avanÃ§a sequencialmente 1â†’6; banners no Master Console (pendente / concluÃ­do).
-- **Deploy:** sÃ³ **painel-typebot-crm** (sem API).
+- `apps/admin/src/masterWizardProgress.ts`: progresso das etapas 2–5 em `master-wizard-confirmed-by-tenant` (migra legado `master-step2-confirmed-by-tenant`).
+- `isMasterConsoleFullyConfigured`: etapas 1–2 OK + fluxos na biblioteca + confirmação explícita das etapas 3, 4 e 5 (Continuar).
+- Assinante master: `allowedScreens` só `master` até concluir; menu Kanban/Fila/Agendamento/Clientes visível mas `menu-btn--locked` até liberar; redirect se tentar outra tela.
+- Wizard avança sequencialmente 1→6; banners no Master Console (pendente / concluído).
+- **Deploy:** só **painel-typebot-crm** (sem API).
 
 ## 2026-05-18 - Etiquetas: nome + cor (API + Master Console)
 
 - CRUD `/api/master/tenants/:tenantId/labels`; ficheiro `tenant-labels.json` no volume da API.
-- Etapa 3: `TenantLabelsStep` â€” `<input type="color">` + hex livre + prÃ©via.
-- **Push:** `ebe7cc6` â€” deploy **API** e **painel**.
+- Etapa 3: `TenantLabelsStep` — `<input type="color">` + hex livre + prévia.
+- **Push:** `ebe7cc6` — deploy **API** e **painel**.
 
-## 2026-05-18 - Push `d9835d6` â€” deploy sÃ³ painel
+## 2026-05-18 - Push `d9835d6` — deploy só painel
 
-- **Commit:** `d9835d6` â€” `feat(admin): Master Console 6 etapas e menu Kanban/Agendamento`
+- **Commit:** `d9835d6` — `feat(admin): Master Console 6 etapas e menu Kanban/Agendamento`
 - **GitHub:** `master` atualizado (`2bf9d42..d9835d6`)
-- **Deploy:** apenas serviÃ§o **painel-typebot-crm** no Easypanel (redeploy/rebuild). API **nÃ£o** precisa.
+- **Deploy:** apenas serviço **painel-typebot-crm** no Easypanel (redeploy/rebuild). API **não** precisa.
 - **Build env:** confirmar `VITE_API_BASE_URL` no painel antes do build.
-- **PÃ³s-deploy:** Ctrl+F5 em `painel.chattypebot.com` â€” menu Kanban, Agendamento; wizard 6 etapas.
+- **Pós-deploy:** Ctrl+F5 em `painel.chattypebot.com` — menu Kanban, Agendamento; wizard 6 etapas.
 
 ## 2026-05-18 - Menu lateral: Kanban e Agendamento (remove Configurar CRM)
 
-- `apps/admin/src/App.tsx`: removido `configureCrm`; novos ecrÃ£s `kanban` e `scheduling` (rÃ³tulo **Agendamento**).
-- Ordem operacional no menu: **Kanban** â†’ **Fila ao vivo** â†’ **Agendamento** â†’ **Lista de Clientes** (apÃ³s Master Console / Biblioteca Master / Assinantes conforme perfil).
-- Placeholders nas novas telas; cabeÃ§alho contextual via `SCREEN_PAGE_HEADER`.
+- `apps/admin/src/App.tsx`: removido `configureCrm`; novos ecrãs `kanban` e `scheduling` (rótulo **Agendamento**).
+- Ordem operacional no menu: **Kanban** → **Fila ao vivo** → **Agendamento** → **Lista de Clientes** (após Master Console / Biblioteca Master / Assinantes conforme perfil).
+- Placeholders nas novas telas; cabeçalho contextual via `SCREEN_PAGE_HEADER`.
 
 ## 2026-05-18 - Master Console: 6 etapas (Etiquetas, Prioridade, Kanban)
 
-- `apps/admin/src/App.tsx`: wizard do assinante passou de 3 para **6 etapas** na ordem: Perfil Assinante â†’ Atendente â†’ Etiquetas â†’ Prioridade â†’ Kanban â†’ Biblioteca de Fluxos.
-- Etapas 3â€“5: UI placeholder com Voltar/Continuar; funcionalidade a definir pelo utilizador.
-- Biblioteca de fluxos movida para etapa **6**; auto-import e refresh de fluxos sÃ³ quando `masterWizardStep === 6`.
+- `apps/admin/src/App.tsx`: wizard do assinante passou de 3 para **6 etapas** na ordem: Perfil Assinante → Atendente → Etiquetas → Prioridade → Kanban → Biblioteca de Fluxos.
+- Etapas 3–5: UI placeholder com Voltar/Continuar; funcionalidade a definir pelo utilizador.
+- Biblioteca de fluxos movida para etapa **6**; auto-import e refresh de fluxos só quando `masterWizardStep === 6`.
 - Constantes: `MASTER_CONSOLE_WIZARD_STEPS`, `MASTER_WIZARD_FLOWS_STEP`.
-- **Pendente:** implementar Etiquetas, Prioridade e Kanban (API + persistÃªncia).
+- **Pendente:** implementar Etiquetas, Prioridade e Kanban (API + persistência).
 
-## 2026-05-18 - MigraÃ§Ã£o Easypanel: projeto `typebot` (8 serviÃ§os)
+## 2026-05-18 - Migração Easypanel: projeto `typebot` (8 serviços)
 
-- Utilizador migrou do projeto antigo (`soma`) para **typebot**: `api-typebot-crm`, `minio`, `paginadevendas`, `painel-typebot-crm`, `typebot-walkup-builder`, `typebot-walkup-db`, `typebot-walkup-redis`, `typebot-walkup-viewer` â€” sistema fora do ar.
-- **Causas tÃ­picas pÃ³s-migraÃ§Ã£o:** domÃ­nios/DNS ainda no projeto antigo; env com URLs internas `soma-*`; volumes nÃ£o remontados na API; `VITE_*` sÃ³ no runtime (painel/LP); Typebot builder/viewer sem `DATABASE_URL`/`REDIS_URL` dos novos nomes de serviÃ§o; `CORS_ORIGIN` desatualizado.
-- **Ordem sugerida:** db + redis â†’ minio â†’ builder + viewer â†’ api (volume + Postgres) â†’ painel + paginadevendas (rebuild com VITE) â†’ DNS/TLS â†’ `/health` e login.
+- Utilizador migrou do projeto antigo (`soma`) para **typebot**: `api-typebot-crm`, `minio`, `paginadevendas`, `painel-typebot-crm`, `typebot-walkup-builder`, `typebot-walkup-db`, `typebot-walkup-redis`, `typebot-walkup-viewer` — sistema fora do ar.
+- **Causas típicas pós-migração:** domínios/DNS ainda no projeto antigo; env com URLs internas `soma-*`; volumes não remontados na API; `VITE_*` só no runtime (painel/LP); Typebot builder/viewer sem `DATABASE_URL`/`REDIS_URL` dos novos nomes de serviço; `CORS_ORIGIN` desatualizado.
+- **Ordem sugerida:** db + redis → minio → builder + viewer → api (volume + Postgres) → painel + paginadevendas (rebuild com VITE) → DNS/TLS → `/health` e login.
 - Guia detalhado: resposta ao utilizador neste chat (2026-05-18); templates em `doc/EASYPANEL-AMBIENTE.env.example`, `doc/EASYPANEL-PAINEL-VITE-build.env.example`, `doc/EASYPANEL-VOLUME-FLUXOS-FILA.md`.
 
-## 2026-05-14 - HistÃ³rico da sessÃ£o (chat): deploy API Easypanel + sync repo
+## 2026-05-14 - Histórico da sessão (chat): deploy API Easypanel + sync repo
 
-- **Pedidos no fio:** corrigir `npm ci` / Node 18 no Nixpacks; commit local do fix; explicar deploy que ainda falhava (`GIT_SHA` antigo); `git push`; pedido final â€œatualizar tudo e guardar chat no histÃ³ricoâ€.
-- **Causa raiz:** lock da raiz com `apps/*` mas `package.json` sÃ³ trÃªs apps; workspace **sales** faltava no manifest â†’ `npm ci` EUSAGE. `fix(ci)` (`d3fb934`) ficou **sÃ³ local** (`ahead 1`) â†’ Easypanel construÃ­a `a1359a5` sem correÃ§Ã£o.
-- **Commits enviados:** `d3fb934` (workspaces + lock + `nixpacks.toml`), `33f7a09` (`.nvmrc` 22, `engines.node` `22.x`), `6d29388` (memÃ³ria push). **HEAD remoto:** `6d29388` (confirmar com `git log origin/master -1`).
-- **HistÃ³rico do projeto:** snapshot deste fio em `doc/LOG-2026-05-14__220000__historico-sessao-chat-deploy-api.md`.
-- **AÃ§Ãµes locais deste pedido:** `git fetch` + `git pull --ff-only origin master` â†’ **Already up to date.**
-- **SeguranÃ§a:** logs de build colados continham secrets â€” recomenda-se **rotaÃ§Ã£o** (JWT, DB, tokens Typebot, password master).
-- **PendÃªncia operacional:** redeploy serviÃ§o API no Easypanel para `GIT_SHA` â‰¥ `6d29388` e setup **nodejs_22**.
+- **Pedidos no fio:** corrigir `npm ci` / Node 18 no Nixpacks; commit local do fix; explicar deploy que ainda falhava (`GIT_SHA` antigo); `git push`; pedido final “atualizar tudo e guardar chat no histórico”.
+- **Causa raiz:** lock da raiz com `apps/*` mas `package.json` só três apps; workspace **sales** faltava no manifest → `npm ci` EUSAGE. `fix(ci)` (`d3fb934`) ficou **só local** (`ahead 1`) → Easypanel construía `a1359a5` sem correção.
+- **Commits enviados:** `d3fb934` (workspaces + lock + `nixpacks.toml`), `33f7a09` (`.nvmrc` 22, `engines.node` `22.x`), `6d29388` (memória push). **HEAD remoto:** `6d29388` (confirmar com `git log origin/master -1`).
+- **Histórico do projeto:** snapshot deste fio em `doc/LOG-2026-05-14__220000__historico-sessao-chat-deploy-api.md`.
+- **Ações locais deste pedido:** `git fetch` + `git pull --ff-only origin master` → **Already up to date.**
+- **Segurança:** logs de build colados continham secrets — recomenda-se **rotação** (JWT, DB, tokens Typebot, password master).
+- **Pendência operacional:** redeploy serviço API no Easypanel para `GIT_SHA` ≥ `6d29388` e setup **nodejs_22**.
 
 ## 2026-05-14 - Easypanel: deploy ainda em `a1359a5` + push `master`
 
-- Log do build com `GIT_SHA=a1359a5` = remoto **sem** `fix(ci)` (`d3fb934`); local estava `ahead 1` â€” causa do mesmo erro.
+- Log do build com `GIT_SHA=a1359a5` = remoto **sem** `fix(ci)` (`d3fb934`); local estava `ahead 1` — causa do mesmo erro.
 - `git push origin master`: `a1359a5..33f7a09` (inclui `fix(ci)` + `chore(ci): .nvmrc 22 e engines 22.x`).
-- **PrÃ³ximo:** sÃ³ redeploy no Easypanel (ou aguardar auto-deploy) para apanhar `33f7a09`.
+- **Próximo:** só redeploy no Easypanel (ou aguardar auto-deploy) para apanhar `33f7a09`.
 
 ## 2026-05-14 - Easypanel API: `npm ci` EUSAGE + Node 18 vs stack sales
 
-- **Causa:** `package-lock.json` (raiz) tinha `workspaces: ["apps/*","packages/*"]` mas `package.json` listava sÃ³ `apps/api|admin|widget` â€” `npm ci` falhava com pacotes em falta (`@typebot-saas/sales`, Vite 7, etc.). Nixpacks usava **Node 18**; dependÃªncias da LP exigem **Node â‰¥22**.
-- **CorreÃ§Ã£o:** `package.json` raiz com `apps/*` + `packages/*`, `engines.node` `22.x`, `.nvmrc` `22`, scripts `dev/build/start:sales` via `--workspace @typebot-saas/sales`; `nixpacks.toml` na raiz com `NIXPACKS_NODE_VERSION=22`; `npm install` na raiz para alinhar lock.
-- **PrÃ³ximo:** redeploy API no Easypanel; opcional env `NIXPACKS_NODE_VERSION=22` no painel se Nixpacks ignorar ficheiros.
+- **Causa:** `package-lock.json` (raiz) tinha `workspaces: ["apps/*","packages/*"]` mas `package.json` listava só `apps/api|admin|widget` — `npm ci` falhava com pacotes em falta (`@typebot-saas/sales`, Vite 7, etc.). Nixpacks usava **Node 18**; dependências da LP exigem **Node ≥22**.
+- **Correção:** `package.json` raiz com `apps/*` + `packages/*`, `engines.node` `22.x`, `.nvmrc` `22`, scripts `dev/build/start:sales` via `--workspace @typebot-saas/sales`; `nixpacks.toml` na raiz com `NIXPACKS_NODE_VERSION=22`; `npm install` na raiz para alinhar lock.
+- **Próximo:** redeploy API no Easypanel; opcional env `NIXPACKS_NODE_VERSION=22` no painel se Nixpacks ignorar ficheiros.
 
-## 2026-05-13 - Admin Lista de Clientes: scroll horizontal visÃ­vel
+## 2026-05-13 - Admin Lista de Clientes: scroll horizontal visível
 
-- `styles.css` `.clients-table-wrap`: `max-height` com `100dvh`/viewport e `overflow: auto` â€” a tabela rola dentro da caixa; a barra horizontal fica no fundo **dessa** Ã¡rea, sem precisar de scroll vertical da pÃ¡gina atÃ© ao fim. CabeÃ§alho da tabela `position: sticky`.
+- `styles.css` `.clients-table-wrap`: `max-height` com `100dvh`/viewport e `overflow: auto` — a tabela rola dentro da caixa; a barra horizontal fica no fundo **dessa** área, sem precisar de scroll vertical da página até ao fim. Cabeçalho da tabela `position: sticky`.
 
-## 2026-05-13 - Admin: "Configurar CRM" tambÃ©m para atendentes
+## 2026-05-13 - Admin: "Configurar CRM" também para atendentes
 
-- `allowedScreens`: papel `attendant` passa a incluir `configureCrm` (ordem: Fila ao vivo, Configurar CRM, Lista de Clientes). Assinantes (master/manager do tenant) jÃ¡ tinham o item.
+- `allowedScreens`: papel `attendant` passa a incluir `configureCrm` (ordem: Fila ao vivo, Configurar CRM, Lista de Clientes). Assinantes (master/manager do tenant) já tinham o item.
 
 ## 2026-05-13 - Admin: menu "Configurar CRM"
 
-- `apps/admin/src/App.tsx`: novo `ScreenId` `configureCrm`, item no `menu-nav` (master sistema + master assinante, nÃ£o atendente), `allowedScreens`, Ã­cone lateral, cartÃ£o placeholder e cabeÃ§alho contextual.
+- `apps/admin/src/App.tsx`: novo `ScreenId` `configureCrm`, item no `menu-nav` (master sistema + master assinante, não atendente), `allowedScreens`, ícone lateral, cartão placeholder e cabeçalho contextual.
 
-## 2026-05-13 - Checkout LP: erro com API HTTPS (sem ligaÃ§Ã£o)
+## 2026-05-13 - Checkout LP: erro com API HTTPS (sem ligação)
 
-- Mensagem antiga sugeria sÃ³ build; com `https://api.chattypebot.com` o problema Ã© **rede/DNS/serviÃ§o**: de um ambiente de teste, `api.chattypebot.com` **nÃ£o resolve** (DNS).
-- `salesApi.ts`: texto de erro no `catch` do `fetch` orienta abrir `{base}/health`, DNS A/AAAA, TLS e API no Easypanel; detalhe da exceÃ§Ã£o sÃ³ em `DEV`.
+- Mensagem antiga sugeria só build; com `https://api.chattypebot.com` o problema é **rede/DNS/serviço**: de um ambiente de teste, `api.chattypebot.com` **não resolve** (DNS).
+- `salesApi.ts`: texto de erro no `catch` do `fetch` orienta abrir `{base}/health`, DNS A/AAAA, TLS e API no Easypanel; detalhe da exceção só em `DEV`.
 
 ## 2026-05-13 - LP checkout chamava localhost: `VITE_*` duplicado no Easypanel + fallback
 
-- Erro no modal: API `http://localhost:3333` â†’ Ãºltima `VITE_API_BASE_URL` no build era localhost ou variÃ¡vel ausente e o **fallback** em `salesApi.ts` embutia localhost no bundle.
-- `salesApi.ts`: fallback localhost **sÃ³ em DEV**; produÃ§Ã£o sem `VITE_*` â†’ base vazia + mensagem explÃ­cita; `resolvePainelUrl` idem; `index` link Entrar `|| "#"`.
-- `scripts/check-prod-vite-api.mjs` + `npm run build`: falha antes do Vite se `VITE_API_BASE_URL` vazio/localhost (merge `.env.production` + `process.env`); `SALES_SKIP_VITE_ENV_CHECK=1` para exceÃ§Ã£o.
-- **Easypanel:** rebuild sÃ³ com `VITE_API_BASE_URL` / `VITE_PAINEL_URL` HTTPS, **sem** segunda linha localhost.
+- Erro no modal: API `http://localhost:3333` → última `VITE_API_BASE_URL` no build era localhost ou variável ausente e o **fallback** em `salesApi.ts` embutia localhost no bundle.
+- `salesApi.ts`: fallback localhost **só em DEV**; produção sem `VITE_*` → base vazia + mensagem explícita; `resolvePainelUrl` idem; `index` link Entrar `|| "#"`.
+- `scripts/check-prod-vite-api.mjs` + `npm run build`: falha antes do Vite se `VITE_API_BASE_URL` vazio/localhost (merge `.env.production` + `process.env`); `SALES_SKIP_VITE_ENV_CHECK=1` para exceção.
+- **Easypanel:** rebuild só com `VITE_API_BASE_URL` / `VITE_PAINEL_URL` HTTPS, **sem** segunda linha localhost.
 
-## 2026-05-13 - DiagnÃ³stico LP Easypanel: ambiente com chaves duplicadas e mistura API+LP
+## 2026-05-13 - Diagnóstico LP Easypanel: ambiente com chaves duplicadas e mistura API+LP
 
-- Utilizador colou env do serviÃ§o LP com **VITE_*** duplicado (HTTPS + localhost), **PORT** 3000 e depois **3333**, **NODE_ENV** duplicado, variÃ¡veis **API** (DATABASE_URL, HANDOFF, ASAAS) no mesmo bloco â€” Easypanel/proxy tende a usar **Ãºltimo valor** por chave â†’ proxy pode apontar para **3333** enquanto `serve-production.mjs` ouve **3000** â†’ "Service not reachable"; ou bundle Vite com **localhost**.
-- **CorreÃ§Ã£o operacional:** no serviÃ§o **sÃ³ da landing** deixar apenas `NODE_ENV`, `VITE_API_BASE_URL`, `VITE_PAINEL_URL`, `PORT=3000`, `HOST=0.0.0.0` (e alinhar porta no UI do proxy). Tudo de API/Asaas/Postgres â†’ **serviÃ§o da API**.
-- **SeguranÃ§a:** chaves Asaas nÃ£o devem estar no env da LP; se foram expostas, **rodar** no Asaas.
-- `apps/sales/.env.example`: bloco de aviso Easypanel (sem duplicar chaves); removidos exemplos com tokens em comentÃ¡rio.
+- Utilizador colou env do serviço LP com **VITE_*** duplicado (HTTPS + localhost), **PORT** 3000 e depois **3333**, **NODE_ENV** duplicado, variáveis **API** (DATABASE_URL, HANDOFF, ASAAS) no mesmo bloco — Easypanel/proxy tende a usar **último valor** por chave → proxy pode apontar para **3333** enquanto `serve-production.mjs` ouve **3000** → "Service not reachable"; ou bundle Vite com **localhost**.
+- **Correção operacional:** no serviço **só da landing** deixar apenas `NODE_ENV`, `VITE_API_BASE_URL`, `VITE_PAINEL_URL`, `PORT=3000`, `HOST=0.0.0.0` (e alinhar porta no UI do proxy). Tudo de API/Asaas/Postgres → **serviço da API**.
+- **Segurança:** chaves Asaas não devem estar no env da LP; se foram expostas, **rodar** no Asaas.
+- `apps/sales/.env.example`: bloco de aviso Easypanel (sem duplicar chaves); removidos exemplos com tokens em comentário.
 
 ## 2026-05-13 - `git push` origin/master (commit 7cc7916)
 
-- Push feito a partir de `D:\typebot-Saas`: `master` â†’ `https://github.com/walkup-tec/typeBot.git` (`7d1bd39..7cc7916`).
-- **PrÃ³ximo passo sÃ³ no Easypanel:** redeploy do serviÃ§o da landing (LP) para puxar o cÃ³digo e subir o contentor.
+- Push feito a partir de `D:\typebot-Saas`: `master` → `https://github.com/walkup-tec/typeBot.git` (`7d1bd39..7cc7916`).
+- **Próximo passo só no Easypanel:** redeploy do serviço da landing (LP) para puxar o código e subir o contentor.
 
-## 2026-05-13 - Pedido: tudo local; deploy sÃ³ pelo utilizador
+## 2026-05-13 - Pedido: tudo local; deploy só pelo utilizador
 
 - Repo: `apps/sales` com `start` + `nixpacks.toml` `[start]` prontos para Easypanel.
-- Build **nesta mÃ¡quina**: `npm ci` em `apps/sales` falhou com **EPERM** (Windows: ficheiros em uso / antivÃ­rus). Sem Docker local para simular Linux; o **build no Easypanel** (Nixpacks Linux) Ã© o validador.
-- **Utilizador:** `git push` + redeploy do serviÃ§o da LP; apÃ³s fechar processos que lockem `node_modules`, pode correr `npm ci --include=dev` e `npm run build` em `apps/sales` para validar em Windows.
+- Build **nesta máquina**: `npm ci` em `apps/sales` falhou com **EPERM** (Windows: ficheiros em uso / antivírus). Sem Docker local para simular Linux; o **build no Easypanel** (Nixpacks Linux) é o validador.
+- **Utilizador:** `git push` + redeploy do serviço da LP; após fechar processos que lockem `node_modules`, pode correr `npm ci --include=dev` e `npm run build` em `apps/sales` para validar em Windows.
 
 ## 2026-05-13 - LP fora do ar: Easypanel "Service is not reachable" + hardening start
 
-- Causa tÃ­pica: proxy sem upstream (contentor parado, crash no boot, ou comando/porta errados).
-- `apps/sales/package.json`: script `start` igual ao servidor estÃ¡tico (muitos Paais chamam `npm start` por defeito; antes sÃ³ existia `start:static`).
+- Causa típica: proxy sem upstream (contentor parado, crash no boot, ou comando/porta errados).
+- `apps/sales/package.json`: script `start` igual ao servidor estático (muitos Paais chamam `npm start` por defeito; antes só existia `start:static`).
 - `apps/sales/nixpacks.toml`: `[start] cmd = "npm run start:static"`.
-- **Easypanel:** ver logs do serviÃ§o; confirmar **porta interna** = `PORT` (ex. 3000); comando de arranque nÃ£o pode ser sÃ³ `vite dev` em produÃ§Ã£o; redeploy apÃ³s push.
-- **SSL "NÃ£o seguro":** emitir/renovar TLS no domÃ­nio no Easypanel apÃ³s o serviÃ§o voltar a responder.
+- **Easypanel:** ver logs do serviço; confirmar **porta interna** = `PORT` (ex. 3000); comando de arranque não pode ser só `vite dev` em produção; redeploy após push.
+- **SSL "Não seguro":** emitir/renovar TLS no domínio no Easypanel após o serviço voltar a responder.
 
-## 2026-05-13 - Utilizador: ambiente configurado e deploy concluÃ­do
+## 2026-05-13 - Utilizador: ambiente configurado e deploy concluído
 
-- ConfirmaÃ§Ã£o: env + deploy em produÃ§Ã£o (API + landing conforme conversa anterior).
-- PrÃ³ximo (opcional): teste checkout sandbox + webhook Asaas na API.
+- Confirmação: env + deploy em produção (API + landing conforme conversa anterior).
+- Próximo (opcional): teste checkout sandbox + webhook Asaas na API.
 
-## 2026-05-13 - SeguranÃ§a: chaves Asaas removidas de `apps/sales/.env.example`
+## 2026-05-13 - Segurança: chaves Asaas removidas de `apps/sales/.env.example`
 
-- Ficheiro de exemplo da landing continha **API keys reais** (sandbox + produÃ§Ã£o) e Wallet ID â€” **nÃ£o** devem estar em ficheiros versionados; a landing **nÃ£o** usa `ASAAS_*` (sÃ³ a API em `apps/api`).
-- `.env.example` limpo: placeholders comentados + aviso para Easypanel/API e rotaÃ§Ã£o se vazamento.
-- **AÃ§Ã£o do utilizador:** se este conteÃºdo chegou ao Git remoto ou foi partilhado, **revogar/regenerar** chaves no Asaas e configurar `ASAAS_API_KEY` (e URL) apenas no ambiente do **serviÃ§o da API**.
+- Ficheiro de exemplo da landing continha **API keys reais** (sandbox + produção) e Wallet ID — **não** devem estar em ficheiros versionados; a landing **não** usa `ASAAS_*` (só a API em `apps/api`).
+- `.env.example` limpo: placeholders comentados + aviso para Easypanel/API e rotação se vazamento.
+- **Ação do utilizador:** se este conteúdo chegou ao Git remoto ou foi partilhado, **revogar/regenerar** chaves no Asaas e configurar `ASAAS_API_KEY` (e URL) apenas no ambiente do **serviço da API**.
 
 ## 2026-05-13 - Deploy Easypanel vendas: ERR_MODULE_NOT_FOUND @lovable.dev/vite-tanstack-config
 
-- Causa: build-arg `NODE_ENV=production` â†’ `npm ci` **sem** devDependencies; o `vite.config.ts` importa `@lovable.dev/vite-tanstack-config` (estava em devDeps).
-- CorreÃ§Ã£o: `nixpacks.toml` com `[phases.install] cmds = ["npm ci --include=dev"]` em `apps/sales` e `_pv-typebot-chat-temp`; `@lovable.dev/vite-tanstack-config` mantido em **dependencies** no `package.json` (cinto e suspensÃ³rios). PV commit `f3451d4`.
+- Causa: build-arg `NODE_ENV=production` → `npm ci` **sem** devDependencies; o `vite.config.ts` importa `@lovable.dev/vite-tanstack-config` (estava em devDeps).
+- Correção: `nixpacks.toml` com `[phases.install] cmds = ["npm ci --include=dev"]` em `apps/sales` e `_pv-typebot-chat-temp`; `@lovable.dev/vite-tanstack-config` mantido em **dependencies** no `package.json` (cinto e suspensórios). PV commit `f3451d4`.
 
-## 2026-05-13 - Landing: mÃ¡scara CPF/CNPJ + nota DNS checkout
+## 2026-05-13 - Landing: máscara CPF/CNPJ + nota DNS checkout
 
-- `maskCpfCnpj.ts` + campo no modal Assinar; envio sÃ³ dÃ­gitos; validaÃ§Ã£o 11 ou 14 dÃ­gitos antes do POST.
-- `ERR_NAME_NOT_RESOLVED` em `api.chattypebot.com`: DNS pÃºblico inexistente â€” criar A/AAAA ou usar no build o host HTTPS real da API (Easypanel).
-- `.env.example`: secÃ§Ã£o DNS. `PV-typebot-chat` `365cd90`.
+- `maskCpfCnpj.ts` + campo no modal Assinar; envio só dígitos; validação 11 ou 14 dígitos antes do POST.
+- `ERR_NAME_NOT_RESOLVED` em `api.chattypebot.com`: DNS público inexistente — criar A/AAAA ou usar no build o host HTTPS real da API (Easypanel).
+- `.env.example`: secção DNS. `PV-typebot-chat` `365cd90`.
 
 ## 2026-05-13 - apps/sales: .env.example completo + .env.local.example
 
-- `.env.example`: secÃ§Ãµes [BUILD] Vite, [RUNTIME] Node, local comentado, ponteiro para API (`doc/EASYPANEL-AMBIENTE.env.example`).
+- `.env.example`: secções [BUILD] Vite, [RUNTIME] Node, local comentado, ponteiro para API (`doc/EASYPANEL-AMBIENTE.env.example`).
 - `.env.local.example`: template para `vite dev` (copiar para `.env.local`).
 - `.env.production`: nota sobre PORT/HOST.
 - `_pv-typebot-chat-temp/.env.example` alinhado.
 
 ## 2026-05-13 - Env landing: VITE_API_BASE_URL / VITE_PAINEL_URL documentados
 
-- Valores de produÃ§Ã£o do projeto: `https://api.chattypebot.com`, `https://painel.chattypebot.com` (doc DEPLOY-VPS). ComentÃ¡rios em `apps/sales/.env.production`, `.env.example` e `_pv-typebot-chat-temp/.env.production`; lembrete Easypanel se o build nÃ£o ler o ficheiro.
+- Valores de produção do projeto: `https://api.chattypebot.com`, `https://painel.chattypebot.com` (doc DEPLOY-VPS). Comentários em `apps/sales/.env.production`, `.env.example` e `_pv-typebot-chat-temp/.env.production`; lembrete Easypanel se o build não ler o ficheiro.
 
-## 2026-05-13 - Landing: erro â€œFailed to fetchâ€ no checkout â€” mensagem e causa
+## 2026-05-13 - Landing: erro “Failed to fetch” no checkout — mensagem e causa
 
 - `createSalesSubscription` em `salesApi.ts`: `fetch` em try/catch com mensagem em PT citando `VITE_API_BASE_URL`, HTTPS e API no ar; parse com `text` + `JSON.parse` para evitar falha opaca.
-- Causa tÃ­pica: build da landing sem URL da API ou com `localhost`; ou API inacessÃ­vel/CORS (menos provÃ¡vel com `cors({origin:true})`).
+- Causa típica: build da landing sem URL da API ou com `localhost`; ou API inacessível/CORS (menos provável com `cors({origin:true})`).
 - `PV-typebot-chat` `8d0ce29`; `apps/sales` espelhado.
 
-## 2026-05-13 - Landing: lista de tÃ³picos do plano Business (duas colunas)
+## 2026-05-13 - Landing: lista de tópicos do plano Business (duas colunas)
 
-- Em vez de uma Ãºnica `grid` com fluxo em â€œlinhasâ€ (o item curto da esquerda herdava a altura da linha do item longo da direita), passou a **duas listas** (`slice` ao meio) com `flex flex-col gap-2.5`, wrapper `grid sm:grid-cols-2 sm:items-start`, texto `leading-snug`.
+- Em vez de uma única `grid` com fluxo em “linhas” (o item curto da esquerda herdava a altura da linha do item longo da direita), passou a **duas listas** (`slice` ao meio) com `flex flex-col gap-2.5`, wrapper `grid sm:grid-cols-2 sm:items-start`, texto `leading-snug`.
 - `PV-typebot-chat` `9a57521`; `apps/sales` espelhado.
 
 ## 2026-05-13 - Landing: toggle mensal/anual menos alto
@@ -623,36 +633,36 @@
 - Trilho `h-7` (antes `h-9`), thumb `h-5 w-5`, `translate-x-[26px]` no estado anual para manter alinhamento na largura `52px`.
 - `PV-typebot-chat` `60455e9`; `apps/sales` espelhado.
 
-## 2026-05-13 - Landing: toggle mensal/anual (preÃ§os)
+## 2026-05-13 - Landing: toggle mensal/anual (preços)
 
-- Trilho `52px`, thumb `24px` com `left-[3px]` e `translate-x-[22px]` quando anual (sem sobreposiÃ§Ã£o com â€œAnualâ€); `shrink-0`, `flex-wrap` e label/badge separados.
+- Trilho `52px`, thumb `24px` com `left-[3px]` e `translate-x-[22px]` quando anual (sem sobreposição com “Anual”); `shrink-0`, `flex-wrap` e label/badge separados.
 - Desativado: `bg-secondary` + `border-border` + sombra interna; thumb `bg-foreground` + anel para contraste no fundo escuro. Ativado: trilho `primary`, thumb `primary-foreground`.
-- Badge â€œeconomizeâ€: interpolaÃ§Ã£o corrigida para `{`economize R$${savings.toFixed(0)}`}`.
+- Badge “economize”: interpolação corrigida para `{`economize R$${savings.toFixed(0)}`}`.
 - `PV-typebot-chat` `66700aa`; `apps/sales` + import `cn`.
 
-## 2026-05-13 - Landing: secÃ§Ã£o Funcionalidades (experiÃªncia + sem IntegraÃ§Ãµes)
+## 2026-05-13 - Landing: secção Funcionalidades (experiência + sem Integrações)
 
-- `FEATURES`: primeiro cartÃ£o "Excelente experiÃªncia" / "Seu Lead com um atendimento excepcional." (Ã­cone `Sparkles`); removido cartÃ£o IntegraÃ§Ãµes; import `Plug` removido.
-- `BUSINESS_FEATURES` (pricing): alinhado â€” nova linha de experiÃªncia; removida linha de integraÃ§Ãµes.
+- `FEATURES`: primeiro cartão "Excelente experiência" / "Seu Lead com um atendimento excepcional." (ícone `Sparkles`); removido cartão Integrações; import `Plug` removido.
+- `BUSINESS_FEATURES` (pricing): alinhado — nova linha de experiência; removida linha de integrações.
 - `PV-typebot-chat` commit `877c4a7`; espelho `apps/sales`.
 
-## 2026-05-13 - Landing: Ã­cone WhatsApp (gradiente Drax) no card Sobre
+## 2026-05-13 - Landing: ícone WhatsApp (gradiente Drax) no card Sobre
 
-- Componente `WhatsAppBrandIcon` (SVG oficial + `linearGradient` com mesmas tonalidades de `--gradient-primary` em `styles.css`); card "IntegraÃ§Ã£o com WhatsApp" usa esse Ã­cone em vez de `Phone` do Lucide.
+- Componente `WhatsAppBrandIcon` (SVG oficial + `linearGradient` com mesmas tonalidades de `--gradient-primary` em `styles.css`); card "Integração com WhatsApp" usa esse ícone em vez de `Phone` do Lucide.
 - `PV-typebot-chat` commit `73ab5ce`; espelho em `apps/sales`.
-- Build local do clone `_pv-typebot-chat-temp` falhou por pacote `@lovable.dev/vite-tanstack-config` ausente no ambiente (nÃ£o relacionado ao diff).
+- Build local do clone `_pv-typebot-chat-temp` falhou por pacote `@lovable.dev/vite-tanstack-config` ausente no ambiente (não relacionado ao diff).
 
 ## 2026-05-13 - Landing: copy "Como funciona" (time + passos 01/02)
 
-- `PV-typebot-chat` / `apps/sales` `index.tsx`: tÃ­tulo "Um time especializado para vocÃª" (gradient em `especializado`); subtÃ­tulo sobre setup/fluxos e qualidade 5 estrelas; passo 01 "Criamos seus fluxos" + texto especialistas; passo 02 mantÃ©m tÃ­tulo "Publique no site" com novo texto de integraÃ§Ã£o no site.
+- `PV-typebot-chat` / `apps/sales` `index.tsx`: título "Um time especializado para você" (gradient em `especializado`); subtítulo sobre setup/fluxos e qualidade 5 estrelas; passo 01 "Criamos seus fluxos" + texto especialistas; passo 02 mantém título "Publique no site" com novo texto de integração no site.
 - Commit remoto: `13238d6`.
-- PrÃ³ximo: rebuild Easypanel.
+- Próximo: rebuild Easypanel.
 
-## 2026-05-13 - Landing PV: cartÃ£o WhatsApp na secÃ§Ã£o "O que Ã© o Drax"
+## 2026-05-13 - Landing PV: cartão WhatsApp na secção "O que é o Drax"
 
-- `_pv-typebot-chat-temp` / `walkup-tec/PV-typebot-chat`: quarto cartÃ£o na About â€” tÃ­tulo "IntegraÃ§Ã£o com WhatsApp", texto sobre direcionar o final do atendimento para um nÃºmero; Ã­cone `Phone`; grelha `sm:grid-cols-2 xl:grid-cols-4`. Espelhado em `apps/sales/src/routes/index.tsx`.
+- `_pv-typebot-chat-temp` / `walkup-tec/PV-typebot-chat`: quarto cartão na About — título "Integração com WhatsApp", texto sobre direcionar o final do atendimento para um número; ícone `Phone`; grelha `sm:grid-cols-2 xl:grid-cols-4`. Espelhado em `apps/sales/src/routes/index.tsx`.
 - Commit remoto: `ffb0d33` (push `main`).
-- PrÃ³ximo: rebuild Easypanel do app de vendas/landing.
+- Próximo: rebuild Easypanel do app de vendas/landing.
 
 ## 2026-05-12 - Lista de clientes: colunas e acao com lupa
 
@@ -721,7 +731,7 @@
 
 ## 2026-05-12 - CPF fixo no detalhe do lead com edicao manual
 
-- CPF aparece abaixo do WhatsApp no card do lead; sem valor mostra "NÃ£o informado".
+- CPF aparece abaixo do WhatsApp no card do lead; sem valor mostra "Não informado".
 - Atendente edita em Dados do contato; salva em `leadContext.CPF` via `PATCH /profile` (`leadCpf`).
 - Variavel `CPF` do Typebot preenche automaticamente; chave fica fora da listagem duplicada de variaveis.
 - Pendencia: redeploy API, widget e admin.
@@ -987,7 +997,7 @@
 ## 2026-05-11 - Diagnostico sync-workspace-flows em producao
 
 - `Cannot GET .../sync-workspace-flows` no navegador: rota era so POST; adicionado GET com o mesmo handler.
-- `POST .../sync-workspace-flows` em producao: `skipReason=workspaces_list_empty`, `flowCount=1` â€” Builder API nao lista workspaces (base/token).
+- `POST .../sync-workspace-flows` em producao: `skipReason=workspaces_list_empty`, `flowCount=1` — Builder API nao lista workspaces (base/token).
 - Resposta do sync passa a incluir `builderApiBaseUrl`, `workspaceListHttpStatus`, `workspaceNames` e `hint`.
 - Pendencia: ajustar env da API no Easypanel e redeploy; validar GET/POST do sync e Etapa 3.
 
@@ -1001,7 +1011,7 @@
 
 ## 2026-05-11 - Divergencia biblioteca x Typebot (Drax Sistemas)
 
-- Sintoma em producao: workspace Typebot com `Teste 5`, `EmprÃ©stimo do Trabalhador CLT` e `Drax Sistemas` (Live); biblioteca SaaS com apenas `Teste` inativo (`teste-0rzqap7` 404) e `Teste 5` ativo no viewer (`teste-5-olx3rjp` 200).
+- Sintoma em producao: workspace Typebot com `Teste 5`, `Empréstimo do Trabalhador CLT` e `Drax Sistemas` (Live); biblioteca SaaS com apenas `Teste` inativo (`teste-0rzqap7` 404) e `Teste 5` ativo no viewer (`teste-5-olx3rjp` 200).
 - Causa raiz: importacao automatica do watcher/listagem nao autenticava na Builder API quando `TYPEBOT_TARGET_BUILDER_API_TOKEN` estava vazio e o fallback era `TYPEBOT_BUILDER_API_TOKEN` (mesma regra do `typebot-builder.service`); tenant `tenant_drax` seguia sem `typebotWorkspaceId` (`not_started`).
 - Correcao: alinhar resolucao de token no `typebot-flow-viewer-url-sync`; vinculo automatico de workspace por nome sanitizado do assinante e fallback unico por e-mail; `/health` expoe `typebotTenantFlowImportConfigured` e aviso no boot se token ausente.
 - Validacao local: `npm run build:api` OK.
@@ -1037,7 +1047,7 @@
     - `typebotAccessUrl`
   - Ao salvar `typebotWorkspaceId`, tenant passa para `typebotProvisionStatus = provisioned` com `typebotLastSyncAt` atualizado.
   - Painel Admin (Editar assinante) ganhou campos:
-    - `Typebot Workspace ID (obrigatÃ³rio para autoimport)`
+    - `Typebot Workspace ID (obrigatório para autoimport)`
     - `Typebot Access URL (opcional)`
 - Arquivos principais:
   - `apps/api/src/tenants/tenant.service.ts`
@@ -1055,16 +1065,16 @@
 
 - Ajuste solicitado pelo usuario: remover indicador da `Fila ao vivo`.
 - Aplicado:
-  - removido banner "Atualizado em / PrÃ³xima atualizaÃ§Ã£o" da tela `liveQueue`;
-  - mantido apenas na tela `Master > Etapa 3 â€” Biblioteca de fluxos`.
+  - removido banner "Atualizado em / Próxima atualização" da tela `liveQueue`;
+  - mantido apenas na tela `Master > Etapa 3 — Biblioteca de fluxos`.
 - Validacao: `npm run build:admin` e `ReadLints` sem erros.
 
 ## 2026-05-08 - Indicador de atualizacao tambem na Biblioteca (Etapa 3)
 
 - Ajuste aplicado apos validacao do usuario: o indicador visual nao aparecia porque estava apenas na tela `Fila ao vivo`.
-- Implementado tambem na tela `Master > Etapa 3 â€” Biblioteca de fluxos`:
+- Implementado tambem na tela `Master > Etapa 3 — Biblioteca de fluxos`:
   - `Atualizado em HH:mm:ss`
-  - `PrÃ³xima atualizaÃ§Ã£o em Ns` (contagem regressiva)
+  - `Próxima atualização em Ns` (contagem regressiva)
 - Polling da biblioteca configurado em 7s (`FLOW_LIBRARY_REFRESH_INTERVAL_MS = 7000`) quando a tela da etapa 3 esta ativa.
 - Validacao: `npm run build:admin` e `ReadLints` sem erros.
 
@@ -1072,9 +1082,9 @@
 
 - Implementado no painel admin (tela `liveQueue`) um banner com:
   - `Atualizado em HH:mm:ss`
-  - `PrÃ³xima atualizaÃ§Ã£o em Ns` (contagem regressiva)
+  - `Próxima atualização em Ns` (contagem regressiva)
 - Mudancas:
-  - `apps/admin/src/App.tsx`: novos estados `queueLastUpdatedAt` e `queueNextRefreshInSeconds`; reset da contagem a cada `loadQueue`; render do banner na seÃ§Ã£o da fila.
+  - `apps/admin/src/App.tsx`: novos estados `queueLastUpdatedAt` e `queueNextRefreshInSeconds`; reset da contagem a cada `loadQueue`; render do banner na seção da fila.
   - `apps/admin/src/styles.css`: estilos dos pills, ponto pulsante e animacao.
 - Intervalo do polling mantido em 3s (`QUEUE_REFRESH_INTERVAL_MS = 3000`) e a contagem regressiva sincronizada com esse ciclo.
 - Validacao: `npm run build:admin` e `ReadLints` sem erros.
@@ -1122,48 +1132,48 @@
 
 ## 2026-05-08 - Deploy API executado no Easypanel (etapa guiada)
 
-- ServiÃ§o confirmado: `soma / api-typebot-crm`, origem GitHub (`walkup-tec/typeBot`, branch `master`), builder Nixpacks.
+- Serviço confirmado: `soma / api-typebot-crm`, origem GitHub (`walkup-tec/typeBot`, branch `master`), builder Nixpacks.
 - Comandos de deploy vistos no log: `npm run build:api`, `npm run start:api`, processo iniciado com `node dist/server.js`.
-- Estado atual: API reiniciada com sucesso aparente; prÃ³xima validaÃ§Ã£o Ã© ler `GET /health` e confirmar presenÃ§a de `operationalDataDirectory`, `flowsSavedCount` e `operationalSavedFlowsFile`.
-- PrÃ³ximo passo operacional: se campos novos aparecerem, configurar volume persistente exatamente em `operationalDataDirectory`.
+- Estado atual: API reiniciada com sucesso aparente; próxima validação é ler `GET /health` e confirmar presença de `operationalDataDirectory`, `flowsSavedCount` e `operationalSavedFlowsFile`.
+- Próximo passo operacional: se campos novos aparecerem, configurar volume persistente exatamente em `operationalDataDirectory`.
 
-## 2026-05-07 - ProduÃ§Ã£o: /health sÃ³ com postgres (artifact antigo da API)
+## 2026-05-07 - Produção: /health só com postgres (artifact antigo da API)
 
-- EvidÃªncia: `GET https://soma-api-typebot-crm.../health` devolve apenas `status`, `service`, `authTenantsAttendants` â€” **nÃ£o aparece** `flowsSavedCount`, `operationalDataDirectory`, etc.
-- ConclusÃ£o: o serviÃ§o em Easypanel ainda estÃ¡ a correr uma **build anterior** ao `/health` estendido. PrÃ³ximo passo operacional Ã© **deploy da API com o cÃ³digo atual** (onde `/health` expÃµe o path exato do volume).
-- AtÃ© ao deploy: o ficheiro de fluxos continua a ser `saved-flows.json` sob a pasta `data` da API; no cÃ³digo local isso resolve para `apps/api/data` (absoluto = `dirname` de `getDataFilePath('saved-flows.json')`). No container, o path absoluto depende do `WORKDIR`/layout do build â€” validar com `find`/`ls` dentro do contentor se necessÃ¡rio.
+- Evidência: `GET https://soma-api-typebot-crm.../health` devolve apenas `status`, `service`, `authTenantsAttendants` — **não aparece** `flowsSavedCount`, `operationalDataDirectory`, etc.
+- Conclusão: o serviço em Easypanel ainda está a correr uma **build anterior** ao `/health` estendido. Próximo passo operacional é **deploy da API com o código atual** (onde `/health` expõe o path exato do volume).
+- Até ao deploy: o ficheiro de fluxos continua a ser `saved-flows.json` sob a pasta `data` da API; no código local isso resolve para `apps/api/data` (absoluto = `dirname` de `getDataFilePath('saved-flows.json')`). No container, o path absoluto depende do `WORKDIR`/layout do build — validar com `find`/`ls` dentro do contentor se necessário.
 
 ## 2026-05-07 - Fix definitivo de sessao intermitente no modo agente
 
-- Causa raiz confirmada: o modo agente ainda dependia de `tenantId` na URL para montar `x-tenant-id`; quando o link carregava tenant ausente/desatualizado, o frontend forÃ§ava tenant errado e retornava "SessÃ£o nÃ£o encontrada para este tenant".
-- CorreÃ§Ã£o aplicada:
+- Causa raiz confirmada: o modo agente ainda dependia de `tenantId` na URL para montar `x-tenant-id`; quando o link carregava tenant ausente/desatualizado, o frontend forçava tenant errado e retornava "Sessão não encontrada para este tenant".
+- Correção aplicada:
   - `apps/admin/src/App.tsx`: `getAgentViewUrl` deixou de enviar `tenantId` na URL do modo agente.
-  - `apps/api/src/queue/queue.routes.ts`: `handoff-view` agora resolve `tenantId` por `contactId` quando query nÃ£o vier; endpoints de sessÃ£o/fila retornam `x-resolved-tenant-id`.
-  - `apps/widget/src/WidgetApp.tsx`: modo agente nÃ£o exige mais `tenantId`; headers agora enviam `x-tenant-id` apenas quando disponÃ­vel e capturam `x-resolved-tenant-id` para estabilizar polling/brand lookup.
-- ValidaÃ§Ã£o executada: `npm run build` (api/admin/widget) + `ReadLints` sem erros.
-- PrÃ³ximo passo sugerido: smoke manual abrindo atendimento por links antigos e novos de agente para confirmar ausÃªncia de regressÃ£o no handoff.
+  - `apps/api/src/queue/queue.routes.ts`: `handoff-view` agora resolve `tenantId` por `contactId` quando query não vier; endpoints de sessão/fila retornam `x-resolved-tenant-id`.
+  - `apps/widget/src/WidgetApp.tsx`: modo agente não exige mais `tenantId`; headers agora enviam `x-tenant-id` apenas quando disponível e capturam `x-resolved-tenant-id` para estabilizar polling/brand lookup.
+- Validação executada: `npm run build` (api/admin/widget) + `ReadLints` sem erros.
+- Próximo passo sugerido: smoke manual abrindo atendimento por links antigos e novos de agente para confirmar ausência de regressão no handoff.
 
 ## 2026-05-07 - Rotina segura: auto-heal da biblioteca e status de fluxo
 
-- Causa raiz observada em produÃ§Ã£o: fluxo salvo com host de viewer invÃ¡lido para aquele slug (`typebot-...` retornando 404 enquanto `soma-typebot-...` estava 200).
-- CorreÃ§Ã£o pontual executada: recriaÃ§Ã£o do fluxo `Drax Sistemas` no tenant `tenant_drax` com URL ativa do viewer.
-- PrevenÃ§Ã£o definitiva implementada no cÃ³digo:
-  - `lib/flow-url-health.ts`: nova `probeFlowUrlStatus()` com fallback automÃ¡tico entre hosts `typebot-` e `soma-typebot-`.
-  - `typebot.routes.ts` (`GET /api/typebot/flow-status`): retorna `resolvedUrl`/`fallbackUrl` para diagnÃ³stico consistente.
-  - `flow.routes.ts` (`GET /api/master/tenants/:tenantId/flows`): rotina `selfHealTenantFlowViewerUrls()` corrige automaticamente URL do fluxo quando fallback ativo Ã© detectado.
-- Resultado esperado: biblioteca nÃ£o volta a marcar fluxo como inativo sÃ³ por variaÃ§Ã£o de host do viewer; URL Ã© auto-reparada no primeiro carregamento da lista.
+- Causa raiz observada em produção: fluxo salvo com host de viewer inválido para aquele slug (`typebot-...` retornando 404 enquanto `soma-typebot-...` estava 200).
+- Correção pontual executada: recriação do fluxo `Drax Sistemas` no tenant `tenant_drax` com URL ativa do viewer.
+- Prevenção definitiva implementada no código:
+  - `lib/flow-url-health.ts`: nova `probeFlowUrlStatus()` com fallback automático entre hosts `typebot-` e `soma-typebot-`.
+  - `typebot.routes.ts` (`GET /api/typebot/flow-status`): retorna `resolvedUrl`/`fallbackUrl` para diagnóstico consistente.
+  - `flow.routes.ts` (`GET /api/master/tenants/:tenantId/flows`): rotina `selfHealTenantFlowViewerUrls()` corrige automaticamente URL do fluxo quando fallback ativo é detectado.
+- Resultado esperado: biblioteca não volta a marcar fluxo como inativo só por variação de host do viewer; URL é auto-reparada no primeiro carregamento da lista.
 
-## 2026-05-07 - Fluxos sumindo apÃ³s deploy: causa infra + mitigaÃ§Ã£o
+## 2026-05-07 - Fluxos sumindo após deploy: causa infra + mitigação
 
-- **Causa raiz:** `saved-flows.json` e outros JSON operacionais vivem no disco da API (`apps/api/data`). Postgres cobre apenas tenants/atendentes. Redeploy **sem volume persistente** recria disco â†’ biblioteca volta vazia.
-- **CorreÃ§Ã£o imediata (produÃ§Ã£o):** recriaÃ§Ã£o via `POST .../tenants/:id/flows` para `tenant_drax` atÃ© volume estar correto.
-- **MitigaÃ§Ã£o no cÃ³digo:** `GET /health` passa `flowsSavedCount`, `operationalDataBackend`, `operationalDataDirectory`, `operationalSavedFlowsFile`, hints; arranque em produÃ§Ã£o emite `[saas-data]` com aviso quando hÃ¡ tenants mas zero fluxos.
-- **Doc:** `doc/EASYPANEL-VOLUME-FLUXOS-FILA.md`; secÃ§Ã£o destacada em `doc/POSTGRES-AUTH-TENANTS-ATTENDANTS.md`.
+- **Causa raiz:** `saved-flows.json` e outros JSON operacionais vivem no disco da API (`apps/api/data`). Postgres cobre apenas tenants/atendentes. Redeploy **sem volume persistente** recria disco → biblioteca volta vazia.
+- **Correção imediata (produção):** recriação via `POST .../tenants/:id/flows` para `tenant_drax` até volume estar correto.
+- **Mitigação no código:** `GET /health` passa `flowsSavedCount`, `operationalDataBackend`, `operationalDataDirectory`, `operationalSavedFlowsFile`, hints; arranque em produção emite `[saas-data]` com aviso quando há tenants mas zero fluxos.
+- **Doc:** `doc/EASYPANEL-VOLUME-FLUXOS-FILA.md`; secção destacada em `doc/POSTGRES-AUTH-TENANTS-ATTENDANTS.md`.
 
 ## 2026-05-04 - Postgres para login (tenants + attendants)
 
-- Com `DATABASE_URL`, assinantes e atendentes persistem em Postgres (`saas_tenants`, `saas_attendants`); redeploy do contentor da API nÃ£o apaga logins. MigraÃ§Ã£o automÃ¡tica JSONâ†’Postgres se Postgres vazio e ficheiros existirem.
-- Bootstrap `bootstrap/auth-data-bootstrap.ts`; mÃ³dulo `lib/auth-postgres.ts`; `reloadFromStorage` em auth; health com `authTenantsAttendants`.
+- Com `DATABASE_URL`, assinantes e atendentes persistem em Postgres (`saas_tenants`, `saas_attendants`); redeploy do contentor da API não apaga logins. Migração automática JSON→Postgres se Postgres vazio e ficheiros existirem.
+- Bootstrap `bootstrap/auth-data-bootstrap.ts`; módulo `lib/auth-postgres.ts`; `reloadFromStorage` em auth; health com `authTenantsAttendants`.
 - Doc: `doc/POSTGRES-AUTH-TENANTS-ATTENDANTS.md`, `doc/LOG-2026-05-04__174500__feat-postgres-auth-tenants-attendants.md`, env em `doc/EASYPANEL-AMBIENTE.env.example`.
 
 ### Palavras-chave
@@ -1172,10 +1182,10 @@
 - `saas_tenants`
 - `auth-postgres`
 
-## 2026-05-04 - Login apÃ³s deploy: volume + seed opcional (base vazia)
+## 2026-05-04 - Login após deploy: volume + seed opcional (base vazia)
 
-- Causa recorrente: sem volume em `apps/api/data`, redeploy zera JSON â†’ 401/404.
-- CÃ³digo: `API_SEED_ON_EMPTY` + env documentados em `doc/EASYPANEL-AMBIENTE.env.example`; bootstrap `apps/api/src/bootstrap/seed-tenant-on-empty.ts`.
+- Causa recorrente: sem volume em `apps/api/data`, redeploy zera JSON → 401/404.
+- Código: `API_SEED_ON_EMPTY` + env documentados em `doc/EASYPANEL-AMBIENTE.env.example`; bootstrap `apps/api/src/bootstrap/seed-tenant-on-empty.ts`.
 - LOG: `doc/LOG-2026-05-04__120000__feat-api-seed-on-empty-easypanel-login.md`.
 
 ### Palavras-chave
@@ -1198,8 +1208,8 @@
 ## 2026-05-03 - Redirect Typebot: url_direct, HTTP 200 e HANDOFF_PUBLIC_BASE_URL
 
 - Handoff devolve **200** e JSON com **`url_direct`** (raiz + `data`) para alinhar com Redirect `{{url_direct}}`.
-- Env **`HANDOFF_PUBLIC_BASE_URL`**: base fixa dos links do handoff quando o Host da requisiÃ§Ã£o Ã© tÃºnel/local errado.
-- Patch do schema Typebot: blocos **Webhook** e **HTTP Request**; `bodyPath` de URLs antigas normalizado para **`url_direct`**; sÃ³ patch se existir `options.webhook` objeto.
+- Env **`HANDOFF_PUBLIC_BASE_URL`**: base fixa dos links do handoff quando o Host da requisição é túnel/local errado.
+- Patch do schema Typebot: blocos **Webhook** e **HTTP Request**; `bodyPath` de URLs antigas normalizado para **`url_direct`**; só patch se existir `options.webhook` objeto.
 - Ver `doc/LOG-2026-05-03__220000__fix-typebot-redirect-url-direct-handoff-public-url.md`.
 
 ### Palavras-chave
@@ -1340,9 +1350,9 @@
 ## 2026-04-28 - Novo layout da fila com acoes por icones
 
 - Tela de fila ajustada para manter colunas em uma unica linha no desktop.
-- Coluna `AÃ§Ã£o` passou a usar dois icones:
-  - `ðŸ”` para abrir dados do Lead;
-  - `ðŸ’¬` para iniciar atendimento.
+- Coluna `Ação` passou a usar dois icones:
+  - `🔍` para abrir dados do Lead;
+  - `💬` para iniciar atendimento.
 - Icone de conversa pulsa quando o contato esta pendente (`waiting`).
 - Apos iniciar atendimento (`in_service`), icone de conversa fica neutro e bloqueado.
 - Build e linter do admin validados sem erros.
@@ -1656,8 +1666,8 @@
 
 - Identificado que o Redirect falhava por mapping legado (`data.urlFlat`) e `tenantId` incorreto no webhook do Typebot.
 - Corrigido no fluxo publicado para usar `bodyPath: urlFlat` e `tenantId` da IdealCred.
-- Aplicado hardening no backend para normalizar esse padrÃ£o em sync/import futuros.
-- Confirmado: URL atual do webhook estÃ¡ inativa (`404`), exigindo endpoint pÃºblico ativo para o redirect funcionar em produÃ§Ã£o.
+- Aplicado hardening no backend para normalizar esse padrão em sync/import futuros.
+- Confirmado: URL atual do webhook está inativa (`404`), exigindo endpoint público ativo para o redirect funcionar em produção.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1755,12 +1765,12 @@
 - `emprestimo-clt-link-oficial`
 - `sync-pos-retomada`
 
-## 2026-04-27 - PublicaÃ§Ã£o forÃ§ada com retry e validaÃ§Ã£o de acessibilidade
+## 2026-04-27 - Publicação forçada com retry e validação de acessibilidade
 
-- Implementada etapa de hardening no sync do tenant para forÃ§ar publicaÃ§Ã£o e validar links ativos ao final.
-- Nova rotina faz atÃ© 3 tentativas: publica workspace completo, recalcula URLs dos flows e revalida acessibilidade.
-- Se recuperar links, registra no resumo; se restar fluxo inativo, tambÃ©m registra aviso explÃ­cito.
-- Objetivo: garantir que fluxo compartilhado esteja visÃ­vel/acessÃ­vel imediatamente apÃ³s sync/import.
+- Implementada etapa de hardening no sync do tenant para forçar publicação e validar links ativos ao final.
+- Nova rotina faz até 3 tentativas: publica workspace completo, recalcula URLs dos flows e revalida acessibilidade.
+- Se recuperar links, registra no resumo; se restar fluxo inativo, também registra aviso explícito.
+- Objetivo: garantir que fluxo compartilhado esteja visível/acessível imediatamente após sync/import.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1768,12 +1778,12 @@
 - `retry-publish-viewer-links`
 - `sync-hardening-accessibility`
 
-## 2026-04-27 - BotÃ£o "Copiar link" bloqueado para fluxo inativo
+## 2026-04-27 - Botão "Copiar link" bloqueado para fluxo inativo
 
-- Implementado bloqueio do botÃ£o de cÃ³pia quando a URL do fluxo nÃ£o estiver ativa no viewer.
-- UI agora sÃ³ habilita cÃ³pia quando `healthStatus === active`; estados `checking` e `inactive` ficam desabilitados.
-- A funÃ§Ã£o de cÃ³pia tambÃ©m valida status no clique (proteÃ§Ã£o dupla) e mostra aviso quando indisponÃ­vel.
-- Resultado: evita copiar links quebrados/404 para operaÃ§Ã£o.
+- Implementado bloqueio do botão de cópia quando a URL do fluxo não estiver ativa no viewer.
+- UI agora só habilita cópia quando `healthStatus === active`; estados `checking` e `inactive` ficam desabilitados.
+- A função de cópia também valida status no clique (proteção dupla) e mostra aviso quando indisponível.
+- Resultado: evita copiar links quebrados/404 para operação.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1781,10 +1791,10 @@
 - `flow-status-gate-ui-action`
 - `no-copy-for-inactive-viewer-url`
 
-## 2026-04-27 - ProteÃ§Ã£o contra URL quebrada (404) no link do fluxo
+## 2026-04-27 - Proteção contra URL quebrada (404) no link do fluxo
 
 - Investigado erro de carregamento no viewer para slug com sufixo (`...-38esudn`): URL respondia 404.
-- Implementada validaÃ§Ã£o de URL ativa antes de persistir links no fluxo do tenant.
+- Implementada validação de URL ativa antes de persistir links no fluxo do tenant.
 - Quando URL derivada estiver inativa, o sync aplica fallback para URL ativa e evita salvar link quebrado.
 - Resultado validado: painel passou a retornar URL funcional (`.../emprestimo-clt`) em vez da quebrada.
 
@@ -1794,12 +1804,12 @@
 - `viewer-active-url-validation`
 - `fallback-url-on-broken-tenant-slug`
 
-## 2026-04-27 - Varredura final de publicaÃ§Ã£o no workspace do tenant
+## 2026-04-27 - Varredura final de publicação no workspace do tenant
 
 - Para eliminar draft residual, o sync do tenant agora faz varredura final e publica todos os typebots do workspace.
-- Implementada funÃ§Ã£o dedicada para listar e publicar cada fluxo ao fim de `syncSystemDefaultsToRealTypebotWorkspace`.
-- `syncSummary` passou a registrar explicitamente quais fluxos receberam publicaÃ§Ã£o final garantida.
-- ValidaÃ§Ã£o no Ideal Cred confirmou execuÃ§Ã£o da etapa de fechamento de publicaÃ§Ã£o.
+- Implementada função dedicada para listar e publicar cada fluxo ao fim de `syncSystemDefaultsToRealTypebotWorkspace`.
+- `syncSummary` passou a registrar explicitamente quais fluxos receberam publicação final garantida.
+- Validação no Ideal Cred confirmou execução da etapa de fechamento de publicação.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1807,12 +1817,12 @@
 - `sync-final-publish-guarantee`
 - `eliminar-draft-residual-typebot`
 
-## 2026-04-27 - Hardening da publicaÃ§Ã£o automÃ¡tica no sync do tenant
+## 2026-04-27 - Hardening da publicação automática no sync do tenant
 
-- Investigado caso onde o Builder ainda mostrava "Publicar" mesmo apÃ³s sync.
+- Investigado caso onde o Builder ainda mostrava "Publicar" mesmo após sync.
 - Confirmado que endpoint de publish funciona, mas alguns caminhos aplicavam patch sem publish final garantido.
 - Ajustado `typebot-builder.service.ts` para publicar:
-  - apÃ³s patch de Ã­cone bem-sucedido;
+  - após patch de ícone bem-sucedido;
   - ao final de cada fluxo importado;
   - ao final de cada fluxo existente atualizado no sync.
 - Resultado: ciclo de sync fecha com estado publicado no tenant, reduzindo chance de draft residual.
@@ -1823,12 +1833,12 @@
 - `builder-showing-publicar-after-automation`
 - `draft-residual-fix-typebot`
 
-## 2026-04-27 - Rotina de publicaÃ§Ã£o imediata apÃ³s import no tenant
+## 2026-04-27 - Rotina de publicação imediata após import no tenant
 
-- Implementada regra Ãºnica: todo fluxo importado no workspace do assinante agora Ã© publicado imediatamente apÃ³s o import.
-- A publicaÃ§Ã£o foi centralizada em `importTypebotIntoTargetWorkspace`, reduzindo risco de fluxo ficar em draft por caminho alternativo.
-- Chamadas duplicadas de publish nos loops de sync foram removidas para evitar redundÃ¢ncia e manter comportamento consistente.
-- Build e sync de validaÃ§Ã£o executados com sucesso.
+- Implementada regra única: todo fluxo importado no workspace do assinante agora é publicado imediatamente após o import.
+- A publicação foi centralizada em `importTypebotIntoTargetWorkspace`, reduzindo risco de fluxo ficar em draft por caminho alternativo.
+- Chamadas duplicadas de publish nos loops de sync foram removidas para evitar redundância e manter comportamento consistente.
+- Build e sync de validação executados com sucesso.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1836,13 +1846,13 @@
 - `typebot-import-draft-prevention`
 - `centralizar-publicacao-import`
 
-## 2026-04-27 - Copiar link agora usa URL do tenant (nÃ£o Walkup)
+## 2026-04-27 - Copiar link agora usa URL do tenant (não Walkup)
 
 - Corrigido o problema da Etapa 3 no painel do assinante onde a URL exibida/copied podia ficar com slug da matriz.
-- Ajustada a rotina de sync para nÃ£o depender de `publicId` quando a Builder API retorna `null` no draft.
+- Ajustada a rotina de sync para não depender de `publicId` quando a Builder API retorna `null` no draft.
 - Passou a casar o typebot por nome e derivar a URL pelo `id` do typebot no workspace do tenant (sufixo final correto).
-- IncluÃ­da limpeza de flows locais duplicados/obsoletos durante sync forÃ§ado para evitar fallback em links antigos.
-- ValidaÃ§Ã£o na Ideal Cred: CLT retornou `.../empr-stimo-do-trabalhador-clt-38esudn` (esperado) e SIAPE com sufixo do tenant.
+- Incluída limpeza de flows locais duplicados/obsoletos durante sync forçado para evitar fallback em links antigos.
+- Validação na Ideal Cred: CLT retornou `.../empr-stimo-do-trabalhador-clt-38esudn` (esperado) e SIAPE com sufixo do tenant.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1851,12 +1861,12 @@
 - `viewer-url-por-id-do-tenant`
 - `limpeza-duplicados-flow-local`
 
-## 2026-04-27 - Novo padrÃ£o sem mapa agora importa automaticamente
+## 2026-04-27 - Novo padrão sem mapa agora importa automaticamente
 
-- Falha identificada: ao promover novo padrÃ£o sem entrada no `TYPEBOT_DEFAULT_IMPORTS_MAP`, o sync ignorava o fluxo.
-- Implementado fallback para resolver `sourceTypebotId` por nome/tÃ­tulo no workspace matriz (`TYPEBOT_SOURCE_MASTER_WORKSPACE_ID`).
-- Com isso, novos padrÃµes promovidos passam a importar sem depender de map manual prÃ©vio.
-- ValidaÃ§Ã£o na Ideal Cred: workspace refletiu os 2 padrÃµes ativos (CLT + FGTS).
+- Falha identificada: ao promover novo padrão sem entrada no `TYPEBOT_DEFAULT_IMPORTS_MAP`, o sync ignorava o fluxo.
+- Implementado fallback para resolver `sourceTypebotId` por nome/título no workspace matriz (`TYPEBOT_SOURCE_MASTER_WORKSPACE_ID`).
+- Com isso, novos padrões promovidos passam a importar sem depender de map manual prévio.
+- Validação na Ideal Cred: workspace refletiu os 2 padrões ativos (CLT + FGTS).
 
 ### Palavras-chave para pesquisa futura
 
@@ -1864,13 +1874,13 @@
 - `default-import-without-map`
 - `promote-new-default-import-fix`
 
-## 2026-04-27 - Espelhamento estrito de padrÃµes no workspace do assinante
+## 2026-04-27 - Espelhamento estrito de padrões no workspace do assinante
 
-- Corrigido desvio onde workspace do assinante mantinha flows alÃ©m dos padrÃµes ativos da Biblioteca Master.
-- Sync forÃ§ado (`overwriteExisting=true`) agora opera em modo estrito: remove todos os flows fora da lista de padrÃµes ativos.
+- Corrigido desvio onde workspace do assinante mantinha flows além dos padrões ativos da Biblioteca Master.
+- Sync forçado (`overwriteExisting=true`) agora opera em modo estrito: remove todos os flows fora da lista de padrões ativos.
 - `promote` passou a disparar sync com `overwriteExisting=true` para refletir na hora.
-- ImportaÃ§Ã£o em massa da matriz foi desligada por padrÃ£o (`TYPEBOT_IMPORT_FULL_SOURCE_WORKSPACE=false`), evitando recontaminaÃ§Ã£o.
-- Validado na Ideal Cred: workspace ficou com apenas 1 flow (o Ãºnico padrÃ£o ativo).
+- Importação em massa da matriz foi desligada por padrão (`TYPEBOT_IMPORT_FULL_SOURCE_WORKSPACE=false`), evitando recontaminação.
+- Validado na Ideal Cred: workspace ficou com apenas 1 flow (o único padrão ativo).
 
 ### Palavras-chave para pesquisa futura
 
@@ -1879,12 +1889,12 @@
 - `promote-overwrite-existing`
 - `disable-full-source-import-default`
 
-## 2026-04-27 - CorreÃ§Ã£o da falha de import apÃ³s promote (metadata null)
+## 2026-04-27 - Correção da falha de import após promote (metadata null)
 
-- InvestigaÃ§Ã£o em logs confirmou falha no import de padrÃ£o com erro 400 da Builder API.
+- Investigação em logs confirmou falha no import de padrão com erro 400 da Builder API.
 - Causa: `settings.metadata.imageUrl` e `settings.metadata.favIconUrl` enviados como `null`; Typebot exige `string`.
-- CorreÃ§Ã£o aplicada em `typebot-builder.service.ts`: fallback para `""` nesses campos.
-- RevalidaÃ§Ã£o do endpoint `sync-defaults` da Ideal Cred concluÃ­da com `status: ok`.
+- Correção aplicada em `typebot-builder.service.ts`: fallback para `""` nesses campos.
+- Revalidação do endpoint `sync-defaults` da Ideal Cred concluída com `status: ok`.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1892,9 +1902,9 @@
 - `favIconUrl-imageUrl-string-required`
 - `sync-defaults-retry-ok`
 
-## 2026-04-27 - Promote para padrÃ£o agora sincroniza Typebot na hora
+## 2026-04-27 - Promote para padrão agora sincroniza Typebot na hora
 
-- Corrigido fluxo de `Definir como padrÃ£o`: antes reaproveitava sÃ³ propagaÃ§Ã£o local e podia nÃ£o importar imediatamente no workspace Typebot.
+- Corrigido fluxo de `Definir como padrão`: antes reaproveitava só propagação local e podia não importar imediatamente no workspace Typebot.
 - `POST /api/master/system-library/promote` agora dispara sync imediato para todos os assinantes (`syncSystemDefaultsToRealTypebotWorkspace`).
 - Efeito: ao remover e promover novamente, o fluxo volta a ser importado sem depender de rotina indireta.
 - Build e lint validados.
@@ -1905,7 +1915,7 @@
 - `reimport-after-repromote`
 - `system-library-promote-typebot`
 
-## 2026-04-27 - Remocao em cascata ao tirar padrÃ£o da Biblioteca Master
+## 2026-04-27 - Remocao em cascata ao tirar padrão da Biblioteca Master
 
 - Identificado gap: remover item da Biblioteca Master apagava apenas o registro local, sem remover dos assinantes.
 - Implementada cascata completa no `DELETE /api/master/system-library/:id`:
@@ -1923,11 +1933,11 @@
 
 ## 2026-04-27 - Rotina automatica: logo do assinante reaplica avatar
 
-- Revisada a rotina solicitada (cadastro tenant/workspace, importacao de padrÃµes e avatar por logo).
-- Confirmado que cadastro de assinante e importacao de flows padrÃ£o ja existiam.
+- Revisada a rotina solicitada (cadastro tenant/workspace, importacao de padrões e avatar por logo).
+- Confirmado que cadastro de assinante e importacao de flows padrão ja existiam.
 - Implementado gatilho faltante: ao salvar `profileImageUrl` no tenant (`PATCH /profile-image`), o backend dispara sync com `overwriteExisting: true`.
-- Efeito: quando o assinante define logo depois, o avatar dos flows Ã© atualizado automaticamente sem aÃ§Ã£o manual.
-- Se o assinante nao tiver logo, o sistema preserva avatar padrÃ£o do Typebot.
+- Efeito: quando o assinante define logo depois, o avatar dos flows é atualizado automaticamente sem ação manual.
+- Se o assinante nao tiver logo, o sistema preserva avatar padrão do Typebot.
 
 ### Palavras-chave para pesquisa futura
 
@@ -1938,7 +1948,7 @@
 
 ## 2026-04-27 - Hotfix de avatar no `hostAvatar` (Ideal Cred)
 
-- Com o bug do topo resolvido, o avatar ainda nÃ£o aparecia no preview dos flows.
+- Com o bug do topo resolvido, o avatar ainda não aparecia no preview dos flows.
 - Hotfix operacional aplicado direto na Builder API para os 5 flows da Ideal Cred:
   - `theme.chat.hostAvatar.isEnabled=true`
   - `theme.chat.hostAvatar.url=<logo do tenant>`
@@ -2041,13 +2051,13 @@
 - `public-share-image-endpoint`
 - `upload-avatar-preservado`
 
-## 2026-04-24 - Cor predominante da logo aplicada em botÃµes do Typebot no sync
+## 2026-04-24 - Cor predominante da logo aplicada em botões do Typebot no sync
 
-- Cor predominante jÃ¡ extraÃ­da no admin (`defaultChatTheme.userBubbleBg`) passou a ser aplicada automaticamente nos botÃµes do Typebot durante sync/import.
+- Cor predominante já extraída no admin (`defaultChatTheme.userBubbleBg`) passou a ser aplicada automaticamente nos botões do Typebot durante sync/import.
 - Implementada rotina dedicada no backend para atualizar `theme.customCss` com bloco idempotente `.typebot-button` (fundo, borda e contraste de texto).
-- Rotina integrada para fluxos existentes e importados, seguida de publicaÃ§Ã£o automÃ¡tica do fluxo.
-- Corrigido bloqueio operacional de validaÃ§Ã£o (API em watch sem subir por `EADDRINUSE` na porta 3333), com restart do processo correto.
-- ValidaÃ§Ã£o real no tenant Ideal Cred confirmou `theme.customCss` com marcador `drax-auto-button-theme:start`.
+- Rotina integrada para fluxos existentes e importados, seguida de publicação automática do fluxo.
+- Corrigido bloqueio operacional de validação (API em watch sem subir por `EADDRINUSE` na porta 3333), com restart do processo correto.
+- Validação real no tenant Ideal Cred confirmou `theme.customCss` com marcador `drax-auto-button-theme:start`.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2128,7 +2138,7 @@
 - `librarysourceid-url-override`
 - `cart-o-consignado-0yjx8jh`
 
-## 2026-04-23 - Admin: Acesso Typebot sÃ³ Master do Sistema (URL matriz)
+## 2026-04-23 - Admin: Acesso Typebot só Master do Sistema (URL matriz)
 
 - Removido `Acessar Typebot` da tabela de assinantes.
 - Header `Acesso Typebot` visivel apenas com `masterProfile === system_master`; abre nova aba na URL fixa do builder matriz (`/pt-BR/typebots`).
@@ -2170,7 +2180,7 @@
 
 - Sync de defaults passou a listar typebots existentes no workspace antes de importar.
 - Comparacao por nome normalizado (lowercase/trim) para evitar reimport de itens ja presentes.
-- Resumo de sync agora separa: `Importados`, `JÃ¡ existentes no workspace` e `Ignorados`.
+- Resumo de sync agora separa: `Importados`, `Já existentes no workspace` e `Ignorados`.
 - Build da API validado apos ajuste.
 
 ### Palavras-chave para pesquisa futura
@@ -2494,7 +2504,7 @@
 - `rotulo-tipo-usuario`
 - `ajuste-texto-assinantes`
 
-## 2026-04-23 - Tabela de assinantes em uma linha + traducao de rÃ³tulos
+## 2026-04-23 - Tabela de assinantes em uma linha + traducao de rótulos
 
 - Ajustado layout da tabela de assinantes para 4 colunas no desktop (Assinante, Tipo de usuario, Status, Acoes).
 - Corrigida quebra visual que jogava parte do cabecalho/acoes para baixo.
@@ -2647,7 +2657,7 @@
 
 ## 2026-04-22 - Fix definitivo de envio de e-mail no cadastro de atendente
 
-- Causa raiz: `mail.service` lia SMTP cedo demais (import-time), gerando `SMTP nÃ£o configurado` em runtime.
+- Causa raiz: `mail.service` lia SMTP cedo demais (import-time), gerando `SMTP não configurado` em runtime.
 - Refatorado para leitura lazy de ambiente com fallback para `.env` da raiz do monorepo.
 - Frontend do admin passou a exibir status real de entrega (`emailDelivery`: sent/failed/skipped) no toast.
 - Teste real confirmou `emailDelivery.status = "sent"` para cadastro de atendente.
@@ -2786,12 +2796,12 @@
 - `admin-sem-filtro-de-plano`
 - `tenant-schema-sem-plan`
 
-## 2026-04-22 - Biblioteca Master com fluxos padrÃ£o do sistema
+## 2026-04-22 - Biblioteca Master com fluxos padrão do sistema
 
-- Adicionada tela lateral `Biblioteca Master` no admin (visÃ­vel para perfil master do sistema) para listar fluxos da conta origem `walkup@walkuptec.com.br`.
-- Backend ganhou endpoints para promover/remover fluxos como `PadrÃ£o Sistema` e persistÃªncia em `data/system-master-library.json`.
+- Adicionada tela lateral `Biblioteca Master` no admin (visível para perfil master do sistema) para listar fluxos da conta origem `walkup@walkuptec.com.br`.
+- Backend ganhou endpoints para promover/remover fluxos como `Padrão Sistema` e persistência em `data/system-master-library.json`.
 - A biblioteca dos assinantes (`/api/master/flow-library`) agora inclui itens publicados pela Biblioteca Master, permitindo ativar da biblioteca no workspace do assinante.
-- Fluxo de ativaÃ§Ã£o mantÃ©m criaÃ§Ã£o do fluxo no tenant assinante dentro do SaaS; cÃ³pia fÃ­sica no ambiente Typebot do assinante depende de integraÃ§Ã£o API especÃ­fica do Typebot.
+- Fluxo de ativação mantém criação do fluxo no tenant assinante dentro do SaaS; cópia física no ambiente Typebot do assinante depende de integração API específica do Typebot.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2805,8 +2815,8 @@
 
 - Tenant passou a armazenar metadados de ambiente Typebot (`typebotOwnerEmail`, status, workspace e sync).
 - Novo endpoint `POST /api/master/tenants/:id/typebot/provision` para iniciar provisionamento por assinante.
-- Tela `Assinantes` mostra status de provisionamento Typebot e aÃ§Ã£o `Provisionar Typebot`.
-- Fluxo atual usa estratÃ©gia `pending_manual` com link de signup por e-mail; integraÃ§Ã£o admin API do Typebot pode ser acoplada na sequÃªncia.
+- Tela `Assinantes` mostra status de provisionamento Typebot e ação `Provisionar Typebot`.
+- Fluxo atual usa estratégia `pending_manual` com link de signup por e-mail; integração admin API do Typebot pode ser acoplada na sequência.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2817,8 +2827,8 @@
 
 ## 2026-04-22 - Fix de Biblioteca Master vazia
 
-- Corrigido endpoint `source-flows` para usar fallback tambÃ©m quando tenant origem existe, porÃ©m sem fluxos associados.
-- RepositÃ³rios de dados do API passaram a resolver arquivos por caminho fixo em `apps/api/data` (independente de `process.cwd()`).
+- Corrigido endpoint `source-flows` para usar fallback também quando tenant origem existe, porém sem fluxos associados.
+- Repositórios de dados do API passaram a resolver arquivos por caminho fixo em `apps/api/data` (independente de `process.cwd()`).
 - Resultado: Biblioteca Master voltou a listar fluxos salvos no ambiente.
 
 ### Palavras-chave para pesquisa futura
@@ -2838,16 +2848,16 @@
 - `biblioteca-master-ativos`
 - `isFlowUrlActive-timeout`
 
-# MemÃ³ria consolidada
+# Memória consolidada
 
 ## 2026-04-20 - Base SaaS local Typebot
 
 - Projeto inicializado em `D:/typebot-Saas` com remoto GitHub `walkup-tec/typeBot`.
 - Infra local preparada com `Postgres + Redis + MinIO`.
-- API inicial criada com padrÃ£o `controller/service/repository`.
-- MÃ³dulos iniciais:
-  - gestÃ£o master de tenants (criar, listar, bloquear/desbloquear);
-  - fila de atendimento por tenant com atribuiÃ§Ã£o de atendente (`in_service`).
+- API inicial criada com padrão `controller/service/repository`.
+- Módulos iniciais:
+  - gestão master de tenants (criar, listar, bloquear/desbloquear);
+  - fila de atendimento por tenant com atribuição de atendente (`in_service`).
 - `README.md` documentado com setup local e roadmap.
 
 ### Palavras-chave para pesquisa futura
@@ -2861,13 +2871,13 @@
 ## 2026-04-20 - Template visual admin e widget
 
 - Criados `apps/admin` e `apps/widget` com layout dark no estilo Typebot.
-- Painel admin jÃ¡ integrado para:
+- Painel admin já integrado para:
   - criar assinante;
   - listar assinantes;
   - bloquear/desbloquear;
   - listar fila por tenant e assumir atendimento.
-- Widget criado com chat base e botÃ£o de handoff para fila.
-- Scripts da raiz ampliados para build/execuÃ§Ã£o dos 3 apps (`api`, `admin`, `widget`).
+- Widget criado com chat base e botão de handoff para fila.
+- Scripts da raiz ampliados para build/execução dos 3 apps (`api`, `admin`, `widget`).
 - Build completo validado.
 
 ### Palavras-chave para pesquisa futura
@@ -2877,12 +2887,12 @@
 - `widget-live-agent-handoff`
 - `vite-react-template-typebot`
 
-## 2026-04-20 - IntegraÃ§Ã£o widget com Typebot real
+## 2026-04-20 - Integração widget com Typebot real
 
-- Widget local (`apps/widget`) integrado ao Typebot real via `iframe` configurÃ¡vel.
-- Novas variÃ¡veis Vite adicionadas para URL pÃºblica do bot e parÃ¢metros de integraÃ§Ã£o local.
+- Widget local (`apps/widget`) integrado ao Typebot real via `iframe` configurável.
+- Novas variáveis Vite adicionadas para URL pública do bot e parâmetros de integração local.
 - Fluxo de atendimento humano mantido, enviando para a fila SaaS.
-- `README` atualizado com setup da integraÃ§Ã£o.
+- `README` atualizado com setup da integração.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2893,9 +2903,9 @@
 ## 2026-04-20 - Handoff Typebot para fila ao vivo
 
 - Implementado endpoint de handoff para acionamento direto do Typebot (`/api/typebot/handoff`).
-- Fila agora registra origem do fluxo (`sourceFlowLabel`) e origem da interaÃ§Ã£o (`typebot`/`widget`).
-- Implementada sessÃ£o de mensagens para atendimento manual:
-  - leitura e envio de mensagens por sessÃ£o.
+- Fila agora registra origem do fluxo (`sourceFlowLabel`) e origem da interação (`typebot`/`widget`).
+- Implementada sessão de mensagens para atendimento manual:
+  - leitura e envio de mensagens por sessão.
 - Admin atualizado para abrir atendimento no widget em modo agente.
 - Widget atualizado com modo agente para continuidade manual do atendimento.
 
@@ -2913,7 +2923,7 @@
   - Apelido
   - URL
   - Status com sinaleira (`Ativo` verde / `Inativo` vermelho / `Verificando` amarelo).
-- Mantido padrÃ£o mobile-first na tabela e na visualizaÃ§Ã£o do status.
+- Mantido padrão mobile-first na tabela e na visualização do status.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2921,13 +2931,13 @@
 - `active-inactive-indicator`
 - `typebot-url-health`
 
-## 2026-04-20 - CorreÃ§Ã£o redirect handoff + atualizaÃ§Ã£o da fila
+## 2026-04-20 - Correção redirect handoff + atualização da fila
 
-- Corrigido redirecionamento do handoff para nÃ£o depender mais do `loca.lt` da porta `5174`.
-- API agora devolve `handoffUrl` pÃºblico no mesmo domÃ­nio do endpoint de handoff (`ngrok`), usando a rota `GET /handoff-view`.
-- Implementada tela pÃºblica mÃ­nima de chat visitante em `handoff-view`, ligada Ã  sessÃ£o existente de mensagens.
+- Corrigido redirecionamento do handoff para não depender mais do `loca.lt` da porta `5174`.
+- API agora devolve `handoffUrl` público no mesmo domínio do endpoint de handoff (`ngrok`), usando a rota `GET /handoff-view`.
+- Implementada tela pública mínima de chat visitante em `handoff-view`, ligada à sessão existente de mensagens.
 - Painel admin atualizado com polling de fila a cada 3 segundos na tela `Fila ao Vivo`.
-- Adicionado log de erro no middleware global da API para diagnÃ³stico rÃ¡pido.
+- Adicionado log de erro no middleware global da API para diagnóstico rápido.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2938,10 +2948,10 @@
 
 ## 2026-04-20 - Persistencia real de assinantes e fluxos
 
-- Assinantes (`tenants`) migrados de memÃ³ria para persistÃªncia em `data/tenants.json`.
-- Fluxos salvos por assinante adicionados no backend com persistÃªncia em `data/saved-flows.json`.
+- Assinantes (`tenants`) migrados de memória para persistência em `data/tenants.json`.
+- Fluxos salvos por assinante adicionados no backend com persistência em `data/saved-flows.json`.
 - Admin deixou de usar `localStorage` como fonte principal dos fluxos; agora consulta/salva pela API.
-- MigraÃ§Ã£o automÃ¡tica de fluxos antigos do `localStorage` para backend adicionada no carregamento.
+- Migração automática de fluxos antigos do `localStorage` para backend adicionada no carregamento.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2952,8 +2962,8 @@
 
 ## 2026-04-20 - Typebot redirect: campos flat no handoff
 
-- Ajustado `POST /api/typebot/handoff` para incluir `urlFlat`, `redirectUrlFlat` e `handoffUrlFlat` no nÃ­vel raiz do JSON.
-- Objetivo: reduzir ambiguidade de `data.url` vs `data.data.url` no mapeamento de variÃ¡veis do Typebot.
+- Ajustado `POST /api/typebot/handoff` para incluir `urlFlat`, `redirectUrlFlat` e `handoffUrlFlat` no nível raiz do JSON.
+- Objetivo: reduzir ambiguidade de `data.url` vs `data.data.url` no mapeamento de variáveis do Typebot.
 
 ### Palavras-chave para pesquisa futura
 
@@ -2962,7 +2972,7 @@
 
 ## 2026-04-20 - Admin: ignorar loca.lt morto no widget URL
 
-- `apps/admin` passou a ignorar `VITE_WIDGET_BASE_URL` quando contÃ©m `loca.lt` (tÃºnel instÃ¡vel) e usar fallback `http://localhost:5174`.
+- `apps/admin` passou a ignorar `VITE_WIDGET_BASE_URL` quando contém `loca.lt` (túnel instável) e usar fallback `http://localhost:5174`.
 - `apps/admin/.env.local` deixou de fixar `loca.lt` e virou template comentado para `ngrok`.
 
 ### Palavras-chave para pesquisa futura
@@ -2970,7 +2980,7 @@
 - `loca-lt-503`
 - `admin-widget-baseurl-fallback`
 
-## 2026-04-20 - VerificaÃ§Ã£o local (API/Admin/Widget)
+## 2026-04-20 - Verificação local (API/Admin/Widget)
 
 - Confirmado healthcheck local da API e HTTP `200` no Admin (`5173`) e Widget (`5174`) no momento da checagem.
 
@@ -2990,9 +3000,9 @@
 
 ## 2026-04-21 - Handoff refinado (chat Typebot-like + contexto do lead)
 
-- `handoff-view` passou para layout focado em chat (continuidade visual do Typebot) com bolhas e shell Ãºnico.
-- `POST /api/typebot/handoff` agora aceita `leadContext` opcional para exibir no topo os dados jÃ¡ informados pelo lead.
-- `leadContext` Ã© serializado no `handoffUrl` e renderizado como chips de contexto no chat.
+- `handoff-view` passou para layout focado em chat (continuidade visual do Typebot) com bolhas e shell único.
+- `POST /api/typebot/handoff` agora aceita `leadContext` opcional para exibir no topo os dados já informados pelo lead.
+- `leadContext` é serializado no `handoffUrl` e renderizado como chips de contexto no chat.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3000,11 +3010,11 @@
 - `handoff-typebot-like`
 - `continuidade-do-fluxo`
 
-## 2026-04-21 - Tenant dinÃ¢mico no handoff (SaaS)
+## 2026-04-21 - Tenant dinâmico no handoff (SaaS)
 
 - `tenantId` no `POST /api/typebot/handoff` passou a ser opcional.
 - API resolve automaticamente o tenant via `sourceFlowLabel` a partir dos fluxos salvos por assinante.
-- CritÃ©rios: `nickname` igual ao label ou URL contendo o slug do label.
+- Critérios: `nickname` igual ao label ou URL contendo o slug do label.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3014,9 +3024,9 @@
 
 ## 2026-04-21 - Layout redirect lead igual Typebot + captura visual
 
-- `handoff-view` no modo lead foi simplificado para uma Ãºnica tela de conversa (sem composiÃ§Ã£o iframe+chat).
+- `handoff-view` no modo lead foi simplificado para uma única tela de conversa (sem composição iframe+chat).
 - `POST /api/typebot/handoff` passou a capturar visual do viewer (cores e imagem) para aplicar no redirect.
-- ParÃ¢metros de tema/avatar sÃ£o enviados na URL de handoff e usados para renderizaÃ§Ã£o do frontend do lead.
+- Parâmetros de tema/avatar são enviados na URL de handoff e usados para renderização do frontend do lead.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3024,23 +3034,23 @@
 - `viewer-theme-capture`
 - `profile-image-capture`
 
-## 2026-04-21 - Ajuste fino: remover sensaÃ§Ã£o de layout duplo no redirect
+## 2026-04-21 - Ajuste fino: remover sensação de layout duplo no redirect
 
-- Modo `visitor` consolidado em layout Ãºnico de chat para parecer continuidade do Typebot.
-- Avatares e cores aplicados no frontend do lead a partir de configuraÃ§Ã£o capturada no handoff.
-- Modo `agent` preservado para operaÃ§Ã£o interna sem impacto no redirect do lead.
+- Modo `visitor` consolidado em layout único de chat para parecer continuidade do Typebot.
+- Avatares e cores aplicados no frontend do lead a partir de configuração capturada no handoff.
+- Modo `agent` preservado para operação interna sem impacto no redirect do lead.
 
 ### Palavras-chave para pesquisa futura
 
 - `redirect-single-chat-typebot`
 - `no-nested-layout`
 
-## 2026-04-21 - Captura automÃ¡tica de cachÃª + tema salvo por fluxo
+## 2026-04-21 - Captura automática de cachê + tema salvo por fluxo
 
-- Handoff passou a capturar automaticamente variÃ¡veis extras do body como contexto do lead quando `leadContext` explÃ­cito nÃ£o for enviado.
+- Handoff passou a capturar automaticamente variáveis extras do body como contexto do lead quando `leadContext` explícito não for enviado.
 - Fluxos agora suportam `redirectTheme` persistido.
 - Novo endpoint `PATCH /api/master/flows/:flowId/theme` para atualizar tema do redirect por fluxo.
-- No handoff, tema do fluxo salvo tem prioridade sobre detecÃ§Ã£o automÃ¡tica do viewer.
+- No handoff, tema do fluxo salvo tem prioridade sobre detecção automática do viewer.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3050,9 +3060,9 @@
 
 ## 2026-04-21 - Handoff tolerante a leadContext vazio
 
-- Corrigida validaÃ§Ã£o do `POST /api/typebot/handoff` para aceitar `leadContext` como string vazia (`""`) quando o Typebot nÃ£o renderiza `{{variables}}`.
-- Mantido fallback dinÃ¢mico: sem `leadContext` vÃ¡lido, backend usa auto-captura dos demais campos do body.
-- Build completo validado apÃ³s alteraÃ§Ã£o.
+- Corrigida validação do `POST /api/typebot/handoff` para aceitar `leadContext` como string vazia (`""`) quando o Typebot não renderiza `{{variables}}`.
+- Mantido fallback dinâmico: sem `leadContext` válido, backend usa auto-captura dos demais campos do body.
+- Build completo validado após alteração.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3062,9 +3072,9 @@
 
 ## 2026-04-21 - Redirect com fallback de cache local do lead
 
-- `handoff-view` atualizado para exibir painel de contexto do lead tambÃ©m via fallback de `localStorage` quando `leadContext` vier vazio no handoff.
-- Contexto agora Ã© persistido no navegador por tenant+flow+nome para manter continuidade visual em retomadas no mesmo dispositivo.
-- Objetivo: reduzir sensaÃ§Ã£o de reinÃ­cio da conversa quando Typebot nÃ£o entrega variÃ¡veis no payload.
+- `handoff-view` atualizado para exibir painel de contexto do lead também via fallback de `localStorage` quando `leadContext` vier vazio no handoff.
+- Contexto agora é persistido no navegador por tenant+flow+nome para manter continuidade visual em retomadas no mesmo dispositivo.
+- Objetivo: reduzir sensação de reinício da conversa quando Typebot não entrega variáveis no payload.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3074,9 +3084,9 @@
 
 ## 2026-04-21 - Handoff com fallback para `variables` do Typebot
 
-- `POST /api/typebot/handoff` passou a suportar extraÃ§Ã£o automÃ¡tica de contexto quando o payload contÃ©m `variables` no formato array (`name`/`value`).
-- Nova prioridade de contexto: `leadContext` vÃ¡lido > `variables` do payload > campos extras primitivos.
-- Objetivo: reduzir dependÃªncia de scripts/expressÃµes no editor do Typebot para envio dinÃ¢mico de variÃ¡veis.
+- `POST /api/typebot/handoff` passou a suportar extração automática de contexto quando o payload contém `variables` no formato array (`name`/`value`).
+- Nova prioridade de contexto: `leadContext` válido > `variables` do payload > campos extras primitivos.
+- Objetivo: reduzir dependência de scripts/expressões no editor do Typebot para envio dinâmico de variáveis.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3087,8 +3097,8 @@
 ## 2026-04-21 - Redirect simplificado com fila + WhatsApp
 
 - Redesenhado o `handoff-view` para o lead em modo simples, sem iframe/view do Typebot.
-- Nova tela foca em experiÃªncia de espera: status de fila, aviso para nÃ£o fechar a pÃ¡gina e chamada clara de atendimento.
-- Adicionado botÃ£o de WhatsApp para `+55 51 99746-2102` com mensagem prÃ©-preenchida usando fluxo, nome e variÃ¡veis capturadas do lead.
+- Nova tela foca em experiência de espera: status de fila, aviso para não fechar a página e chamada clara de atendimento.
+- Adicionado botão de WhatsApp para `+55 51 99746-2102` com mensagem pré-preenchida usando fluxo, nome e variáveis capturadas do lead.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3096,10 +3106,10 @@
 - `whatsapp-preenchido-com-variaveis`
 - `remover-view-typebot-redirect`
 
-## 2026-04-21 - Mensagem WhatsApp sÃ³ com variÃ¡veis do lead
+## 2026-04-21 - Mensagem WhatsApp só com variáveis do lead
 
-- Ajustada mensagem do botÃ£o WhatsApp no redirect para remover metadados de fluxo e nome.
-- Texto agora inclui somente os dados informados pelo lead (`Dados informados` + lista de variÃ¡veis).
+- Ajustada mensagem do botão WhatsApp no redirect para remover metadados de fluxo e nome.
+- Texto agora inclui somente os dados informados pelo lead (`Dados informados` + lista de variáveis).
 
 ### Palavras-chave para pesquisa futura
 
@@ -3109,8 +3119,8 @@
 
 ## 2026-04-21 - Mensagem WhatsApp com alias do fluxo
 
-- Ajustado texto inicial do WhatsApp para usar alias do fluxo (`sourceFlowLabel`) no formato: `OlÃ¡, tenho interesse no <alias>.`
-- Mantido bloco `Dados informados` com variÃ¡veis capturadas do lead.
+- Ajustado texto inicial do WhatsApp para usar alias do fluxo (`sourceFlowLabel`) no formato: `Olá, tenho interesse no <alias>.`
+- Mantido bloco `Dados informados` com variáveis capturadas do lead.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3118,10 +3128,10 @@
 - `sourceflowlabel-mensagem`
 - `mensagem-interesse-no-fluxo`
 
-## 2026-04-21 - SeparaÃ§Ã£o entre label tÃ©cnico e alias exibido
+## 2026-04-21 - Separação entre label técnico e alias exibido
 
 - Adicionado `flowAlias` opcional no handoff para uso visual (redirect/WhatsApp).
-- `sourceFlowLabel` permanece tÃ©cnico para resolver tenant/fluxo com estabilidade.
+- `sourceFlowLabel` permanece técnico para resolver tenant/fluxo com estabilidade.
 - URL do redirect agora usa `flowAlias` quando enviado, sem impactar roteamento.
 
 ### Palavras-chave para pesquisa futura
@@ -3133,20 +3143,20 @@
 ## 2026-04-21 - Remover flowAlias de dados do lead no WhatsApp
 
 - `flowAlias` passou a ser tratado como chave reservada no handoff.
-- Com isso, aparece apenas na frase inicial da mensagem e nÃ£o na lista de `Dados informados`.
+- Com isso, aparece apenas na frase inicial da mensagem e não na lista de `Dados informados`.
 
 ### Palavras-chave para pesquisa futura
 
 - `flowalias-reserved-key`
 - `lead-summary-without-flowalias`
 
-## 2026-04-21 - Tela do lead troca automÃ¡tico para chat apÃ³s assumir
+## 2026-04-21 - Tela do lead troca automático para chat após assumir
 
 - Implementado endpoint de status por contato (`GET /api/chat/queue/:contactId`) com isolamento por tenant.
 - `handoff-view` do lead passa a alternar em tempo real:
   - espera/fila (`waiting`);
   - chat ao vivo (`in_service`).
-- Polling de status e mensagens a cada 2.5s, sem recarregar pÃ¡gina.
+- Polling de status e mensagens a cada 2.5s, sem recarregar página.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3156,13 +3166,13 @@
 
 ## 2026-04-21 - Chat do lead estilo WhatsApp + avatar por assinante
 
-- Adicionado suporte a `profileImageUrl` no tenant com endpoint para atualizaÃ§Ã£o.
-- Admin recebeu configuraÃ§Ã£o de imagem de perfil do assinante com preview.
+- Adicionado suporte a `profileImageUrl` no tenant com endpoint para atualização.
+- Admin recebeu configuração de imagem de perfil do assinante com preview.
 - `handoff-view` do lead foi redesenhado:
   - mobile full-screen;
   - desktop em modal;
   - visual de chat aproximado ao WhatsApp.
-- Avatar configurado do assinante passa a ser usado no chat no lugar do Ã­cone BOT.
+- Avatar configurado do assinante passa a ser usado no chat no lugar do ícone BOT.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3173,9 +3183,9 @@
 
 ## 2026-04-21 - Refino visual com glassmorphism no estado de espera
 
-- Overlay de espera atualizado com blur de fundo, gradientes e saturaÃ§Ã£o para efeito frosted glass.
-- Card de espera recebeu fundo translÃºcido, borda suave, brilho interno e elementos decorativos.
-- Mantida a lÃ³gica de liberar chat ao assumir atendimento.
+- Overlay de espera atualizado com blur de fundo, gradientes e saturação para efeito frosted glass.
+- Card de espera recebeu fundo translúcido, borda suave, brilho interno e elementos decorativos.
+- Mantida a lógica de liberar chat ao assumir atendimento.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3183,12 +3193,12 @@
 - `frosted-card-ui`
 - `modern-redirect-look`
 
-## 2026-04-21 - Nova tela de assinantes com modal e aÃ§Ãµes
+## 2026-04-21 - Nova tela de assinantes com modal e ações
 
-- Tela `Assinantes` refeita com botÃ£o destacado de novo assinante.
-- Listagem agora inclui avatar, nome, plano, status e aÃ§Ãµes (`Bloquear/Reativar`, `Editar`).
+- Tela `Assinantes` refeita com botão destacado de novo assinante.
+- Listagem agora inclui avatar, nome, plano, status e ações (`Bloquear/Reativar`, `Editar`).
 - Modal de criar/editar com upload de imagem, nome, e-mail, WhatsApp e plano.
-- Backend de tenants ampliado com campo `whatsapp` e endpoint de ediÃ§Ã£o completa (`PATCH /api/master/tenants/:id`).
+- Backend de tenants ampliado com campo `whatsapp` e endpoint de edição completa (`PATCH /api/master/tenants/:id`).
 
 ### Palavras-chave para pesquisa futura
 
@@ -3208,11 +3218,11 @@
 - `sidebar-logo-update`
 - `typebot-chat-branding`
 
-## 2026-04-21 - CorreÃ§Ã£o de 500 ao salvar assinante com imagem
+## 2026-04-21 - Correção de 500 ao salvar assinante com imagem
 
 - API ajustada para aceitar payload JSON maior (`express.json({ limit: "8mb" })`).
-- Tratamento explÃ­cito para `entity.too.large` retornando `413` com mensagem amigÃ¡vel.
-- Objetivo: permitir salvar ediÃ§Ã£o de assinante com imagem base64 sem erro interno.
+- Tratamento explícito para `entity.too.large` retornando `413` com mensagem amigável.
+- Objetivo: permitir salvar edição de assinante com imagem base64 sem erro interno.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3220,11 +3230,11 @@
 - `base64-image-payload`
 - `express-body-limit`
 
-## 2026-04-21 - PersistÃªncia da fila para evitar chat Ã³rfÃ£o no lead
+## 2026-04-21 - Persistência da fila para evitar chat órfão no lead
 
 - Fila e mensagens do atendimento passaram a persistir em `data/queue-state.json`.
-- `QueueRepository` agora carrega estado no startup e salva apÃ³s enqueue/assign/message.
-- Objetivo: evitar `Contact not found for tenant` no redirect do lead apÃ³s reinicializaÃ§Ã£o da API.
+- `QueueRepository` agora carrega estado no startup e salva após enqueue/assign/message.
+- Objetivo: evitar `Contact not found for tenant` no redirect do lead após reinicialização da API.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3232,10 +3242,10 @@
 - `lead-contactid-persistencia`
 - `chat-not-opening-after-assign`
 
-## 2026-04-21 - Imagem Ãºnica: Master Console = imagem do assinante
+## 2026-04-21 - Imagem única: Master Console = imagem do assinante
 
-- `profileImageUrl` Ã© Ãºnica; o modal de assinantes nÃ£o altera mais a imagem (sÃ³ o Master Console â†’ Perfil de atendimento).
-- `PATCH /api/master/tenants/:id` sem `profileImageUrl` preserva a imagem jÃ¡ salva (evita apagar ao editar dados cadastrais).
+- `profileImageUrl` é única; o modal de assinantes não altera mais a imagem (só o Master Console → Perfil de atendimento).
+- `PATCH /api/master/tenants/:id` sem `profileImageUrl` preserva a imagem já salva (evita apagar ao editar dados cadastrais).
 
 ### Palavras-chave para pesquisa futura
 
@@ -3244,10 +3254,10 @@
 
 ## 2026-04-21 - Master Console: atendentes, biblioteca, tema da logo, link curto
 
-- Cadastro de atendentes por tenant (Master / Gerente / Atendente) com senha hasheada (`scrypt`), persistÃªncia em `data/attendants.json`.
-- Fluxos: `displayLabel` editÃ¡vel no painel (apelido Typebot `nickname` intacto); `POST .../share-code` + redirect `GET /r/:code`; biblioteca em `data/flow-library.json` + ativaÃ§Ã£o `from-library`.
-- Tema por tenant `defaultChatTheme` (â€œPadrÃ£o Sistemaâ€), cor predominante extraÃ­da no admin ao salvar logo; handoff mescla tema do tenant com tema do fluxo/viewer.
-- RepositÃ³rios `FlowRepository` e `TenantRepository` unificados em `src/lib/repositories.ts` para evitar dessincronia entre rotas.
+- Cadastro de atendentes por tenant (Master / Gerente / Atendente) com senha hasheada (`scrypt`), persistência em `data/attendants.json`.
+- Fluxos: `displayLabel` editável no painel (apelido Typebot `nickname` intacto); `POST .../share-code` + redirect `GET /r/:code`; biblioteca em `data/flow-library.json` + ativação `from-library`.
+- Tema por tenant `defaultChatTheme` (“Padrão Sistema”), cor predominante extraída no admin ao salvar logo; handoff mescla tema do tenant com tema do fluxo/viewer.
+- Repositórios `FlowRepository` e `TenantRepository` unificados em `src/lib/repositories.ts` para evitar dessincronia entre rotas.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3258,11 +3268,11 @@
 - `redirect-r-shortlink`
 - `singleton-flow-tenant-repository`
 
-## 2026-04-24 - CorreÃ§Ã£o de corrupÃ§Ã£o visual por metadados de Ã­cone/imagem no Typebot
+## 2026-04-24 - Correção de corrupção visual por metadados de ícone/imagem no Typebot
 
 - Problema: `icon` estava sendo enviado como `data:image/base64` para a API Builder, gerando comportamento visual incorreto no topo do Typebot.
-- CorreÃ§Ã£o: sanitizaÃ§Ã£o em `typebot-builder.service.ts` para aceitar `icon/image` somente como URL pÃºblica (`http/https`), enviando `null` quando invÃ¡lido.
-- AÃ§Ã£o operacional: limpeza dos typebots existentes da Ideal Cred para remover `icon/image` invÃ¡lidos e normalizar metadados.
+- Correção: sanitização em `typebot-builder.service.ts` para aceitar `icon/image` somente como URL pública (`http/https`), enviando `null` quando inválido.
+- Ação operacional: limpeza dos typebots existentes da Ideal Cred para remover `icon/image` inválidos e normalizar metadados.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3270,11 +3280,11 @@
 - `metadata-corruption-header`
 - `sanitize-metadata-http-url`
 
-## 2026-04-24 - CorreÃ§Ã£o do mapeamento de metadata (favIconUrl/imageUrl)
+## 2026-04-24 - Correção do mapeamento de metadata (favIconUrl/imageUrl)
 
-- DiagnÃ³stico: API do Typebot nÃ£o persistia `metadata.icon`/`metadata.image`; os campos vÃ¡lidos sÃ£o `settings.metadata.favIconUrl` e `settings.metadata.imageUrl`.
-- Ajuste em `typebot-builder.service.ts` para aplicar metadados nos campos corretos durante importaÃ§Ã£o e resync.
-- ReaplicaÃ§Ã£o imediata dos metadados em todos os fluxos da Ideal Cred.
+- Diagnóstico: API do Typebot não persistia `metadata.icon`/`metadata.image`; os campos válidos são `settings.metadata.favIconUrl` e `settings.metadata.imageUrl`.
+- Ajuste em `typebot-builder.service.ts` para aplicar metadados nos campos corretos durante importação e resync.
+- Reaplicação imediata dos metadados em todos os fluxos da Ideal Cred.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3282,21 +3292,21 @@
 - `typebot-metadata-imageurl`
 - `ideal-cred-metadata-reapply`
 
-## 2026-04-24 - Regra operacional: apÃ³s alterar fluxo, publicar
+## 2026-04-24 - Regra operacional: após alterar fluxo, publicar
 
-- Rotina ajustada para publicar automaticamente o typebot apÃ³s alteraÃ§Ã£o em fluxo existente durante sync (inclusive metadados).
-- Implementado em `updateTypebotMetadataOnTarget` com publish apÃ³s `PATCH` bem-sucedido (fluxo principal e fallback).
+- Rotina ajustada para publicar automaticamente o typebot após alteração em fluxo existente durante sync (inclusive metadados).
+- Implementado em `updateTypebotMetadataOnTarget` com publish após `PATCH` bem-sucedido (fluxo principal e fallback).
 
 ### Palavras-chave para pesquisa futura
 
 - `auto-publish-after-flow-change`
 - `publish-after-metadata-update`
 
-## 2026-04-24 - PropagaÃ§Ã£o de alteraÃ§Ãµes da Walkup para cÃ³pias dos assinantes
+## 2026-04-24 - Propagação de alterações da Walkup para cópias dos assinantes
 
-- Nova rotina de sync para fluxos existentes no destino: quando o fluxo jÃ¡ existe no workspace do assinante, o sistema atualiza o schema completo a partir da matriz (Walkup) e publica em seguida.
-- Implementado fallback para atualizaÃ§Ã£o de metadados caso o patch completo nÃ£o seja aceito, sem quebrar o ciclo.
-- Coberto tanto para biblioteca padrÃ£o quanto para import em massa da matriz.
+- Nova rotina de sync para fluxos existentes no destino: quando o fluxo já existe no workspace do assinante, o sistema atualiza o schema completo a partir da matriz (Walkup) e publica em seguida.
+- Implementado fallback para atualização de metadados caso o patch completo não seja aceito, sem quebrar o ciclo.
+- Coberto tanto para biblioteca padrão quanto para import em massa da matriz.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3306,51 +3316,51 @@
 
 ## 2026-04-24 - Avatar do bot no tema fixado com logo do assinante
 
-- Ajuste de backend para forÃ§ar `redirectTheme.profileImageUrl` usando `tenant.profileImageUrl` (logo do assinante).
-- Coberto em listagem, criaÃ§Ã£o e atualizaÃ§Ã£o de tema de fluxo.
-- Resultado: o avatar do bot no tema nÃ£o depende mais de valor externo divergente do tenant.
+- Ajuste de backend para forçar `redirectTheme.profileImageUrl` usando `tenant.profileImageUrl` (logo do assinante).
+- Coberto em listagem, criação e atualização de tema de fluxo.
+- Resultado: o avatar do bot no tema não depende mais de valor externo divergente do tenant.
 
 ### Palavras-chave para pesquisa futura
 
 - `tenant-logo-bot-avatar`
 - `flow-theme-avatar-enforced`
 
-## 2026-04-24 - CorreÃ§Ã£o de layout estourando no Theme (Avatar do bot)
+## 2026-04-24 - Correção de layout estourando no Theme (Avatar do bot)
 
 - Problema: `hostAvatar.url` com `data:image;base64` muito longo aparecia no editor e estourava o layout visual.
-- Ajuste: no Theme do Typebot, `hostAvatar.url` agora aceita apenas `http(s)`; sem URL pÃºblica, grava `isEnabled=false` e `url=""`.
-- Sync reaplicado na Ideal Cred para limpar o estado jÃ¡ persistido.
+- Ajuste: no Theme do Typebot, `hostAvatar.url` agora aceita apenas `http(s)`; sem URL pública, grava `isEnabled=false` e `url=""`.
+- Sync reaplicado na Ideal Cred para limpar o estado já persistido.
 
 ### Palavras-chave para pesquisa futura
 
 - `typebot-hostavatar-overflow`
 - `theme-chat-hostavatar-url`
 
-## 2026-04-24 - Avatar ativo com logo + otimizaÃ§Ã£o de upload
+## 2026-04-24 - Avatar ativo com logo + otimização de upload
 
-- ReversÃ£o da regra que desativava avatar quando a logo nÃ£o era `http(s)`: avatar do bot voltou a aceitar `data:image` e ficar ativo.
+- Reversão da regra que desativava avatar quando a logo não era `http(s)`: avatar do bot voltou a aceitar `data:image` e ficar ativo.
 - Melhoria de frontend: upload de `Logo da marca` agora otimiza para 96x96 PNG antes de persistir (reduz payload e evita estouro visual).
-- NecessÃ¡rio reenviar a logo para aplicar a versÃ£o otimizada nos fluxos jÃ¡ existentes.
+- Necessário reenviar a logo para aplicar a versão otimizada nos fluxos já existentes.
 
 ### Palavras-chave para pesquisa futura
 
 - `avatar-ativo-logo-assinante`
 - `resize-logo-upload-96x96`
 
-## 2026-04-24 - Avatar ativo com URL pÃºblica da logo (sem texto gigante)
+## 2026-04-24 - Avatar ativo com URL pública da logo (sem texto gigante)
 
-- Ajuste definitivo para Theme do Typebot: `hostAvatar.url` nÃ£o recebe mais `data:image` direto.
-- Nova estratÃ©gia: avatar ativo apontando para endpoint pÃºblico da API (`/api/public/tenants/:id/logo`), que serve a logo do assinante.
-- Resultado: avatar permanece ativo e o layout do editor nÃ£o estoura com string base64.
+- Ajuste definitivo para Theme do Typebot: `hostAvatar.url` não recebe mais `data:image` direto.
+- Nova estratégia: avatar ativo apontando para endpoint público da API (`/api/public/tenants/:id/logo`), que serve a logo do assinante.
+- Resultado: avatar permanece ativo e o layout do editor não estoura com string base64.
 
 ### Palavras-chave para pesquisa futura
 
 - `avatar-bot-url-publica`
 - `public-tenant-logo-endpoint`
 
-## 2026-04-24 - CorreÃ§Ã£o de avatar corrompido (remoÃ§Ã£o de localhost)
+## 2026-04-24 - Correção de avatar corrompido (remoção de localhost)
 
-- Ajuste com URL `localhost` no `hostAvatar.url` causou Ã­cone quebrado no Typebot remoto.
+- Ajuste com URL `localhost` no `hostAvatar.url` causou ícone quebrado no Typebot remoto.
 - Fluxo revertido para `data:image/http(s)` direto no avatar do Theme.
 - Logo da Ideal Cred foi otimizada (64x64 PNG) para reduzir payload do `data:image` e diminuir risco de estouro visual.
 
@@ -3359,11 +3369,11 @@
 - `avatar-corrompido-localhost`
 - `hostavatar-dataimage-otimizado`
 
-## 2026-04-24 - Avatar sem estouro usando URL pÃºblica real
+## 2026-04-24 - Avatar sem estouro usando URL pública real
 
 - `hostAvatar.url` em `data:image` causava texto gigante no editor; `localhost` causava imagem quebrada no remoto.
-- SoluÃ§Ã£o operacional aplicada: logo do tenant em URL pÃºblica real e sync reaplicado.
-- Resultado: avatar ativo com imagem vÃ¡lida e sem texto estourando o layout.
+- Solução operacional aplicada: logo do tenant em URL pública real e sync reaplicado.
+- Resultado: avatar ativo com imagem válida e sem texto estourando o layout.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3372,9 +3382,9 @@
 
 ## 2026-05-11 - Menu Lista de Clientes no admin
 
-- Nova tela `clientList` no admin para assinantes e atendentes: tabela dinÃ¢mica com contatos da fila do tenant, colunas fixas (Nome, WhatsApp, CPF, Fluxo/Produto, Atendente, Atualizado em) e colunas extras sÃ³ para chaves nÃ£o vazias do `leadContext`.
-- Busca por CPF, nome ou WhatsApp; filtros Fluxo/Produto e com/sem WhatsApp; aÃ§Ã£o Ver detalhes reutiliza `LeadDetailModal`.
-- Dados vÃªm de `GET /api/chat/queue` jÃ¡ carregado no painel (sem endpoint novo).
+- Nova tela `clientList` no admin para assinantes e atendentes: tabela dinâmica com contatos da fila do tenant, colunas fixas (Nome, WhatsApp, CPF, Fluxo/Produto, Atendente, Atualizado em) e colunas extras só para chaves não vazias do `leadContext`.
+- Busca por CPF, nome ou WhatsApp; filtros Fluxo/Produto e com/sem WhatsApp; ação Ver detalhes reutiliza `LeadDetailModal`.
+- Dados vêm de `GET /api/chat/queue` já carregado no painel (sem endpoint novo).
 
 ### Palavras-chave para pesquisa futura
 
@@ -3383,8 +3393,8 @@
 
 ## 2026-05-12 - CPF mascarado no card de detalhes do lead
 
-- CPF resolvido do `leadContext` e exibido logo abaixo do WhatsApp no topo do card (admin `LeadDetailModal` e widget `LeadDrawerPanel`), com mÃ¡scara `000.000.000-00`.
-- Chaves de CPF removidas da listagem de variÃ¡veis do Typebot para evitar duplicidade; lista de clientes reutiliza a mesma formataÃ§Ã£o.
+- CPF resolvido do `leadContext` e exibido logo abaixo do WhatsApp no topo do card (admin `LeadDetailModal` e widget `LeadDrawerPanel`), com máscara `000.000.000-00`.
+- Chaves de CPF removidas da listagem de variáveis do Typebot para evitar duplicidade; lista de clientes reutiliza a mesma formatação.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3393,60 +3403,60 @@
 
 ## 2026-05-12 - Nome do contato com fallback para nome_completo
 
-- Regra central: priorizar `Nome_Contato` no contexto do lead; se vazio, usar `nome_completo` (tambÃ©m `nome_competo` e `nome completo`).
-- Handoff, normalizaÃ§Ã£o da fila na API, admin e widget passam a aplicar a mesma resoluÃ§Ã£o de nome.
+- Regra central: priorizar `Nome_Contato` no contexto do lead; se vazio, usar `nome_completo` (também `nome_competo` e `nome completo`).
+- Handoff, normalização da fila na API, admin e widget passam a aplicar a mesma resolução de nome.
 
 ### Palavras-chave para pesquisa futura
 
 - `resolve-lead-contact-name`
 - `nome-contato-nome-completo-fallback`
 
-## 2026-05-12 - DiagnÃ³stico login painel (ligaÃ§Ã£o Ã  API)
+## 2026-05-12 - Diagnóstico login painel (ligação à API)
 
-- Sintoma em `painel.chattypebot.com`: toast **Sem ligaÃ§Ã£o Ã  API** ao enviar login; rodapÃ© jÃ¡ mostrava `https://soma-api-typebot-crm.achpyp.easypanel.host` (URL correta no bundle).
+- Sintoma em `painel.chattypebot.com`: toast **Sem ligação à API** ao enviar login; rodapé já mostrava `https://soma-api-typebot-crm.achpyp.easypanel.host` (URL correta no bundle).
 - Testes externos (PowerShell/Node): `GET /health` **200**; CORS com `Origin: https://painel.chattypebot.com` OK; `POST /api/auth/login` responde (401 com senha errada para `draxsistemas@gmail.com`).
-- ConclusÃ£o: falha no `catch` do `fetch` (rede/TLS/browser), nÃ£o credencial nem `VITE_API_BASE_URL` ausente no build.
-- Admin: sonda `/health` na tela de login, estado visual no rodapÃ© da API e mensagem de erro com detalhe do `Error.message`.
+- Conclusão: falha no `catch` do `fetch` (rede/TLS/browser), não credencial nem `VITE_API_BASE_URL` ausente no build.
+- Admin: sonda `/health` na tela de login, estado visual no rodapé da API e mensagem de erro com detalhe do `Error.message`.
 
 ### Palavras-chave para pesquisa futura
 
 - `login-sem-ligacao-api`
 - `auth-api-endpoint-hint-health-probe`
 
-## 2026-05-12 - Coluna AÃ§Ãµes centralizada (lista de clientes)
+## 2026-05-12 - Coluna Ações centralizada (lista de clientes)
 
-- CabeÃ§alho **AÃ§Ãµes** e Ã­cones da Ãºltima coluna da tabela de clientes alinhados ao centro da cÃ©lula (`clients-table-row > span:last-child`).
-- Fila de atendimento: mesma centralizaÃ§Ã£o na coluna de aÃ§Ãµes (`queue-table-row`).
+- Cabeçalho **Ações** e ícones da última coluna da tabela de clientes alinhados ao centro da célula (`clients-table-row > span:last-child`).
+- Fila de atendimento: mesma centralização na coluna de ações (`queue-table-row`).
 
 ### Palavras-chave para pesquisa futura
 
 - `clients-table-actions-center`
 - `queue-actions-center`
 
-## 2026-05-12 - ReforÃ§o centralizaÃ§Ã£o coluna AÃ§Ãµes
+## 2026-05-12 - Reforço centralização coluna Ações
 
-- Coluna **AÃ§Ãµes** com largura fixa (76px) e classe `clients-table-col-actions` no cabeÃ§alho e nas cÃ©lulas da lista de clientes.
-- Fila: classe `queue-table-col-actions` e Ãºltima coluna fixa (76px) no breakpoint largo.
+- Coluna **Ações** com largura fixa (76px) e classe `clients-table-col-actions` no cabeçalho e nas células da lista de clientes.
+- Fila: classe `queue-table-col-actions` e última coluna fixa (76px) no breakpoint largo.
 
 ### Palavras-chave para pesquisa futura
 
 - `clients-table-col-actions`
 - `queue-table-col-actions`
 
-## 2026-05-12 - CentralizaÃ§Ã£o do Ã­cone na coluna AÃ§Ãµes (grelha)
+## 2026-05-12 - Centralização do ícone na coluna Ações (grelha)
 
 - Template de colunas da lista de clientes via `--clients-table-cols` no contentor da tabela.
-- BotÃ£o de detalhe como filho direto da grelha com `justify-self: center` na coluna de aÃ§Ãµes.
+- Botão de detalhe como filho direto da grelha com `justify-self: center` na coluna de ações.
 
 ### Palavras-chave para pesquisa futura
 
 - `clients-table-cols-css-var`
 - `clients-table-action-grid-item`
 
-## 2026-05-12 - Lista de clientes em tabela HTML (AÃ§Ãµes centralizada)
+## 2026-05-12 - Lista de clientes em tabela HTML (Ações centralizada)
 
-- Lista de clientes deixou de usar grelha CSS em `div`; passou a `<table>` com coluna **AÃ§Ãµes** fixa (76px) e `text-align: center`.
-- ProduÃ§Ã£o em `painel.chattypebot.com` ainda servia bundle antigo (`index-CdLZziWW.css`) sem os ajustes recentes â€” redeploy do painel necessÃ¡rio.
+- Lista de clientes deixou de usar grelha CSS em `div`; passou a `<table>` com coluna **Ações** fixa (76px) e `text-align: center`.
+- Produção em `painel.chattypebot.com` ainda servia bundle antigo (`index-CdLZziWW.css`) sem os ajustes recentes — redeploy do painel necessário.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3455,16 +3465,16 @@
 
 ## 2026-05-12 - Exportar lista de clientes para Excel
 
-- BotÃ£o **Exportar Excel** na Lista de Clientes; exporta `filteredRows` (filtros ativos) ou lista completa.
-- Arquivo `.xlsx` com colunas da tabela (sem AÃ§Ãµes); nome `clientes-AAAA-MM-DD.xlsx` ou `-filtrado` com filtros.
-- DependÃªncia `xlsx` no admin; import dinÃ¢mico no clique.
+- Botão **Exportar Excel** na Lista de Clientes; exporta `filteredRows` (filtros ativos) ou lista completa.
+- Arquivo `.xlsx` com colunas da tabela (sem Ações); nome `clientes-AAAA-MM-DD.xlsx` ou `-filtrado` com filtros.
+- Dependência `xlsx` no admin; import dinâmico no clique.
 
 ### Palavras-chave para pesquisa futura
 
 - `export-client-directory-excel`
 - `clients-list-export-btn`
 
-## 2026-05-12 - Nome Ãºnico no export Excel da lista de clientes
+## 2026-05-12 - Nome único no export Excel da lista de clientes
 
 - Cada download usa UUID no nome: `clientes-AAAA-MM-DD-{id}.xlsx` (ou `-filtrado`).
 
@@ -3472,34 +3482,34 @@
 
 - `clientes-export-uuid-filename`
 
-## 2026-05-12 - DiagnÃ³stico painel sem exportar Excel nem centralizar AÃ§Ãµes
+## 2026-05-12 - Diagnóstico painel sem exportar Excel nem centralizar Ações
 
 - `painel.chattypebot.com` servia `index-CdLZziWW.css` / `index-BuzWbGuk.js` (commit `140f34a`); sem `Exportar Excel`, `clients-table-col-actions` nem chunk `xlsx`.
-- Causa: alteraÃ§Ãµes do admin sÃ³ no working tree; Easypanel rebuilda a partir do Git.
-- CorreÃ§Ã£o: commit/push `0aad114` (tabela HTML, coluna AÃ§Ãµes 76px, export Excel).
-- PrÃ³ximo passo: redeploy **painel-typebot-crm** (nÃ£o sÃ³ API); validar novo hash de assets no HTML.
+- Causa: alterações do admin só no working tree; Easypanel rebuilda a partir do Git.
+- Correção: commit/push `0aad114` (tabela HTML, coluna Ações 76px, export Excel).
+- Próximo passo: redeploy **painel-typebot-crm** (não só API); validar novo hash de assets no HTML.
 
 ### Palavras-chave para pesquisa futura
 
 - `painel-bundle-desatualizado`
 - `deploy-painel-typebot-crm-admin`
 
-## 2026-05-12 - Login/reset walkup 401/404 em produÃ§Ã£o
+## 2026-05-12 - Login/reset walkup 401/404 em produção
 
-- API com Postgres: `walkup@walkuptec.com.br` nÃ£o cadastrado â†’ login 401 e reset 404.
-- RecuperaÃ§Ã£o: `API_ENSURE_SYSTEM_MASTER` no arranque; `API_ALLOW_SYSTEM_MASTER_RESET_PROVISION` no reset (documentado em `doc/EASYPANEL-AMBIENTE.env.example`).
+- API com Postgres: `walkup@walkuptec.com.br` não cadastrado → login 401 e reset 404.
+- Recuperação: `API_ENSURE_SYSTEM_MASTER` no arranque; `API_ALLOW_SYSTEM_MASTER_RESET_PROVISION` no reset (documentado em `doc/EASYPANEL-AMBIENTE.env.example`).
 
 ### Palavras-chave para pesquisa futura
 
 - `ensure-system-master-auth`
 - `walkup-master-postgres-404`
 
-## 2026-05-12 - Nome exibido do usuÃ¡rio Drax (Drax Sistemas)
+## 2026-05-12 - Nome exibido do usuário Drax (Drax Sistemas)
 
-- Sintoma: `draxsistemas@gmail.com` aparecia como `draxsistemas` / `darsistemas` quando `displayName` vinha vazio ou sÃ³ o prefixo do e-mail.
-- CorreÃ§Ã£o: mapa canÃ´nico `draxsistemas@gmail.com` / `draxsistemas` / `darsistemas` â†’ **Drax Sistemas** em `resolveAttendantDisplayName` (API, painel, widget) e no script inline do handoff.
-- ReforÃ§o fila: `GET /api/chat/queue` e detalhe do contato normalizam `assignedAgentName`; atribuiÃ§Ã£o grava nome canÃ´nico; coluna Atendente no painel resolve na renderizaÃ§Ã£o.
-- Telas: login/boas-vindas, menu do usuÃ¡rio, fila, lista de clientes, modal do lead, atendentes, widget e resposta de login da API.
+- Sintoma: `draxsistemas@gmail.com` aparecia como `draxsistemas` / `darsistemas` quando `displayName` vinha vazio ou só o prefixo do e-mail.
+- Correção: mapa canônico `draxsistemas@gmail.com` / `draxsistemas` / `darsistemas` → **Drax Sistemas** em `resolveAttendantDisplayName` (API, painel, widget) e no script inline do handoff.
+- Reforço fila: `GET /api/chat/queue` e detalhe do contato normalizam `assignedAgentName`; atribuição grava nome canônico; coluna Atendente no painel resolve na renderização.
+- Telas: login/boas-vindas, menu do usuário, fila, lista de clientes, modal do lead, atendentes, widget e resposta de login da API.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3529,11 +3539,11 @@
 - `commit-caf5618-deploy`
 - `redeploy-painel-api-pos-push`
 
-## 2026-05-12 - PÃ¡gina de vendas e checkout Asaas (base)
+## 2026-05-12 - Página de vendas e checkout Asaas (base)
 
 - Novo app `apps/sales` (Vite) com planos, checkout e acompanhamento do pedido.
 - API: `GET /api/public/sales/plans`, `POST /api/public/sales/checkout`, `GET /api/public/sales/orders/:id`, `POST /api/webhooks/asaas`.
-- PÃ³s-pagamento: provisiona assinante, fluxos padrÃ£o e e-mail de boas-vindas; pedidos em `billing-orders.json`.
+- Pós-pagamento: provisiona assinante, fluxos padrão e e-mail de boas-vindas; pedidos em `billing-orders.json`.
 - Env: `ASAAS_API_KEY`, `ASAAS_API_BASE_URL`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `SALES_PLAN_*`; build vendas com `VITE_API_BASE_URL` e `VITE_PAINEL_URL`.
 
 ### Palavras-chave para pesquisa futura
@@ -3544,10 +3554,10 @@
 ## 2026-05-12 - PV chattypebot.com (TanStack Start)
 
 - `apps/sales` passou a usar o PV `walkup-tec/PV-typebot-chat` (TanStack Start); checkout via `POST /api/public/sales/subscriptions` e **Entrar** com `VITE_PAINEL_URL`.
-- Build de produÃ§Ã£o: `apps/sales/.env.production` (`api.chattypebot.com`, `painel.chattypebot.com`); arranque `node scripts/serve-production.mjs` (SSR Node, porta `PORT`).
+- Build de produção: `apps/sales/.env.production` (`api.chattypebot.com`, `painel.chattypebot.com`); arranque `node scripts/serve-production.mjs` (SSR Node, porta `PORT`).
 - Monorepo: `apps/sales` fora do workspace npm da raiz; scripts raiz usam `npm --prefix apps/sales`.
-- Deploy: `doc/DEPLOY-VPS-chattypebot-com.md` â€” `chattypebot.com` = vendas; painel em subdomÃ­nio.
-- PendÃªncia: serviÃ§o Easypanel dedicado + `npm ci` limpo em `apps/sales` no servidor (node_modules local no Windows instÃ¡vel).
+- Deploy: `doc/DEPLOY-VPS-chattypebot-com.md` — `chattypebot.com` = vendas; painel em subdomínio.
+- Pendência: serviço Easypanel dedicado + `npm ci` limpo em `apps/sales` no servidor (node_modules local no Windows instável).
 
 ### Palavras-chave para pesquisa futura
 
@@ -3557,18 +3567,18 @@
 ## 2026-05-12 - Env Asaas na API local
 
 - `apps/api/.env`: `ASAAS_API_BASE_URL`, `ASAAS_API_KEY`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `SALES_PLAN_*` (mensal R$ 190, anual R$ 1188).
-- PendÃªncia: usuÃ¡rio preencher chaves e webhook no painel Asaas; replicar env no Easypanel da API.
+- Pendência: usuário preencher chaves e webhook no painel Asaas; replicar env no Easypanel da API.
 
 ### Palavras-chave para pesquisa futura
 
 - `env-asaas-api-local`
 - `webhook-asaas-access-token`
 
-## 2026-05-13 - Retomada sessÃ£o (continuar projeto)
+## 2026-05-13 - Retomada sessão (continuar projeto)
 
-- Contexto recuperado: Ãºltima entrega em 2026-05-12 foi **pÃ¡gina de vendas** (`apps/sales`, TanStack Start) + **billing Asaas** na API (`/api/public/sales/*`, webhook `/api/webhooks/asaas`).
-- PendÃªncias operacionais (inalteradas): serviÃ§o Easypanel dedicado para `apps/sales` em `chattypebot.com` (build com `VITE_*`, start `node scripts/serve-production.mjs`); env `ASAAS_*` + webhook na API em produÃ§Ã£o; DNS/TLS `chattypebot.com` / `www`; opcional `npm ci` sÃ³ em `apps/sales` no servidor se houver corrupÃ§Ã£o de `node_modules` no Windows.
-- ValidaÃ§Ã£o local: `npm run build:sales` na raiz concluiu com sucesso (client + SSR, ~40s + ~1.4s).
+- Contexto recuperado: última entrega em 2026-05-12 foi **página de vendas** (`apps/sales`, TanStack Start) + **billing Asaas** na API (`/api/public/sales/*`, webhook `/api/webhooks/asaas`).
+- Pendências operacionais (inalteradas): serviço Easypanel dedicado para `apps/sales` em `chattypebot.com` (build com `VITE_*`, start `node scripts/serve-production.mjs`); env `ASAAS_*` + webhook na API em produção; DNS/TLS `chattypebot.com` / `www`; opcional `npm ci` só em `apps/sales` no servidor se houver corrupção de `node_modules` no Windows.
+- Validação local: `npm run build:sales` na raiz concluiu com sucesso (client + SSR, ~40s + ~1.4s).
 
 ### Palavras-chave para pesquisa futura
 
@@ -3577,9 +3587,9 @@
 
 ## 2026-05-13 - PV-typebot-chat GitHub (Easypanel deploy)
 
-- RepositÃ³rio `walkup-tec/PV-typebot-chat`: commit `d2d49b8` em `main` â€” `package-lock.json` alinhado ao `package.json` (corrige `npm ci` no Nixpacks), `scripts/serve-production.mjs` versionado (SSR), `src/lib/salesApi.ts`, checkout no `index` via API pÃºblica, `vite.config` com `cloudflare: false` para build Node/Docker.
+- Repositório `walkup-tec/PV-typebot-chat`: commit `d2d49b8` em `main` — `package-lock.json` alinhado ao `package.json` (corrige `npm ci` no Nixpacks), `scripts/serve-production.mjs` versionado (SSR), `src/lib/salesApi.ts`, checkout no `index` via API pública, `vite.config` com `cloudflare: false` para build Node/Docker.
 - Push feito a partir do clone local em `_pv-typebot-chat-temp` (Windows: `npm ci` local pode falhar com ENOTEMPTY; o CI Docker usa Linux).
-- Nota: `.env.production` passou a ser versionado no commit seguinte (`04042bc`) â€” ver entrada abaixo.
+- Nota: `.env.production` passou a ser versionado no commit seguinte (`04042bc`) — ver entrada abaixo.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3588,8 +3598,8 @@
 
 ## 2026-05-13 - PV-typebot-chat `.env.production` (VITE URLs)
 
-- RepositÃ³rio `walkup-tec/PV-typebot-chat`: ficheiro **`.env.production`** versionado com `VITE_API_BASE_URL=https://api.chattypebot.com` e `VITE_PAINEL_URL=https://painel.chattypebot.com` para o `vite build` no Easypanel embutir URLs pÃºblicas; **`.env.example`** com defaults locais.
-- Rebuild no Easypanel necessÃ¡rio para o novo bundle.
+- Repositório `walkup-tec/PV-typebot-chat`: ficheiro **`.env.production`** versionado com `VITE_API_BASE_URL=https://api.chattypebot.com` e `VITE_PAINEL_URL=https://painel.chattypebot.com` para o `vite build` no Easypanel embutir URLs públicas; **`.env.example`** com defaults locais.
+- Rebuild no Easypanel necessário para o novo bundle.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3598,9 +3608,9 @@
 
 ## 2026-05-13 - PV-typebot CSS 404 em `/assets/*`
 
-- Causa: `curl -I https://chattypebot.com/assets/styles-*.css` â†’ **404**; HTML SSR referenciava `/assets/...` mas o handler sÃ³ delegava a `dist/server/server.js` sem servir ficheiros de `dist/client`.
-- CorreÃ§Ã£o: `scripts/serve-production.mjs` passa a servir **GET/HEAD** para `/assets/*` (e `favicon.ico` / `robots.txt`) a partir de `dist/client`, com MIME e cache; depois delega ao SSR.
-- Commit `aaf74ab` em `walkup-tec/PV-typebot-chat`; mesmo padrÃ£o aplicado em `apps/sales/scripts/serve-production.mjs` no monorepo local.
+- Causa: `curl -I https://chattypebot.com/assets/styles-*.css` → **404**; HTML SSR referenciava `/assets/...` mas o handler só delegava a `dist/server/server.js` sem servir ficheiros de `dist/client`.
+- Correção: `scripts/serve-production.mjs` passa a servir **GET/HEAD** para `/assets/*` (e `favicon.ico` / `robots.txt`) a partir de `dist/client`, com MIME e cache; depois delega ao SSR.
+- Commit `aaf74ab` em `walkup-tec/PV-typebot-chat`; mesmo padrão aplicado em `apps/sales/scripts/serve-production.mjs` no monorepo local.
 
 ### Palavras-chave para pesquisa futura
 
@@ -3609,12 +3619,11 @@
 
 ## 2026-05-13 - Landing PV: logo igual ao painel admin
 
-- Logo **DRAX** (`/drax-logo-footer.png`, ficheiro igual a `apps/admin/public/drax-logo-footer.png`) no **header** e **footer** da landing (`PV-typebot-chat`); removido Ã­cone Lucide `Bot` + texto duplicado nesses blocos.
-- `public/drax-logo-footer.png` no repo; `serve-production.mjs` passa a servir tambÃ©m `/drax-logo-footer.png` desde `dist/client`.
+- Logo **DRAX** (`/drax-logo-footer.png`, ficheiro igual a `apps/admin/public/drax-logo-footer.png`) no **header** e **footer** da landing (`PV-typebot-chat`); removido ícone Lucide `Bot` + texto duplicado nesses blocos.
+- `public/drax-logo-footer.png` no repo; `serve-production.mjs` passa a servir também `/drax-logo-footer.png` desde `dist/client`.
 - Commit `12accb4` em `walkup-tec/PV-typebot-chat`; alinhado `apps/sales` (public + index + serve-production) no monorepo local.
 
 ### Palavras-chave para pesquisa futura
 
 - `landing-drax-logo-admin-parity`
 - `serve-production-public-png`
-
