@@ -24,6 +24,7 @@ import { isFlowUrlActive, probeFlowUrlStatus } from "../lib/flow-url-health";
 import { attachFlowActiveStatus } from "../lib/typebot-flow-publish-status";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
+  ensureTenantFlowsLinkedToWorkspace,
   filterTenantFlowsForWorkspace,
   importManualWorkspaceTypebotsIntoTenantFlows,
   refreshFlowViewerUrlFromTypebot,
@@ -38,10 +39,13 @@ import {
   removeSystemDefaultFromSubscriberWorkspaces,
   syncSystemDefaultsToRealTypebotWorkspace,
 } from "../typebot/typebot-builder.service";
+import { SYSTEM_MASTER_OWNER_EMAIL } from "../auth/system-master-auth";
 
 const flowService = new FlowService(flowRepository);
-const MASTER_SOURCE_EMAIL = "walkup@walkuptec.com.br";
+const MASTER_SOURCE_EMAIL = SYSTEM_MASTER_OWNER_EMAIL;
 const normalizeText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
+const isMasterSourceTenant = (ownerEmail: string | undefined): boolean =>
+  normalizeText(ownerEmail) === normalizeText(MASTER_SOURCE_EMAIL);
 const slugifyFlowNickname = (value: string): string =>
   String(value ?? "")
     .toLowerCase()
@@ -416,7 +420,15 @@ export const registerFlowRoutes = (app: Express) => {
     }
     let flows = flowService.listByTenant(tenantId);
     if (hasTypebotWorkspace) {
-      flows = await filterTenantFlowsForWorkspace(tenantId, flows);
+      try {
+        await ensureTenantFlowsLinkedToWorkspace(tenantId);
+      } catch {
+        // best-effort: não bloqueia listagem
+      }
+      // Conta matriz (walkup@): não filtrar por workspace — evita biblioteca vazia na etapa 6.
+      if (!isMasterSourceTenant(tenant?.ownerEmail)) {
+        flows = await filterTenantFlowsForWorkspace(tenantId, flows);
+      }
     }
     const withAvatar = flows.map(applyTenantLogoAsBotAvatar);
     const withStatus = await attachFlowActiveStatus(withAvatar);

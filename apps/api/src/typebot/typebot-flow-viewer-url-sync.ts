@@ -339,21 +339,104 @@ const listWorkspaceTypebots = async (workspaceId: string): Promise<TypebotListRo
   return filtered;
 };
 
-const resolveWorkspaceTypebotRemoteIds = async (workspaceId: string): Promise<{ remoteIds: Set<string>; listOk: boolean }> => {
+type WorkspaceTypebotCatalog = {
+  remoteIds: Set<string>;
+  publicIds: Set<string>;
+  listOk: boolean;
+};
+
+const resolveWorkspaceTypebotCatalog = async (workspaceId: string): Promise<WorkspaceTypebotCatalog> => {
   const normalizedWorkspaceId = String(workspaceId ?? "").trim();
-  if (!normalizedWorkspaceId) return { remoteIds: new Set(), listOk: false };
+  if (!normalizedWorkspaceId) return { remoteIds: new Set(), publicIds: new Set(), listOk: false };
 
   const raw = await listWorkspaceTypebotsRaw(normalizedWorkspaceId);
-  if (!raw.listOk) return { remoteIds: new Set(), listOk: false };
+  if (!raw.listOk) return { remoteIds: new Set(), publicIds: new Set(), listOk: false };
 
   const remoteIds = new Set<string>();
+  const publicIds = new Set<string>();
   for (const row of raw.rows) {
     const id = String(row.id ?? "").trim();
     if (!id) continue;
     const detail = await fetchTypebotDetailById(id);
-    if (detail.workspaceId === normalizedWorkspaceId) remoteIds.add(id);
+    if (detail.workspaceId !== normalizedWorkspaceId) continue;
+    remoteIds.add(id);
+    let publicId = (await resolvePublicIdForRow(row)) ?? "";
+    if (!publicId) publicId = derivePublicIdFromRowName(row);
+    if (publicId) publicIds.add(normalizeText(publicId));
   }
-  return { remoteIds, listOk: true };
+  return { remoteIds, publicIds, listOk: true };
+};
+
+const flowPublicIdKey = (flow: SavedFlow): string => {
+  const fromField = String(flow.typebotPublicId ?? "").trim();
+  const fromUrl = typebotPublicIdFromViewerUrl(flow.url) ?? "";
+  return normalizeText(fromField || fromUrl);
+};
+
+const flowBelongsToWorkspaceCatalog = (flow: SavedFlow, catalog: WorkspaceTypebotCatalog): boolean => {
+  const remoteId = String(flow.typebotRemoteId ?? "").trim();
+  if (remoteId && catalog.remoteIds.has(remoteId)) return true;
+  const publicId = flowPublicIdKey(flow);
+  return Boolean(publicId && catalog.publicIds.has(publicId));
+};
+
+/** Vincula fluxos locais órfãos (sem `typebotRemoteId`) ao bot correto do workspace por publicId/nome. */
+const linkTenantFlowsToWorkspaceRows = async (
+  tenantId: string,
+  rows: TypebotListRow[],
+  viewerBase: string,
+): Promise<number> => {
+  if (rows.length === 0) return 0;
+  const allFlows = flowRepository.listByTenant(tenantId);
+  let linked = 0;
+
+  for (const flow of allFlows) {
+    const remoteId = String(flow.typebotRemoteId ?? "").trim();
+    const alreadyInWorkspace = remoteId && rows.some((row) => String(row.id ?? "").trim() === remoteId);
+    if (alreadyInWorkspace) continue;
+
+    const row = await pickTypebotRowForFlow(flow, rows, allFlows);
+    if (!row) {
+      const flowPid = flowPublicIdKey(flow);
+      if (!flowPid) continue;
+      const byPublicId = rows.find((candidate) => {
+        const candidatePid = normalizeText(
+          String(candidate.publicId ?? "").trim() ||
+            derivePublicIdFromRowName(candidate) ||
+            "",
+        );
+        return candidatePid === flowPid;
+      });
+      if (!byPublicId) continue;
+      await applyWorkspaceRowToFlow(flow, byPublicId, viewerBase);
+      linked += 1;
+      continue;
+    }
+
+    await applyWorkspaceRowToFlow(flow, row, viewerBase);
+    linked += 1;
+  }
+
+  return linked;
+};
+
+const applyWorkspaceRowToFlow = async (flow: SavedFlow, row: TypebotListRow, viewerBase: string): Promise<void> => {
+  const typebotId = String(row.id ?? "").trim();
+  const displayName = String(row.name ?? "").trim();
+  if (!typebotId) return;
+
+  let publicId = (await resolvePublicIdForRow(row)) ?? "";
+  if (!publicId) publicId = derivePublicIdFromRowName(row);
+  if (!publicId) return;
+
+  const viewerUrl = buildViewerUrl(viewerBase, publicId);
+  const patch: Partial<SavedFlow> = {
+    typebotRemoteId: typebotId,
+    typebotPublicId: publicId,
+    url: viewerUrl,
+  };
+  if (displayName) patch.displayLabel = displayName;
+  flowRepository.updateById(flow.id, patch);
 };
 
 /** Resposta da API: só fluxos cujo typebot está no workspace vinculado ao assinante. */
@@ -365,13 +448,24 @@ export const filterTenantFlowsForWorkspace = async (
   const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
   if (!workspaceId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) return flows;
 
-  const { remoteIds, listOk } = await resolveWorkspaceTypebotRemoteIds(workspaceId);
-  if (!listOk) return flows;
+  const catalog = await resolveWorkspaceTypebotCatalog(workspaceId);
+  if (!catalog.listOk) return flows;
 
-  return flows.filter((flow) => {
-    const remoteId = String(flow.typebotRemoteId ?? "").trim();
-    return Boolean(remoteId && remoteIds.has(remoteId));
-  });
+  return flows.filter((flow) => flowBelongsToWorkspaceCatalog(flow, catalog));
+};
+
+/** Garante vínculo builder antes de filtrar/prunar (fluxos criados só com URL pública). */
+export const ensureTenantFlowsLinkedToWorkspace = async (tenantId: string): Promise<number> => {
+  const tenant = tenantRepository.getById(tenantId);
+  const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
+  if (!workspaceId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) return 0;
+
+  const viewerBase = resolveTargetViewerBaseUrl(tenantId);
+  if (!viewerBase) return 0;
+
+  const rows = await listWorkspaceTypebots(workspaceId);
+  if (rows.length === 0) return 0;
+  return linkTenantFlowsToWorkspaceRows(tenantId, rows, viewerBase);
 };
 
 const resolveMasterCatalogViewerUrl = (flow: SavedFlow): string => {
@@ -507,6 +601,11 @@ const pruneTenantFlowsToMatchWorkspace = async (
     if (id) remoteIds.add(id);
   }
 
+  const viewerBase = resolveTargetViewerBaseUrl(tenantId);
+  if (viewerBase) {
+    await linkTenantFlowsToWorkspaceRows(tenantId, rows, viewerBase);
+  }
+
   const flows = flowRepository.listByTenant(tenantId);
   const keptRemoteIds = new Set<string>();
   const toRemove: string[] = [];
@@ -514,6 +613,19 @@ const pruneTenantFlowsToMatchWorkspace = async (
   for (const flow of flows) {
     const remoteId = String(flow.typebotRemoteId ?? "").trim();
     if (!remoteId || !remoteIds.has(remoteId)) {
+      const publicId = flowPublicIdKey(flow);
+      let keepByPublicId = false;
+      if (publicId) {
+        for (const row of rows) {
+          let pid = (await resolvePublicIdForRow(row)) ?? "";
+          if (!pid) pid = derivePublicIdFromRowName(row);
+          if (normalizeText(pid) === publicId) {
+            keepByPublicId = true;
+            break;
+          }
+        }
+      }
+      if (keepByPublicId) continue;
       toRemove.push(flow.id);
       continue;
     }
@@ -546,13 +658,17 @@ const alignTenantFlowsWithWorkspaceRows = async (
     if (!publicId) continue;
 
     const viewerUrl = buildViewerUrl(viewerBase, publicId);
-    const match = flowRepository.listByTenant(tenantId).find((f) => String(f.typebotRemoteId ?? "").trim() === typebotId);
+    const tenantFlows = flowRepository.listByTenant(tenantId);
+    const match =
+      tenantFlows.find((f) => String(f.typebotRemoteId ?? "").trim() === typebotId) ??
+      tenantFlows.find((f) => flowPublicIdKey(f) === normalizeText(publicId));
     if (!match) continue;
 
     const patch: Partial<SavedFlow> = {
       displayLabel: displayName,
       url: viewerUrl,
       typebotPublicId: publicId,
+      typebotRemoteId: typebotId,
     };
     const sameLabel = normalizeText(match.displayLabel ?? "") === normalizeText(displayName);
     const sameUrl = normalizeText(match.url) === normalizeText(viewerUrl);

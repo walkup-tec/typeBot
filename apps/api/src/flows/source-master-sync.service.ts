@@ -162,6 +162,31 @@ const upsertMatrixFlowOnTenant = (
   }
 };
 
+const mapSavedFlowsToSourceRows = async (savedFlows: SavedFlow[]): Promise<MasterLibrarySourceFlowRow[]> => {
+  const rows: MasterLibrarySourceFlowRow[] = [];
+  for (const flow of savedFlows) {
+    const url = String(flow.url ?? "").trim();
+    if (!url) continue;
+    const remoteId = String(flow.typebotRemoteId ?? "").trim();
+    const detail = remoteId ? await fetchSourceTypebotDetail(remoteId) : null;
+    const publicId =
+      String(flow.typebotPublicId ?? "").trim() ||
+      typebotPublicIdFromViewerUrl(url) ||
+      (remoteId ? await fetchSourcePublicIdByTypebotId(remoteId) : "");
+    const viewerReachable = await isFlowUrlActive(url);
+    const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
+    rows.push({
+      ...flow,
+      typebotPublicId: publicId || flow.typebotPublicId,
+      typebotRemoteId: remoteId || flow.typebotRemoteId,
+      viewerReachable,
+      typebotPublished,
+      viewerUrlActive: typebotPublished || viewerReachable,
+    });
+  }
+  return rows;
+};
+
 /** Lista somente fluxos do workspace matriz (TYPEBOT_SOURCE_MASTER_WORKSPACE_ID). */
 export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourceFlowRow[]> => {
   const sourceTenant = tenantRepository
@@ -169,8 +194,10 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
     .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
   if (!sourceTenant?.id) return [];
 
+  const savedFlowsOnDisk = flowService.listByTenant(sourceTenant.id);
+
   if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_VIEWER_BASE_URL) {
-    return [];
+    return mapSavedFlowsToSourceRows(savedFlowsOnDisk);
   }
 
   const matrixBots = await listSourceWorkspaceTypebots();
@@ -209,7 +236,8 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
     });
   }
 
-  return rows;
+  if (rows.length > 0) return rows;
+  return mapSavedFlowsToSourceRows(savedFlowsOnDisk);
 };
 
 export const syncSourceWorkspaceFlowsToMasterTenant = async (): Promise<{
