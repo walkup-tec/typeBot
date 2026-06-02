@@ -47,11 +47,23 @@ ensure_traefik_on_overlay() {
 
   svc=$(traefik_swarm_service || true)
   if [[ -n "${svc:-}" ]]; then
-    if ! docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}}{{end}}' 2>/dev/null | grep -q "$NET"; then
-      echo "Swarm: adicionando rede ${NET} ao serviço ${svc} (permanente)"
-      docker service update --network-add "$NET" "$svc" >/dev/null
-    else
+    local net_id on_net update_out
+    net_id=$(docker network ls -q -f name="^${NET}$" | head -1)
+    on_net=0
+    if [[ -n "$net_id" ]]; then
+      docker service inspect "$svc" --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}}{{println}}{{end}}' 2>/dev/null \
+        | grep -qx "$net_id" && on_net=1
+    fi
+    if [[ "$on_net" -eq 1 ]]; then
       echo "Swarm: serviço ${svc} já na rede ${NET}"
+    else
+      echo "Swarm: adicionando rede ${NET} ao serviço ${svc} (permanente)"
+      update_out=$(timeout 45 docker service update --network-add "$NET" "$svc" 2>&1) || true
+      if grep -qiE 'already attached|is already attached' <<<"$update_out"; then
+        echo "Swarm: rede ${NET} já estava no serviço ${svc}"
+      elif [[ -n "$update_out" ]]; then
+        echo "$update_out"
+      fi
     fi
   fi
 }
