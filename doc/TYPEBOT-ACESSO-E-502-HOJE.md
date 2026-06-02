@@ -42,6 +42,29 @@ curl -s https://app.chattypebot.com/health | jq '.typebotBuilderReachable, .type
 
 ---
 
+## Diagnóstico no VPS (cole no SSH)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/walkup-tec/typeBot/master/scripts/diagnose-typebot-vps.sh -o /tmp/diag-typebot.sh
+bash /tmp/diag-typebot.sh
+```
+
+Ou, com o repo já no servidor:
+
+```bash
+bash /caminho/typeBot/scripts/diagnose-typebot-vps.sh
+```
+
+O script mostra: container Running?, app em `127.0.0.1:3000`, IP na rede `easypanel-typebot`, últimas linhas do log.
+
+| Resultado do script | Ação |
+|---------------------|------|
+| Container **não** Running | Easypanel → **Start**; subir **db** e **redis** antes |
+| Falha em `127.0.0.1:3000` | Corrigir env (ver abaixo) — ver log (Redis WRONGPASS, DB, ENCRYPTION) |
+| OK interno, 502 público | Easypanel → **Domínios** porta **3000**; redeploy/restart builder |
+
+---
+
 ## Passo a passo no Easypanel (corrigir 502)
 
 ### 1. Serviço `typebot-walkup-builder`
