@@ -147,30 +147,82 @@ if builder and builder != painel:
         text,
     )
 
-# Domínio builder apontando para LP/painel (404 Drax em /signin)
+def fix_host_windows(host_needle, wrong_ips, correct_ip, wrong_services, correct_service, port="3000"):
+    global text
+    lines = text.splitlines(keepends=True)
+    i = 0
+    changed = 0
+    while i < len(lines):
+        line = lines[i]
+        if host_needle in line and re.search(r"Host|host|rule", line):
+            end = min(i + 35, len(lines))
+            block = "".join(lines[i:end])
+            orig = block
+            for ws in wrong_services:
+                block = re.sub(rf"{re.escape(ws)}[^\"\\s]*", correct_service, block)
+            for wip in wrong_ips:
+                if wip:
+                    block = re.sub(
+                        rf"http://{re.escape(wip)}:{port}",
+                        f"http://{correct_ip}:{port}",
+                        block,
+                    )
+            if block != orig:
+                newlines = block.splitlines(keepends=True)
+                if len(newlines) < (end - i):
+                    newlines.extend(lines[i + len(newlines) : end])
+                lines[i:end] = newlines[: end - i]
+                changed += 1
+            i = end
+        else:
+            i += 1
+    text = "".join(lines)
+    return changed
+
 if builder:
     builder_svc = "typebot_typebot-walkup-builder-0"
-    for wrong in (
+    wrong_svcs = (
         "typebot_paginadevendas-1",
         "typebot_paginadevendas-0",
         "typebot_painel-typebot-crm-0",
-    ):
+    )
+    wrong_ips = [x for x in (lp, painel) if x]
+    for needle in ("walkup-builder", "typebot-typebot-walkup-builder"):
+        n = fix_host_windows(needle, wrong_ips, builder, wrong_svcs, builder_svc)
+        if n:
+            print(f"  janela Host {needle} -> {builder_svc} ({n}x)")
+    for wrong in wrong_svcs:
         pat = (
-            rf'((?:Host\(`[^`]*walkup-builder[^`]*`[^)]*\)|walkup-builder\.achpyp)'
-            rf'[\s\S]{{0,600}}?(?:service|"service")\s*:\s*")'
-            rf'{re.escape(wrong)}(")'
+            rf"((?:Host\(`[^`]*walkup-builder[^`]*`[^)]*\)|walkup-builder\.achpyp)"
+            rf"[\s\S]{{0,800}}?(?:service|\"service\")\s*:\s*\")"
+            rf"{re.escape(wrong)}(\"')"
         )
         text, n = re.subn(pat, rf"\1{builder_svc}\2", text, flags=re.I)
         if n:
-            print(f"  router builder: service {wrong} -> {builder_svc} ({n}x)")
+            print(f"  router builder service {wrong} -> {builder_svc} ({n}x)")
     if lp:
-        pat_url = (
-            rf'((?:Host\(`[^`]*walkup-builder[^`]*`[^)]*\)|walkup-builder\.achpyp)'
-            rf'[\s\S]{{0,900}}?"url"\s*:\s*")http://{re.escape(lp)}:3000/?(")'
+        text, n = re.subn(
+            rf"(walkup-builder[\s\S]{{0,1200}}?\"url\"\s*:\s*\")http://{re.escape(lp)}:3000/?(\")",
+            rf"\1http://{builder}:3000/\2",
+            text,
+            flags=re.I,
         )
-        text, n = re.subn(pat_url, rf'\1http://{builder}:3000/\2', text, flags=re.I)
         if n:
-            print(f"  router builder: url LP -> builder ({n}x)")
+            print(f"  bloco builder url LP -> builder ({n}x)")
+
+if viewer:
+    viewer_svc = "typebot_typebot-walkup-viewer-0"
+    wrong_svcs_v = (
+        "typebot_paginadevendas-1",
+        "typebot_paginadevendas-0",
+        "typebot_painel-typebot-crm-0",
+        "typebot_typebot-walkup-builder-0",
+    )
+    wrong_ips_v = [x for x in (lp, painel, builder) if x]
+    for needle in ("walkup-viewer", "typebot-typebot-walkup-viewer"):
+        n = fix_host_windows(needle, wrong_ips_v, viewer, wrong_svcs_v, viewer_svc)
+        if n:
+            print(f"  janela Host {needle} -> {viewer_svc} ({n}x)")
 
 open(path, "w", encoding="utf-8").write(text)
 PY
@@ -222,15 +274,20 @@ run_fix() {
   fi
 
   if builder_wrong_backend; then
-    echo "ALERTA: Builder responde LP Drax — forçando patch builder"
+    echo "ALERTA: Builder responde LP Drax — patch + restart Traefik"
     patch_main_yaml
     local traefik
     traefik=$(traefik_container)
     if [[ -n "$traefik" ]]; then
       docker restart "$traefik" >/dev/null
-      sleep 12
+      sleep 15
       ensure_traefik_on_overlay
       patch_main_yaml
+      if builder_wrong_backend; then
+        echo "ALERTA: ainda LP após restart — rotas builder no main.yaml:"
+        grep -n "walkup-builder" "$CFG" 2>/dev/null | head -25 || true
+        echo ">>> Easypanel → typebot-walkup-builder → Domínios → destino http://\$(docker inspect ... builder IP):3000/"
+      fi
     fi
   fi
 
@@ -266,8 +323,8 @@ install_permanent() {
   echo "Instalando fix permanente em ${dest}"
 
   cat > "$CRON_FILE" <<EOF
-# Traefik Easypanel — corrige upstreams a cada 2 min (Swarm IP drift)
-*/2 * * * * root ${dest} run >> ${LOG} 2>&1
+# Traefik Easypanel — corrige upstreams a cada 1 min (Swarm IP drift)
+*/1 * * * * root ${dest} run >> ${LOG} 2>&1
 EOF
   chmod 644 "$CRON_FILE"
 
