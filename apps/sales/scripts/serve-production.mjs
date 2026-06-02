@@ -29,7 +29,12 @@ const mimeByExt = {
   ".map": "application/json; charset=utf-8",
 };
 
-const PUBLIC_ROOT_FILES = new Set(["/drax-logo-footer.png", "/favicon.ico", "/robots.txt"]);
+const PUBLIC_ROOT_FILES = new Set([
+  "/drax-logo-footer.png",
+  "/favcon.png",
+  "/favicon.ico",
+  "/robots.txt",
+]);
 
 const isSafeClientPath = (pathname) => {
   const pathOnly = pathname.split("?")[0];

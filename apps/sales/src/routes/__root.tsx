@@ -48,7 +48,10 @@ export const Route = createRootRoute({
           "Chatbot + chat humano em tempo real. Automação completa, sem bloqueios e com mais conversão.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://chattypebot.com/favcon.png" },
+      { property: "og:image:alt", content: "Drax — Typebot e chat de atendimento" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "https://chattypebot.com/favcon.png" },
       { name: "twitter:title", content: "Drax — Atendimento que vende" },
       {
         name: "twitter:description",
@@ -56,6 +59,10 @@ export const Route = createRootRoute({
       },
     ],
     links: [
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "icon", type: "image/png", href: "/favcon.png" },
+      { rel: "shortcut icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", href: "/favcon.png" },
       { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
