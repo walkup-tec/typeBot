@@ -3,6 +3,7 @@ import type { SavedFlow } from "./flow.repository";
 import { flowRepository, tenantRepository } from "../lib/repositories";
 import { isFlowUrlActive } from "../lib/flow-url-health";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
+import { resolveFlowActiveStatus } from "../lib/typebot-flow-publish-status";
 
 const flowService = new FlowService(flowRepository);
 const MASTER_SOURCE_EMAIL = "walkup@walkuptec.com.br";
@@ -35,6 +36,9 @@ export type MasterLibrarySourceFlowRow = SavedFlow & {
   viewerUrlActive: boolean;
   typebotPublished?: boolean;
   viewerReachable?: boolean;
+  /** Proprietário (assinante) do fluxo no disco. */
+  ownerEmail?: string;
+  ownerName?: string;
 };
 
 const normalizeKey = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
@@ -162,29 +166,98 @@ const upsertMatrixFlowOnTenant = (
   }
 };
 
-const mapSavedFlowsToSourceRows = async (savedFlows: SavedFlow[]): Promise<MasterLibrarySourceFlowRow[]> => {
-  const rows: MasterLibrarySourceFlowRow[] = [];
-  for (const flow of savedFlows) {
-    const url = String(flow.url ?? "").trim();
-    if (!url) continue;
-    const remoteId = String(flow.typebotRemoteId ?? "").trim();
-    const detail = remoteId ? await fetchSourceTypebotDetail(remoteId) : null;
-    const publicId =
-      String(flow.typebotPublicId ?? "").trim() ||
-      typebotPublicIdFromViewerUrl(url) ||
-      (remoteId ? await fetchSourcePublicIdByTypebotId(remoteId) : "");
-    const viewerReachable = await isFlowUrlActive(url);
-    const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
-    rows.push({
-      ...flow,
-      typebotPublicId: publicId || flow.typebotPublicId,
-      typebotRemoteId: remoteId || flow.typebotRemoteId,
-      viewerReachable,
-      typebotPublished,
-      viewerUrlActive: typebotPublished || viewerReachable,
+const tenantOwnerLookup = (): Map<string, { email: string; name: string }> => {
+  const map = new Map<string, { email: string; name: string }>();
+  for (const tenant of tenantRepository.list()) {
+    if (!tenant.id) continue;
+    map.set(tenant.id, {
+      email: String(tenant.ownerEmail ?? "").trim(),
+      name: String(tenant.name ?? "").trim(),
     });
   }
+  return map;
+};
+
+const flowToSourceRow = async (
+  flow: SavedFlow,
+  owners: Map<string, { email: string; name: string }>,
+  options?: { preferSourceBuilder?: boolean },
+): Promise<MasterLibrarySourceFlowRow> => {
+  const url = String(flow.url ?? "").trim();
+  const remoteId = String(flow.typebotRemoteId ?? "").trim();
+  let detail = null;
+  if (options?.preferSourceBuilder && remoteId) {
+    detail = await fetchSourceTypebotDetail(remoteId);
+  }
+  const publicId =
+    String(flow.typebotPublicId ?? "").trim() ||
+    typebotPublicIdFromViewerUrl(url) ||
+    String(detail?.publicId ?? "").trim() ||
+    (options?.preferSourceBuilder && remoteId ? await fetchSourcePublicIdByTypebotId(remoteId) : "");
+  const status = await resolveFlowActiveStatus({
+    url,
+    typebotRemoteId: remoteId,
+    typebotPublicId: publicId,
+  });
+  const owner = owners.get(flow.tenantId);
+  return {
+    ...flow,
+    typebotPublicId: publicId || flow.typebotPublicId,
+    typebotRemoteId: remoteId || flow.typebotRemoteId,
+    viewerReachable: status.viewerReachable,
+    typebotPublished: status.typebotPublished,
+    viewerUrlActive: status.viewerUrlActive,
+    ownerEmail: owner?.email ?? "",
+    ownerName: owner?.name ?? "",
+  };
+};
+
+const mapSavedFlowsToSourceRows = async (savedFlows: SavedFlow[]): Promise<MasterLibrarySourceFlowRow[]> => {
+  const owners = tenantOwnerLookup();
+  const rows: MasterLibrarySourceFlowRow[] = [];
+  for (const flow of savedFlows) {
+    if (!String(flow.url ?? "").trim()) continue;
+    rows.push(await flowToSourceRow(flow, owners, { preferSourceBuilder: true }));
+  }
   return rows;
+};
+
+/**
+ * Fallback histórico: inclui fluxos de todos os assinantes (dedupe por URL).
+ * Necessário quando a matriz walkup@ não tem fluxos mas drax/outros têm, ou Typebot não responde.
+ */
+export const appendPersistedFlowsFallback = async (
+  primary: MasterLibrarySourceFlowRow[],
+): Promise<MasterLibrarySourceFlowRow[]> => {
+  const owners = tenantOwnerLookup();
+  const byUrl = new Map<string, MasterLibrarySourceFlowRow>();
+  const byId = new Map<string, MasterLibrarySourceFlowRow>();
+
+  const add = (row: MasterLibrarySourceFlowRow) => {
+    byId.set(row.id, row);
+    const urlKey = normalizeKey(row.url);
+    if (urlKey) byUrl.set(urlKey, row);
+  };
+
+  for (const row of primary) add(row);
+
+  for (const flow of flowRepository.listAll()) {
+    const url = String(flow.url ?? "").trim();
+    if (!url) continue;
+    const urlKey = normalizeKey(url);
+    if (urlKey && byUrl.has(urlKey)) continue;
+    if (byId.has(flow.id)) continue;
+    add(await flowToSourceRow(flow, owners));
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    const ownerA = normalizeKey(a.ownerEmail || a.ownerName);
+    const ownerB = normalizeKey(b.ownerEmail || b.ownerName);
+    if (ownerA !== ownerB) return ownerA.localeCompare(ownerB);
+    const labelA = normalizeKey(a.displayLabel ?? a.nickname);
+    const labelB = normalizeKey(b.displayLabel ?? b.nickname);
+    return labelA.localeCompare(labelB);
+  });
 };
 
 /** Lista somente fluxos do workspace matriz (TYPEBOT_SOURCE_MASTER_WORKSPACE_ID). */
@@ -192,17 +265,21 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
   const sourceTenant = tenantRepository
     .list()
     .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
-  if (!sourceTenant?.id) return [];
 
-  const savedFlowsOnDisk = flowService.listByTenant(sourceTenant.id);
+  const savedFlowsOnDisk = sourceTenant?.id ? flowService.listByTenant(sourceTenant.id) : [];
+
+  if (!sourceTenant?.id) {
+    return appendPersistedFlowsFallback([]);
+  }
 
   if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_VIEWER_BASE_URL) {
-    return mapSavedFlowsToSourceRows(savedFlowsOnDisk);
+    return appendPersistedFlowsFallback(await mapSavedFlowsToSourceRows(savedFlowsOnDisk));
   }
 
   const matrixBots = await listSourceWorkspaceTypebots();
   let savedFlows = flowService.listByTenant(sourceTenant.id);
   const rows: MasterLibrarySourceFlowRow[] = [];
+  const owners = tenantOwnerLookup();
 
   for (const bot of matrixBots) {
     const typebotId = String(bot.id ?? "").trim();
@@ -226,6 +303,7 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
     const viewerReachable = await isFlowUrlActive(viewerUrl);
     const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
 
+    const owner = owners.get(flow.tenantId);
     rows.push({
       ...flow,
       typebotPublicId: publicId,
@@ -233,11 +311,14 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
       viewerReachable,
       typebotPublished,
       viewerUrlActive: typebotPublished || viewerReachable,
+      ownerEmail: owner?.email ?? MASTER_SOURCE_EMAIL,
+      ownerName: owner?.name ?? "Drax Sistemas",
     });
   }
 
-  if (rows.length > 0) return rows;
-  return mapSavedFlowsToSourceRows(savedFlowsOnDisk);
+  const primary =
+    rows.length > 0 ? rows : await mapSavedFlowsToSourceRows(savedFlowsOnDisk);
+  return appendPersistedFlowsFallback(primary);
 };
 
 export const syncSourceWorkspaceFlowsToMasterTenant = async (): Promise<{

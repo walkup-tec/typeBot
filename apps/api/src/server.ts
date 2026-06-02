@@ -20,6 +20,7 @@ import { PixAutomaticRenewalService } from "./billing/pix-automatic-renewal.serv
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
+import { seedOperationalDataOnEmptyIfNeeded } from "./bootstrap/seed-operational-data-on-empty";
 import { ensureSystemMasterAuthIfConfigured } from "./bootstrap/ensure-system-master-auth";
 import { ensureSystemMasterBrandingOnBoot } from "./bootstrap/ensure-system-master-branding";
 import {
@@ -300,6 +301,7 @@ async function startApi(): Promise<void> {
   await bootstrapAuthDataFromDatabase();
   logAuthPersistenceMode();
   await seedTenantOnEmptyIfConfigured();
+  const operationalSeed = await seedOperationalDataOnEmptyIfNeeded();
   await ensureSystemMasterAuthIfConfigured();
   await ensureSystemMasterBrandingOnBoot();
 
@@ -311,8 +313,13 @@ async function startApi(): Promise<void> {
       // eslint-disable-next-line no-console
       console.warn(
         `[saas-data] AVISO: biblioteca de fluxos vazia (${flowsTotal}) com ${tenantsTotal} assinante(s). Se antes havia fluxos, ` +
-          `redeploy sem volume pode ter apagado JSON no contentor. Persistência esperada próximo de: ${dataMarker}`,
+          `redeploy sem volume pode ter apagado JSON no contentor. Persistência esperada próximo de: ${dataMarker}. ` +
+          `Com v8+, o boot tenta restaurar de apps/api/data-seed quando NODE_ENV=production.`,
       );
+    }
+    if (operationalSeed.restored) {
+      // eslint-disable-next-line no-console
+      console.log(`[saas-data] Seed operacional aplicado no boot (${operationalSeed.flows} fluxo(s)).`);
     }
     // eslint-disable-next-line no-console
     console.log(

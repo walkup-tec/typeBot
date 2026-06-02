@@ -64,6 +64,10 @@ export class FlowRepository {
     this.flows = loadPersistedFlows();
   }
 
+  reloadFromStorage(): void {
+    this.flows = loadPersistedFlows();
+  }
+
   listByTenant(tenantId: string): SavedFlow[] {
     return this.flows.filter((flow) => flow.tenantId === tenantId);
   }

@@ -94,6 +94,9 @@ type SavedFlow = {
   url: string;
   /** Preenchido em `source-flows` quando a URL do viewer foi testada. */
   viewerUrlActive?: boolean;
+  /** Proprietário do fluxo (retorno de source-flows com fallback multi-tenant). */
+  ownerEmail?: string;
+  ownerName?: string;
 };
 
 type FlowLibraryItem = {
@@ -1093,9 +1096,11 @@ export function App() {
       setSourceMasterFlows(data);
       if (!options?.silent) {
         if (data.length === 0) {
-          setStatusMessage("Nenhum fluxo no workspace matriz.");
+          setStatusMessage(
+            "Nenhum fluxo encontrado. Confira volume da API (saved-flows.json), token Typebot ou sincronize o workspace matriz.",
+          );
         } else {
-          setStatusMessage(`Lista atualizada: ${data.length} fluxo(s) na matriz.`);
+          setStatusMessage(`Lista atualizada: ${data.length} fluxo(s) por proprietário.`);
         }
       }
     } catch {
@@ -3060,20 +3065,34 @@ export function App() {
             ) : null}
             <div className="saved-flows-table master-library-table">
               <div className="saved-flows-header master-library-row">
+                <span>Proprietário</span>
                 <span>Título</span>
                 <span>Fluxo origem</span>
                 <span>Status</span>
                 <span>URL</span>
                 <span>Ação</span>
               </div>
-              {unpublishedSourceMasterFlows.map((flow) => {
+              {sourceMasterFlows.map((flow) => {
+                const flowUrl = flow.url.trim().toLowerCase();
+                const alreadyInLibrary = systemMasterLibrary.some(
+                  (item) =>
+                    item.sourceFlowId === flow.id ||
+                    item.viewerUrl.trim().toLowerCase() === flowUrl,
+                );
                 const promoteTitle = masterPromoteTitles[flow.id] ?? flow.displayLabel ?? "";
-                const canPromote = promoteTitle.trim().length >= 2;
+                const canPromote = !alreadyInLibrary && promoteTitle.trim().length >= 2;
                 const flowOriginAlias =
                   flow.typebotPublicId?.trim() || flow.displayLabel?.trim() || flow.nickname;
                 const urlActive = flow.viewerUrlActive !== false;
+                const ownerLabel =
+                  flow.ownerName?.trim() ||
+                  flow.ownerEmail?.trim() ||
+                  (flow.tenantId ? `Tenant ${flow.tenantId.slice(0, 8)}` : "—");
                 return (
                   <div key={flow.id} className="saved-flows-row master-library-row">
+                    <span className="master-flow-owner" title={flow.ownerEmail ?? ""}>
+                      {ownerLabel}
+                    </span>
                     <span>
                       {editingMasterTitleFlowId === flow.id ? (
                         <input
@@ -3121,22 +3140,27 @@ export function App() {
                       </a>
                     </span>
                     <span className="master-library-action-cell">
-                      <button
-                        type="button"
-                        className="compact-action-btn compact-action-btn-success"
-                        disabled={!canPromote}
-                        onClick={() => void promoteFlowToSystemLibrary(flow, promoteTitle)}
-                      >
-                        Definir como Padrão
-                      </button>
+                      {alreadyInLibrary ? (
+                        <span className="muted">Já na biblioteca</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="compact-action-btn compact-action-btn-success"
+                          disabled={!canPromote}
+                          onClick={() => void promoteFlowToSystemLibrary(flow, promoteTitle)}
+                        >
+                          Definir como Padrão
+                        </button>
+                      )}
                     </span>
                   </div>
                 );
               })}
-              {unpublishedSourceMasterFlows.length === 0 ? (
+              {sourceMasterFlows.length === 0 ? (
                 <p className="muted">
-                  Nenhum fluxo no workspace matriz. Confira token do builder e{" "}
-                  <code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code> na API (Easypanel).
+                  Nenhum fluxo salvo na API. Verifique o volume de dados,{" "}
+                  <code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code> e o token do builder no Easypanel (serviço{" "}
+                  <code>api</code>), depois use &quot;Atualizar lista&quot;.
                 </p>
               ) : null}
             </div>

@@ -1,0 +1,138 @@
+[
+  {
+    "id": "a4fdfb14-ad49-4c25-9131-a50c084e90a3",
+    "tenantId": "8776c7b2-4b55-4348-b39a-ada02549fae1",
+    "createdAt": "2026-04-23T16:29:08.733Z",
+    "nickname": "CLT",
+    "displayLabel": "CLT",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/clt-xop5yt8",
+    "librarySourceId": "b74ddb75-7358-442c-8767-ebf38914fd9a"
+  },
+  {
+    "id": "dc5edbc4-e569-4bee-ae82-2f71147c694e",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T09:31:01.511Z",
+    "nickname": "Antecipação do FGTS",
+    "displayLabel": "Antecipação do FGTS",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/meu-typebot-8bp8ovm"
+  },
+  {
+    "id": "75725ef8-bc8b-4071-9d3e-9bb62d30caff",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T09:31:01.669Z",
+    "nickname": "Empréstimo do Trabalhador CLT",
+    "displayLabel": "Empréstimo do Trabalhador CLT",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/emprestimo-clt"
+  },
+  {
+    "id": "c664e017-c457-47b9-b751-cefbf616803a",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T10:05:28.924Z",
+    "nickname": "Cartão Consignado",
+    "displayLabel": "Cartão Consignado",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/cart-o-consignado-85lq30n"
+  },
+  {
+    "id": "4a0d8cf1-e271-4660-bd8c-c6cf89647772",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T10:05:29.018Z",
+    "nickname": "Empréstimo de Cartão de Crédito",
+    "displayLabel": "Empréstimo de Cartão de Crédito",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/empr-stimo-de-cart-o-de-cr-dito-4zovoe0"
+  },
+  {
+    "id": "d59f80fd-197a-495c-a315-401e761c6429",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T10:05:29.065Z",
+    "nickname": "SIAPE",
+    "displayLabel": "SIAPE",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/meu-typebot-e88th5d"
+  },
+  {
+    "id": "b2ad8248-3fe8-4fcd-88e5-41bf45582b38",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T10:14:20.563Z",
+    "nickname": "Cartão Consignado",
+    "displayLabel": "Cartão Consignado",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/consignado"
+  },
+  {
+    "id": "ef60d9e0-1753-4542-aa33-5cdc268d1527",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T10:14:40.595Z",
+    "nickname": "Empréstimo de Cartão de Crédito",
+    "displayLabel": "Empréstimo de Cartão de Crédito",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/cartao-credito"
+  },
+  {
+    "id": "8a927f0b-2e4b-46dc-8469-9276faf134ba",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T10:15:00.738Z",
+    "nickname": "SIAPE",
+    "displayLabel": "SIAPE",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/siape"
+  },
+  {
+    "id": "2997d685-0edd-48e7-abea-51103e44504d",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-04-24T10:15:00.788Z",
+    "nickname": "Antecipação do FGTS",
+    "displayLabel": "Antecipação do FGTS",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/fgts"
+  },
+  {
+    "id": "2180e24d-931e-497a-ab6e-2bceafa2af1e",
+    "tenantId": "ae2a4236-8ddf-4ae6-81d8-0ec88c9827bb",
+    "createdAt": "2026-04-27T17:09:59.587Z",
+    "nickname": "Empréstimo do Trabalhador CLT",
+    "displayLabel": "Empréstimo do Trabalhador CLT",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/empr-stimo-do-trabalhador-clt-yzc9yip",
+    "librarySourceId": "75725ef8-bc8b-4071-9d3e-9bb62d30caff"
+  },
+  {
+    "id": "82bb3642-996d-4be3-96c7-6416dc3e74e3",
+    "tenantId": "17df12c7-3abb-4fd1-9177-6ff7dd9514ab",
+    "createdAt": "2026-04-28T22:34:48.151Z",
+    "nickname": "Empréstimo do Trabalhador CLT",
+    "displayLabel": "Empréstimo do Trabalhador CLT",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/empr-stimo-do-trabalhador-clt-38esudn",
+    "librarySourceId": "41256e9c-2f03-4446-ab48-55685b8e4a0e"
+  },
+  {
+    "id": "e7a8d151-0541-455f-aab1-a8ad77540258",
+    "tenantId": "3fd073ba-7a9a-482c-9714-bbf6f1ed4e8b",
+    "createdAt": "2026-05-03T19:19:57.157Z",
+    "nickname": "campanha-facebook-x5k4a3",
+    "displayLabel": "Campanha Facebook",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/drax-sistemas-px5k4a3",
+    "typebotPublicId": "drax-sistemas-px5k4a3",
+    "typebotRemoteId": "cmopzmivk0025ru1czpx5k4a3"
+  },
+  {
+    "id": "ccb7e4ee-3080-48c6-b84a-1b489f275207",
+    "tenantId": "3fd073ba-7a9a-482c-9714-bbf6f1ed4e8b",
+    "createdAt": "2026-05-03T19:22:40.968Z",
+    "nickname": "Empréstimo do Trabalhador CLT",
+    "displayLabel": "Empréstimo do Trabalhador CLT",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/empr-stimo-do-trabalhador-clt-vjziztu",
+    "librarySourceId": "41256e9c-2f03-4446-ab48-55685b8e4a0e"
+  },
+  {
+    "id": "f2e24574-6f9e-40ab-8a3d-6c0aa9f44388",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-05-07T17:52:11.139Z",
+    "nickname": "drax-sistemas-px5k4a3",
+    "displayLabel": "drax-sistemas-px5k4a3",
+    "url": "https://typebot-walkup-viewer.achpyp.easypanel.host/drax-sistemas-px5k4a3",
+    "typebotPublicId": "drax-sistemas-px5k4a3"
+  },
+  {
+    "id": "879e3c4a-42c7-492b-8a5d-dd21db1a6bb4",
+    "tenantId": "c339e134-deea-4547-8db8-197037f85307",
+    "createdAt": "2026-05-07T18:01:13.642Z",
+    "nickname": "clt-soma",
+    "displayLabel": "clt-soma",
+    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/clt-soma",
+    "typebotPublicId": "clt-soma"
+  }
+]

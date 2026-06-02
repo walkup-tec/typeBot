@@ -1,0 +1,13 @@
+[
+  {
+    "id": "41256e9c-2f03-4446-ab48-55685b8e4a0e",
+    "sourceFlowId": "75725ef8-bc8b-4071-9d3e-9bb62d30caff",
+    "title": "Empréstimo do Trabalhador CLT",
+    "description": "Fluxo padrão disponibilizado pela Biblioteca Master.",
+    "suggestedNickname": "Empréstimo do Trabalhador CLT",
+    "viewerUrl": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/emprestimo-clt",
+    "isSystemDefault": true,
+    "createdAt": "2026-04-27T17:09:59.581Z",
+    "updatedAt": "2026-04-27T17:09:59.581Z"
+  }
+]

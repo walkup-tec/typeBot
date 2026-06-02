@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { loadFlowLibrary } from "./flow-library.repository";
 import {
+  appendPersistedFlowsFallback,
   listMasterLibrarySourceFlows,
   syncSourceWorkspaceFlowsToMasterTenant,
 } from "./source-master-sync.service";
@@ -220,7 +221,11 @@ export const registerFlowRoutes = (app: Express) => {
 
       return res.status(200).json(withTypebotAlias);
     } catch {
-      return res.status(200).json([]);
+      try {
+        return res.status(200).json(await appendPersistedFlowsFallback([]));
+      } catch {
+        return res.status(200).json([]);
+      }
     }
   };
 

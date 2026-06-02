@@ -2543,6 +2543,7 @@ button:disabled {
 .master-library-table .saved-flows-row.master-library-row {
   display: grid;
   grid-template-columns:
+    minmax(120px, 0.9fr)
     minmax(140px, 1.1fr)
     minmax(100px, 0.75fr)
     minmax(72px, 0.5fr)
@@ -2550,6 +2551,14 @@ button:disabled {
     minmax(148px, auto);
   column-gap: 12px;
   align-items: center;
+}
+
+.master-flow-owner {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #cbd5e1;
 }
 
 .master-library-table .saved-flows-header.master-library-published-row,
