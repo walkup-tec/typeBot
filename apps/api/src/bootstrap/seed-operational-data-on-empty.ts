@@ -37,6 +37,11 @@ const remapFlowTenantIds = (flows: SavedFlow[], seedMap: TenantIdMapEntry[]): Sa
   });
 };
 
+export const countOperationalSeedFlows = (): number => {
+  const seedFlows = readJsonFile<SavedFlow[]>(join(seedDirectory(), "saved-flows.json"));
+  return Array.isArray(seedFlows) ? seedFlows.length : 0;
+};
+
 const shouldRestoreOperationalSeed = (): boolean => {
   const forced = String(process.env.API_RESTORE_OPERATIONAL_SEED_ON_EMPTY ?? "")
     .trim()
@@ -44,11 +49,9 @@ const shouldRestoreOperationalSeed = (): boolean => {
   if (forced === "true" || forced === "1") return true;
   if (forced === "false" || forced === "0") return false;
 
-  const isProduction = String(process.env.NODE_ENV ?? "").trim().toLowerCase() === "production";
-  if (!isProduction) return false;
-
   const flowsTotal = flowRepository.listAll().length;
   const tenantsTotal = tenantRepository.list().length;
+  // Restaura sempre que há assinantes mas o JSON operacional está vazio (redeploy sem volume).
   return tenantsTotal > 0 && flowsTotal === 0;
 };
 

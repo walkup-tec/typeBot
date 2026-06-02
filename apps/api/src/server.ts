@@ -20,7 +20,10 @@ import { PixAutomaticRenewalService } from "./billing/pix-automatic-renewal.serv
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
-import { seedOperationalDataOnEmptyIfNeeded } from "./bootstrap/seed-operational-data-on-empty";
+import {
+  countOperationalSeedFlows,
+  seedOperationalDataOnEmptyIfNeeded,
+} from "./bootstrap/seed-operational-data-on-empty";
 import { ensureSystemMasterAuthIfConfigured } from "./bootstrap/ensure-system-master-auth";
 import { ensureSystemMasterBrandingOnBoot } from "./bootstrap/ensure-system-master-branding";
 import {
@@ -197,6 +200,8 @@ app.get("/health", (_req, res) => {
     /** Postgres cobre só login/assinantes/atendentes. Fluxos, fila e bibliotecas continuam em JSON no disco. */
     flowsSavedCount: flowsTotal,
     tenantsCount: tenantsTotal,
+    /** Fluxos embutidos em `apps/api/data-seed` (imagem). Se >0 e flowsSavedCount=0, o boot restaura. */
+    dataSeedFlowCount: countOperationalSeedFlows(),
     operationalDataBackend: "json_filesystem",
     /** Caminho absoluto no servidor/container — monte o volume nesta pasta (contém saved-flows.json). */
     operationalDataDirectory,
@@ -314,7 +319,7 @@ async function startApi(): Promise<void> {
       console.warn(
         `[saas-data] AVISO: biblioteca de fluxos vazia (${flowsTotal}) com ${tenantsTotal} assinante(s). Se antes havia fluxos, ` +
           `redeploy sem volume pode ter apagado JSON no contentor. Persistência esperada próximo de: ${dataMarker}. ` +
-          `Com v8+, o boot tenta restaurar de apps/api/data-seed quando NODE_ENV=production.`,
+          `Com v8b+, o boot restaura de apps/api/data-seed quando tenants>0 e flows=0.`,
       );
     }
     if (operationalSeed.restored) {
