@@ -281,6 +281,9 @@ const isTenantTypebotProvisioned = (tenant: Tenant): boolean =>
   tenant.typebotProvisionStatus === "provisioned" &&
   Boolean(String(tenant.typebotWorkspaceId ?? "").trim());
 
+const isSystemMasterTenant = (tenant: Tenant | null | undefined): boolean =>
+  Boolean(tenant && tenant.ownerEmail.trim().toLowerCase() === SYSTEM_MASTER_EMAIL);
+
 async function extractDominantHexFromImageSrc(src: string): Promise<string | null> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -620,10 +623,7 @@ export function App() {
     const directLibrary = flowLibrary.filter(
       (item) => item.id !== "template-placeholder" && item.title !== "Modelo (substitua a URL)",
     );
-    if (directLibrary.length > 0) return directLibrary;
-
-    // Fallback operacional: algumas instâncias retornam /flow-library vazio mesmo com itens na system-library.
-    return systemMasterLibrary
+    const fromSystemDefaults = systemMasterLibrary
       .filter((item) => item.isSystemDefault)
       .map((item) => ({
         id: item.id,
@@ -632,7 +632,20 @@ export function App() {
         suggestedNickname: item.suggestedNickname,
         viewerUrl: item.viewerUrl,
       }));
-  }, [flowLibrary, systemMasterLibrary]);
+    const fromActiveMatrix = sourceMasterFlows
+      .filter((flow) => flow.viewerUrlActive !== false)
+      .map((flow) => ({
+        id: flow.librarySourceId?.trim() || flow.id,
+        title: flow.displayLabel?.trim() || flow.nickname,
+        description: "Fluxo ativo no workspace matriz",
+        suggestedNickname: flow.nickname,
+        viewerUrl: flow.url,
+      }));
+    const base = directLibrary.length > 0 ? directLibrary : fromSystemDefaults;
+    const byId = new Map<string, FlowLibraryItem>();
+    for (const item of [...base, ...fromActiveMatrix]) byId.set(item.id, item);
+    return [...byId.values()];
+  }, [flowLibrary, systemMasterLibrary, sourceMasterFlows]);
   const libraryLinkedFlows = useMemo(
     () => selectedTenantFlows.filter((flow) => Boolean(flow.librarySourceId)),
     [selectedTenantFlows],
@@ -642,6 +655,16 @@ export function App() {
     () => selectedTenantFlows.filter((flow) => !flow.librarySourceId),
     [selectedTenantFlows],
   );
+  /** Com Typebot provisionado (ou conta matriz), a etapa 6 lista todos os fluxos retornados pela API. */
+  const tenantWorkspaceFlowsForStep6 = useMemo(() => {
+    if (
+      selectedTenantObject &&
+      (isSystemMasterTenant(selectedTenantObject) || isTenantTypebotProvisioned(selectedTenantObject))
+    ) {
+      return selectedTenantFlows;
+    }
+    return workspaceOnlyFlows;
+  }, [selectedTenantFlows, selectedTenantObject, workspaceOnlyFlows]);
   const activeWorkspaceOnlyFlows = useMemo(
     () =>
       workspaceOnlyFlows.filter((flow) => {
@@ -671,8 +694,12 @@ export function App() {
           matchingFlows.find((flow) => flow.librarySourceId === item.id) ??
           matchingFlows.find((flow) => flow.url.trim() === item.viewerUrl.trim()) ??
           null;
-        const healthStatus = linkedFlow ? (flowStatuses[linkedFlow.id] ?? "checking") : "inactive";
-        const status: FlowStatus = linkedFlow ? "active" : "inactive";
+        const healthStatus = linkedFlow
+          ? flowStatuses[linkedFlow.id] ??
+            (linkedFlow.viewerUrlActive !== false ? "active" : "inactive")
+          : "inactive";
+        const status: FlowStatus =
+          healthStatus === "active" || healthStatus === "checking" ? "active" : "inactive";
         return {
           item,
           linkedFlow,
@@ -683,10 +710,21 @@ export function App() {
       }),
     [selectableFlowLibrary, libraryLinkedFlows, flowStatuses],
   );
-  /** Mostra todos os itens do catálogo (incl. inativos) para não parecer biblioteca vazia. */
-  const visibleLibraryFlowRows = libraryFlowRows;
+  /** Fluxos ativos no catálogo (etapa 6). Se vazio, a UI mostra o catálogo completo como fallback. */
+  const activeLibraryFlowRows = useMemo(
+    () => libraryFlowRows.filter((row) => row.healthStatus === "active"),
+    [libraryFlowRows],
+  );
+  const visibleLibraryFlowRows =
+    activeLibraryFlowRows.length > 0 ? activeLibraryFlowRows : libraryFlowRows;
+  const activeMatrixSourceFlows = useMemo(
+    () => sourceMasterFlows.filter((flow) => flow.viewerUrlActive !== false),
+    [sourceMasterFlows],
+  );
   const hasAnyFlowListedInStep6 =
-    visibleLibraryFlowRows.length > 0 || workspaceOnlyFlows.length > 0;
+    visibleLibraryFlowRows.length > 0 ||
+    tenantWorkspaceFlowsForStep6.length > 0 ||
+    activeMatrixSourceFlows.length > 0;
   const unpublishedSourceMasterFlows = useMemo(
     () =>
       sourceMasterFlows.filter((flow) => {
@@ -1036,9 +1074,11 @@ export function App() {
       if (!syncResponse.ok) {
         const syncPayload = (await syncResponse.json().catch(() => ({}))) as { message?: string };
         if (!options?.silent) {
-          setStatusMessage(syncPayload.message ?? "Falha ao sincronizar matriz Typebot.");
+          setStatusMessage(
+            syncPayload.message ??
+              "Sync da matriz falhou; carregando fluxos já gravados na API…",
+          );
         }
-        return;
       }
 
       const response = await fetch(`${apiBase}/api/master/system-library/source-flows`, {
@@ -1082,6 +1122,8 @@ export function App() {
         imported?: number;
         pruned?: number;
         metadataRepublished?: number;
+        skipReason?: string;
+        typebotsScanned?: number;
       };
       if (!syncResponse.ok) {
         setStatusMessage(syncPayload.message ?? "Falha ao sincronizar fluxos do Typebot.");
@@ -1093,12 +1135,22 @@ export function App() {
       if (syncPayload.metadataRepublished && syncPayload.metadataRepublished > 0) {
         parts.push(`${syncPayload.metadataRepublished} republicado(s) para compartilhamento`);
       }
-      if (parts.length > 0) setStatusMessage(`Lista atualizada: ${parts.join("; ")}.`);
       await loadFlows(tenantId);
       const imported = Number(syncPayload.imported ?? 0);
-      setStatusMessage(
-        imported > 0 ? `Lista atualizada: ${imported} fluxo(s) importado(s).` : "Lista de fluxos atualizada.",
-      );
+      const scanned = Number(syncPayload.typebotsScanned ?? 0);
+      if (imported > 0) {
+        setStatusMessage(`Lista atualizada: ${imported} fluxo(s) importado(s).`);
+      } else if (syncPayload.skipReason === "builder_api_token_missing") {
+        setStatusMessage("Token da API Typebot ausente no servidor. Configure TYPEBOT_TARGET_BUILDER_API_TOKEN na API.");
+      } else if (syncPayload.skipReason === "workspace_not_matched") {
+        setStatusMessage("Workspace Typebot não encontrado para este assinante. Confira o vínculo em Assinantes.");
+      } else if (syncPayload.skipReason === "workspace_typebots_empty" && scanned === 0) {
+        setStatusMessage("Nenhum typebot no workspace. Crie e publique um fluxo no builder Typebot e clique em Atualizar lista.");
+      } else if (syncPayload.skipReason) {
+        setStatusMessage(`Lista atualizada (${syncPayload.skipReason}).`);
+      } else {
+        setStatusMessage("Lista de fluxos atualizada.");
+      }
     } catch {
       setStatusMessage("Falha ao atualizar lista. Tente novamente.");
     } finally {
@@ -2744,9 +2796,12 @@ export function App() {
                   </button>
                 </div>
                 <p className="muted muted-subtle">
-                  {selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject) ? (
+                  {selectedTenantObject &&
+                (isSystemMasterTenant(selectedTenantObject) ||
+                  isTenantTypebotProvisioned(selectedTenantObject)) ? (
                     <>
-                      Nesta conta, a lista reflete <strong>somente os typebots do workspace Typebot</strong> vinculado ao assinante.
+                      Nesta conta, a lista reflete os <strong>fluxos ativos do workspace Typebot</strong> vinculado
+                      {isSystemMasterTenant(selectedTenantObject) ? " à matriz" : " ao assinante"}.
                       Use <strong>Atualizar lista</strong> após criar ou publicar um fluxo no builder.
                     </>
                   ) : (
@@ -2856,8 +2911,12 @@ export function App() {
                   <p className="muted muted-subtle">
                     Inclui fluxos criados no builder Typebot e fluxos adicionados por URL (sem item na Biblioteca Master). Copie o link público abaixo.
                   </p>
-                  {workspaceOnlyFlows.length === 0 ? (
-                    <p className="muted muted-subtle">Nenhum fluxo fora do catálogo da biblioteca neste assinante.</p>
+                  {tenantWorkspaceFlowsForStep6.length === 0 ? (
+                    <p className="muted muted-subtle">
+                      {selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject)
+                        ? "Nenhum fluxo no workspace Typebot. Crie ou publique no builder e use Atualizar lista."
+                        : "Nenhum fluxo fora do catálogo da biblioteca neste assinante."}
+                    </p>
                   ) : (
                     <div className="saved-flows-table">
                       <div className="saved-flows-header library-active-row">
@@ -2866,7 +2925,7 @@ export function App() {
                         <span>URL</span>
                         <span>Ações</span>
                       </div>
-                      {workspaceOnlyFlows.map((flow) => {
+                      {tenantWorkspaceFlowsForStep6.map((flow) => {
                         const healthStatus = flowStatuses[flow.id] ?? "checking";
                         const canCopyLink = healthStatus === "active";
                         return (
@@ -2969,6 +3028,36 @@ export function App() {
                 Atualizar lista
               </button>
             </div>
+            {activeMatrixSourceFlows.length > 0 ? (
+              <div className="tenant-profile-card">
+                <h4>Fluxos ativos no workspace matriz</h4>
+                <p className="muted muted-subtle">
+                  Lista viva do Typebot matriz ({activeMatrixSourceFlows.length} fluxo
+                  {activeMatrixSourceFlows.length === 1 ? "" : "s"}). Promova como padrão na tabela abaixo.
+                </p>
+                <div className="saved-flows-table master-library-table">
+                  <div className="saved-flows-header master-library-row">
+                    <span>Nome</span>
+                    <span>Status</span>
+                    <span>URL</span>
+                  </div>
+                  {activeMatrixSourceFlows.map((flow) => (
+                    <div key={flow.id} className="saved-flows-row master-library-row">
+                      <span>{flow.displayLabel ?? flow.nickname}</span>
+                      <span className="flow-status active">
+                        <i />
+                        Ativo
+                      </span>
+                      <span className="flow-url-cell">
+                        <a href={flow.url} title={flow.url} target="_blank" rel="noreferrer">
+                          {abbreviateUrlForDisplay(flow.url)}
+                        </a>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="saved-flows-table master-library-table">
               <div className="saved-flows-header master-library-row">
                 <span>Título</span>
