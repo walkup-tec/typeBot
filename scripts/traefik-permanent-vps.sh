@@ -108,7 +108,9 @@ for svc, ip in [
     ("typebot_paginadevendas-0", lp),
     ("typebot_painel-typebot-crm-0", painel),
     ("typebot_typebot-walkup-builder-0", builder),
+    ("typebot_typebot-typebot-walkup-builder-0", builder),
     ("typebot_typebot-walkup-viewer-0", viewer),
+    ("typebot_typebot-typebot-walkup-viewer-0", viewer),
     ("typebot_minio-0", minio),
     ("typebot_minio", minio),
 ]:
@@ -145,6 +147,31 @@ if builder and builder != painel:
         text,
     )
 
+# Domínio builder apontando para LP/painel (404 Drax em /signin)
+if builder:
+    builder_svc = "typebot_typebot-walkup-builder-0"
+    for wrong in (
+        "typebot_paginadevendas-1",
+        "typebot_paginadevendas-0",
+        "typebot_painel-typebot-crm-0",
+    ):
+        pat = (
+            rf'((?:Host\(`[^`]*walkup-builder[^`]*`[^)]*\)|walkup-builder\.achpyp)'
+            rf'[\s\S]{{0,600}}?(?:service|"service")\s*:\s*")'
+            rf'{re.escape(wrong)}(")'
+        )
+        text, n = re.subn(pat, rf"\1{builder_svc}\2", text, flags=re.I)
+        if n:
+            print(f"  router builder: service {wrong} -> {builder_svc} ({n}x)")
+    if lp:
+        pat_url = (
+            rf'((?:Host\(`[^`]*walkup-builder[^`]*`[^)]*\)|walkup-builder\.achpyp)'
+            rf'[\s\S]{{0,900}}?"url"\s*:\s*")http://{re.escape(lp)}:3000/?(")'
+        )
+        text, n = re.subn(pat_url, rf'\1http://{builder}:3000/\2', text, flags=re.I)
+        if n:
+            print(f"  router builder: url LP -> builder ({n}x)")
+
 open(path, "w", encoding="utf-8").write(text)
 PY
 
@@ -170,6 +197,14 @@ lp_wrong_backend() {
   return 1
 }
 
+builder_wrong_backend() {
+  local body
+  body=$(curl -sS --resolve typebot-typebot-walkup-builder.achpyp.easypanel.host:443:127.0.0.1 \
+    --max-time 12 "https://typebot-typebot-walkup-builder.achpyp.easypanel.host/signin" 2>/dev/null || true)
+  grep -qiE 'Drax — Atendimento|Voltar ao início|Página não encontrada' <<< "$body" && return 0
+  return 1
+}
+
 run_fix() {
   echo "=== traefik-permanent $(date -Is) ==="
   ensure_traefik_on_overlay
@@ -186,6 +221,19 @@ run_fix() {
     lp=$(http_code chattypebot.com)
   fi
 
+  if builder_wrong_backend; then
+    echo "ALERTA: Builder responde LP Drax — forçando patch builder"
+    patch_main_yaml
+    local traefik
+    traefik=$(traefik_container)
+    if [[ -n "$traefik" ]]; then
+      docker restart "$traefik" >/dev/null
+      sleep 12
+      ensure_traefik_on_overlay
+      patch_main_yaml
+    fi
+  fi
+
   if [[ "$lp" == "502" || "$lp" == "000" ]]; then
     local traefik
     traefik=$(traefik_container)
@@ -200,7 +248,9 @@ run_fix() {
     fi
   fi
 
-  echo "RESULTADO lp:${lp} painel:${painel} app:${app}"
+  local builder_code
+  builder_code=$(http_code typebot-typebot-walkup-builder.achpyp.easypanel.host /signin)
+  echo "RESULTADO lp:${lp} painel:${painel} app:${app} builder_signin:${builder_code}"
   [[ "$lp" == "200" || "$lp" == "307" ]] && [[ "$painel" == "200" || "$painel" == "307" ]]
 }
 
