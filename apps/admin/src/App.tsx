@@ -226,8 +226,11 @@ function formatApiConnectionError(error: unknown): string {
 const SYSTEM_MASTER_EMAIL = "walkup@walkuptec.com.br";
 /** Builder Typebot da matriz (Master do Sistema): abre em nova aba a partir do header. */
 const systemMasterTypebotBuilderUrlFromEnv = import.meta.env.VITE_SYSTEM_MASTER_TYPEBOT_BUILDER_URL?.trim();
+/** URL canónica do builder (projeto Easypanel `typebot`, migração 2026-05). */
+const TYPEBOT_BUILDER_PUBLIC_BASE_URL =
+  "https://typebot-typebot-walkup-builder.achpyp.easypanel.host";
 const SYSTEM_MASTER_TYPEBOT_BUILDER_URL =
-  systemMasterTypebotBuilderUrlFromEnv || "https://typebot-walkup-builder.achpyp.easypanel.host/pt-BR/typebots";
+  systemMasterTypebotBuilderUrlFromEnv || `${TYPEBOT_BUILDER_PUBLIC_BASE_URL}/pt-BR/typebots`;
 const AUTH_STORAGE_KEY = "typebot-saas-auth-session";
 const widgetBaseUrlFromEnv = import.meta.env.VITE_WIDGET_BASE_URL?.trim();
 const widgetBaseUrl =

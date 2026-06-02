@@ -187,11 +187,35 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "8mb" }));
 
-app.get("/health", (_req, res) => {
+const probeTypebotBuilderReachability = async (): Promise<{
+  url: string;
+  httpStatus: number | null;
+  ok: boolean;
+}> => {
+  const base = String(process.env.TYPEBOT_BUILDER_API_BASE_URL ?? "")
+    .trim()
+    .replace(/\/api\/?$/i, "");
+  const url = base ? `${base}/signin` : "";
+  if (!url) return { url: "", httpStatus: null, ok: false };
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(url, { method: "GET", redirect: "manual", signal: controller.signal });
+    clearTimeout(timeout);
+    const httpStatus = response.status;
+    const ok = httpStatus > 0 && httpStatus < 500;
+    return { url, httpStatus, ok };
+  } catch {
+    return { url, httpStatus: null, ok: false };
+  }
+};
+
+app.get("/health", async (_req, res) => {
   const flowsTotal = flowRepository.listAll().length;
   const tenantsTotal = tenantRepository.list().length;
   const savedFlowsPath = getDataFilePath("saved-flows.json");
   const operationalDataDirectory = dirname(savedFlowsPath);
+  const typebotBuilder = await probeTypebotBuilderReachability();
   res.status(200).json({
     status: "ok",
     service: "typebot-saas-api",
@@ -210,6 +234,9 @@ app.get("/health", (_req, res) => {
       "Montar volume persistente no diretório de dados da API (operationalDataDirectory). Sem volume, cada redeploy recria disco e pode esvaziar a biblioteca de fluxos.",
     typebotTenantFlowWatcherEnabled: TYPEBOT_TENANT_FLOW_WATCHER_ENABLED,
     typebotTenantFlowImportConfigured: Boolean(TYPEBOT_TARGET_BUILDER_API_TOKEN),
+    typebotBuilderSigninUrl: typebotBuilder.url || null,
+    typebotBuilderHttpStatus: typebotBuilder.httpStatus,
+    typebotBuilderReachable: typebotBuilder.ok,
   });
 });
 
