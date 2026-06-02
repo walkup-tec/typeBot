@@ -97,13 +97,29 @@ const fetchSourcePublicIdByTypebotId = async (typebotId: string): Promise<string
   return String(detail?.publicId ?? "").trim();
 };
 
+/** Alinhado ao badge "Live" do Typebot: só fluxo com publicação real no builder. */
 const isTypebotPublishedInBuilder = (detail: SourceTypebotDetail | null, publicId: string): boolean => {
   if (!publicId) return false;
   const publishedAt = String(detail?.publishedAt ?? "").trim();
-  if (publishedAt.length > 0) return true;
-  // Na matriz com publicId definido: considerado ativo no builder mesmo se o probe HTTP do viewer falhar (502/500).
-  return true;
+  return publishedAt.length > 0;
 };
+
+const isWalkupMatrixViewerUrl = (url: string): boolean => {
+  const normalized = normalizeKey(url);
+  if (!normalized) return false;
+  return (
+    normalized.includes("typebot-typebot-walkup-viewer") ||
+    normalized.includes("typebot-walkup-viewer")
+  );
+};
+
+const filterActiveWalkupMatrixRows = (rows: MasterLibrarySourceFlowRow[]): MasterLibrarySourceFlowRow[] =>
+  rows.filter(
+    (row) =>
+      row.typebotPublished === true &&
+      row.viewerUrlActive !== false &&
+      isWalkupMatrixViewerUrl(String(row.url ?? "")),
+  );
 
 const findSavedFlowForMatrixBot = (
   savedFlows: SavedFlow[],
@@ -269,11 +285,12 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
   const savedFlowsOnDisk = sourceTenant?.id ? flowService.listByTenant(sourceTenant.id) : [];
 
   if (!sourceTenant?.id) {
-    return appendPersistedFlowsFallback([]);
+    return [];
   }
 
   if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_VIEWER_BASE_URL) {
-    return appendPersistedFlowsFallback(await mapSavedFlowsToSourceRows(savedFlowsOnDisk));
+    const diskRows = await mapSavedFlowsToSourceRows(savedFlowsOnDisk);
+    return filterActiveWalkupMatrixRows(diskRows);
   }
 
   const matrixBots = await listSourceWorkspaceTypebots();
@@ -300,25 +317,29 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
       continue;
     }
 
-    const viewerReachable = await isFlowUrlActive(viewerUrl);
     const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
+    if (!typebotPublished) continue;
 
+    const viewerReachable = await isFlowUrlActive(viewerUrl);
     const owner = owners.get(flow.tenantId);
     rows.push({
       ...flow,
       typebotPublicId: publicId,
       typebotRemoteId: typebotId,
       viewerReachable,
-      typebotPublished,
-      viewerUrlActive: typebotPublished || viewerReachable,
+      typebotPublished: true,
+      viewerUrlActive: true,
       ownerEmail: owner?.email ?? MASTER_SOURCE_EMAIL,
       ownerName: owner?.name ?? "Drax Sistemas",
     });
   }
 
-  const primary =
-    rows.length > 0 ? rows : await mapSavedFlowsToSourceRows(savedFlowsOnDisk);
-  return appendPersistedFlowsFallback(primary);
+  if (rows.length > 0) {
+    return filterActiveWalkupMatrixRows(rows);
+  }
+
+  const diskRows = await mapSavedFlowsToSourceRows(savedFlowsOnDisk);
+  return filterActiveWalkupMatrixRows(diskRows);
 };
 
 export const syncSourceWorkspaceFlowsToMasterTenant = async (): Promise<{

@@ -94,6 +94,8 @@ type SavedFlow = {
   url: string;
   /** Preenchido em `source-flows` quando a URL do viewer foi testada. */
   viewerUrlActive?: boolean;
+  /** Publicado (Live) no Typebot builder — workspace matriz. */
+  typebotPublished?: boolean;
   /** Proprietário do fluxo (retorno de source-flows com fallback multi-tenant). */
   ownerEmail?: string;
   ownerName?: string;
@@ -724,16 +726,21 @@ export function App() {
   const visibleLibraryFlowRows =
     activeLibraryFlowRows.length > 0 ? activeLibraryFlowRows : libraryFlowRows;
   const activeMatrixSourceFlows = useMemo(
-    () => sourceMasterFlows.filter((flow) => flow.viewerUrlActive !== false),
+    () =>
+      sourceMasterFlows.filter(
+        (flow) => flow.viewerUrlActive !== false && flow.typebotPublished !== false,
+      ),
     [sourceMasterFlows],
   );
+  /** Biblioteca Master: só fluxos Live do workspace Walkup (matriz Typebot). */
+  const walkupMasterLibraryFlows = activeMatrixSourceFlows;
   const hasAnyFlowListedInStep6 =
     visibleLibraryFlowRows.length > 0 ||
     tenantWorkspaceFlowsForStep6.length > 0 ||
     activeMatrixSourceFlows.length > 0;
   const unpublishedSourceMasterFlows = useMemo(
     () =>
-      sourceMasterFlows.filter((flow) => {
+      walkupMasterLibraryFlows.filter((flow) => {
         const flowUrl = flow.url.trim().toLowerCase();
         return !systemMasterLibrary.some((item) => {
           const bySourceId = item.sourceFlowId === flow.id;
@@ -741,7 +748,7 @@ export function App() {
           return bySourceId || byViewerUrl;
         });
       }),
-    [sourceMasterFlows, systemMasterLibrary],
+    [walkupMasterLibraryFlows, systemMasterLibrary],
   );
   const systemDefaultLibraryIds = useMemo(
     () => new Set(systemMasterLibrary.filter((item) => item.isSystemDefault).map((item) => item.id)),
@@ -1103,7 +1110,12 @@ export function App() {
             "Nenhum fluxo encontrado. Confira volume da API (saved-flows.json), token Typebot ou sincronize o workspace matriz.",
           );
         } else {
-          setStatusMessage(`Lista atualizada: ${data.length} fluxo(s) por proprietário.`);
+          const activeCount = data.filter(
+            (flow) => flow.viewerUrlActive !== false && flow.typebotPublished !== false,
+          ).length;
+          setStatusMessage(
+            `Lista atualizada: ${activeCount} fluxo(s) Live no workspace Walkup.`,
+          );
         }
       }
     } catch {
@@ -3066,6 +3078,9 @@ export function App() {
                 </div>
               </div>
             ) : null}
+            <p className="muted muted-subtle">
+              Somente fluxos <strong>Live</strong> do workspace <strong>Walkup</strong> no Typebot Builder.
+            </p>
             <div className="saved-flows-table master-library-table">
               <div className="saved-flows-header master-library-row">
                 <span>Proprietário</span>
@@ -3075,7 +3090,7 @@ export function App() {
                 <span>URL</span>
                 <span>Ação</span>
               </div>
-              {sourceMasterFlows.map((flow) => {
+              {walkupMasterLibraryFlows.map((flow) => {
                 const flowUrl = flow.url.trim().toLowerCase();
                 const alreadyInLibrary = systemMasterLibrary.some(
                   (item) =>
@@ -3159,11 +3174,11 @@ export function App() {
                   </div>
                 );
               })}
-              {sourceMasterFlows.length === 0 ? (
+              {walkupMasterLibraryFlows.length === 0 ? (
                 <p className="muted">
-                  Nenhum fluxo salvo na API. Verifique o volume de dados,{" "}
-                  <code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code> e o token do builder no Easypanel (serviço{" "}
-                  <code>api</code>), depois use &quot;Atualizar lista&quot;.
+                  Nenhum fluxo <strong>Live</strong> no workspace Walkup. Publique no Typebot Builder e use
+                  &quot;Atualizar lista&quot;. Confira <code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code> e o token do
+                  builder no Easypanel (serviço <code>api</code>).
                 </p>
               ) : null}
             </div>

@@ -221,11 +221,7 @@ export const registerFlowRoutes = (app: Express) => {
 
       return res.status(200).json(withTypebotAlias);
     } catch {
-      try {
-        return res.status(200).json(await appendPersistedFlowsFallback([]));
-      } catch {
-        return res.status(200).json([]);
-      }
+      return res.status(200).json([]);
     }
   };
 

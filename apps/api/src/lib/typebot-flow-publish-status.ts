@@ -59,8 +59,7 @@ export const fetchTypebotDetailById = async (typebotId: string): Promise<Typebot
 export const isTypebotPublishedInBuilder = (detail: TypebotDetail | null, publicId: string): boolean => {
   if (!publicId) return false;
   const publishedAt = String(detail?.publishedAt ?? "").trim();
-  if (publishedAt.length > 0) return true;
-  return true;
+  return publishedAt.length > 0;
 };
 
 export const resolveFlowActiveStatus = async (flow: {
@@ -85,7 +84,7 @@ export const resolveFlowActiveStatus = async (flow: {
   return {
     typebotPublished,
     viewerReachable,
-    viewerUrlActive: typebotPublished || viewerReachable,
+    viewerUrlActive: typebotPublished,
   };
 };
 
