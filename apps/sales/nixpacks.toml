@@ -6,6 +6,9 @@ NIXPACKS_NODE_VERSION = "22"
 [phases.install]
 cmds = ["npm ci --include=dev"]
 
+[phases.build]
+cmds = ["npm run build"]
+
 # Easypanel / Nixpacks usam por defeito `npm start` — tem de servir `dist/` já feito no build.
 [start]
 cmd = "npm run start:static"

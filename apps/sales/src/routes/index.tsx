@@ -34,27 +34,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PaymentMethodSelector, type SalesBillingType } from "@/components/sales/PaymentMethodSelector";
-import { PagamentoPixContent } from "@/components/sales/PagamentoPixContent";
 import { createSalesSubscription, fetchSalesPlans, resolvePainelUrl } from "@/lib/salesApi";
 import { digitsFromCpfCnpj, maskCpfCnpjInput } from "@/lib/maskCpfCnpj";
 import { digitsFromPhone, isValidBrazilMobileDigits, maskBrazilMobileInput } from "@/lib/maskPhone";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    orderId: String(search.orderId ?? "").trim(),
-    pix: String(search.pix ?? "").trim() === "1",
-  }),
-  component: IndexPage,
+  component: Index,
 });
-
-function IndexPage() {
-  const { orderId, pix } = Route.useSearch();
-  if (pix && orderId) {
-    return <PagamentoPixContent orderId={orderId} />;
-  }
-  return <Index />;
-}
 
 const NAV = [
   { href: "#sobre", label: "Sobre" },
@@ -665,15 +652,18 @@ function Pricing() {
         cycle: yearly ? "YEARLY" : "MONTHLY",
       });
       const orderId = String(res.orderId ?? "").trim();
-      if (res.pixCopyPaste && orderId) {
-        sessionStorage.setItem(
-          `pix-pay-${orderId}`,
-          JSON.stringify({
-            pixCopyPaste: res.pixCopyPaste,
-            pixQrCodeBase64: res.pixQrCodeBase64 ?? "",
-          }),
-        );
-        window.location.href = `/?orderId=${encodeURIComponent(orderId)}&pix=1`;
+      const isPixAutomatic = res.billingKind === "pix_automatic";
+      if (orderId && (res.pixCopyPaste || isPixAutomatic)) {
+        if (res.pixCopyPaste) {
+          sessionStorage.setItem(
+            `pix-pay-${orderId}`,
+            JSON.stringify({
+              pixCopyPaste: res.pixCopyPaste,
+              pixQrCodeBase64: res.pixQrCodeBase64 ?? "",
+            }),
+          );
+        }
+        window.location.href = `/pagamento?orderId=${encodeURIComponent(orderId)}`;
         return;
       }
       if (res.invoiceUrl) {

@@ -80,6 +80,19 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (url.pathname === "/" && url.searchParams.get("pix") === "1") {
+      const orderId = url.searchParams.get("orderId") ?? "";
+      if (orderId) {
+        res.statusCode = 302;
+        res.setHeader(
+          "location",
+          `/pagamento?orderId=${encodeURIComponent(orderId)}`,
+        );
+        res.end();
+        return;
+      }
+    }
+
     const request = new Request(url, {
       method: req.method,
       headers: req.headers,

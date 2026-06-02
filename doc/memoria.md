@@ -1,5 +1,30 @@
+## 2026-06-02 - Fluxos vazios Drax (`draxsistemas@gmail.com`)
+
+- **Sintoma:** Etapa 6 (Biblioteca de Fluxos) vazia ao logar como `draxsistemas@gmail.com` / Drax Sistemas.
+- **Causa:** Conta com Typebot **provisionado** (`typebotWorkspaceId`); API filtrava só fluxos com `typebotRemoteId` no workspace; fluxos salvos só com URL/`publicId` sumiam; painel ocultava seção da biblioteca e listava só `workspaceOnlyFlows` (sem `librarySourceId`).
+- **Correção:** `typebot-flow-viewer-url-sync.ts` — vínculo por `publicId`, filtro/prune/align ampliados; `ensureTenantFlowsLinkedToWorkspace` na listagem; `App.tsx` — etapa 6 usa todos os fluxos do tenant quando provisionado; mensagens claras no sync (`builder_api_token_missing`, workspace vazio).
+- **Ops:** redeploy API + painel; Etapa 6 → **Atualizar lista**; conferir `TYPEBOT_TARGET_BUILDER_API_TOKEN` e workspace `cmohgh7ll0014ru1cwhg90xnp` (Drax).
+- **Log:** `doc/LOG-2026-06-02__fluxos-vazios-drax-provisionado.md`
+
+## 2026-06-01 - Biblioteca de fluxos (conta matriz)
+
+- **Conta matriz sistema:** `walkup@walkuptec.com.br` (nome tenant **Drax Sistemas**). `draxsistemas@gmail.com` = assinante operacional Drax, não master do sistema.
+- **Fix biblioteca vazia:** fallback `source-flows` do disco; sem filtro workspace na matriz; admin mostra fluxos ativos matriz + catálogo ativo na etapa 6.
+- Snapshot: `doc/LOG-2026-06-01__220000__fix-biblioteca-fluxos-matriz-ativos.md`.
+
 ## 2026-06-01 - Pix Automático (assinatura mensal)
 
+- **LP porta host removida (Etapa 46):** Easypanel `paginadevendas` → aba **Portas** → removido `3000:3000` (conflito com Easypanel na 3000). HTTP só via **Domínios** → `typebot_paginadevendas:3000` interno.
+- **Pós-remoção porta 3000:** Traefik OK (`app:200 lp:307 painel:200`). API `deployMarker=DEPLOY-2026-06-01-api-pix-v6`. LP bundle novo `index-CXJi_hvW.js` contém `pixCopyPaste`, `billingKind`, `pix_automatic` — **deploy LP OK**.
+- **Fix LP recarrega no Pix (2026-06-01):** SSR TanStack convertia `/?orderId=x&pix=1` → 307 → `pix=false` (landing de novo). Correção: redirect checkout para `/pagamento?orderId=x` + rota dedicada + redirect legado no `serve-production.mjs`. **Commit PV:** `50b4894` — `DEPLOY-2026-06-01-lp-pix-pagamento` (`walkup-tec/PV-typebot-chat` `main`).
+- **Diagnóstico produção:** `GET https://app.chattypebot.com/api/public/sales/plans` **sem** `billingCapabilities` → API antiga (checkout RECURRENT+PIX → erro Asaas CREDIT_CARD obrigatório).
+- **Commits API:** `b833624` (marcador deploy) + `59869d2` (Pix Automático). **LP:** `PV-typebot-chat` `8f29f57` (Pix mensal só se `pixAutomaticMonthly`).
+- **Produção OK (2026-06-01):** `deployMarker=DEPLOY-2026-06-01-api-pix-v2`, `billingCapabilities.pixAutomaticMonthly=true` em `app.chattypebot.com`.
+- **Causa raiz 502/código antigo:** Swarm `typebot_api` não trocava task na 3333 (porta em host-mode presa ao container velho). Fix: `scale 0` → porta livre → `scale 1`.
+- **Build Easypanel:** exigir `test -f apps/api/dist/deploy-marker.js` no comando de build; commit `4a68e9e`.
+- **Serviço definitivo:** `api` (domínio `app.chattypebot.com`). `api-typebot-crm` pode ser excluído após confirmar dados/env no `api`.
+- **Guia paridade:** `doc/EASYPANEL-PARIDADE-SERVICO-API.md`.
+- Redeploy: `doc/REDEPLOY-PIX-AUTOMATICO.md`.
 - Landing (`apps/sales`): PIX no plano mensal; checkout redireciona para `/pagamento` com QR/copia-e-cola.
 - API: autorização Pix Automático (`asaas-pix-automatic.client.ts`), pedido `billingKind=pix_automatic`.
 - Renovações: `BILLING_PIX_AUTOMATIC_PAYMENT_MODE=SUBSCRIPTION` (padrão); `MANUAL` ativa job em `server.ts`.
