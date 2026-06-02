@@ -67,6 +67,13 @@ echo "--- 3) Env crítico (builder) ---"
 docker inspect "$BUILDER_CID" --format '{{range .Config.Env}}{{println .}}{{end}}' \
   | grep -E '^(PORT|HOSTNAME|NODE_ENV|NEXTAUTH_URL|NEXT_PUBLIC_VIEWER_URL|DATABASE_URL|REDIS_URL|ENCRYPTION_SECRET)=' \
   | sed 's/ENCRYPTION_SECRET=.*/ENCRYPTION_SECRET=***/; s/DATABASE_URL=postgres:.*/DATABASE_URL=postgres:***@***/; s/REDIS_URL=.*/REDIS_URL=***/' || true
+
+REDIS_RAW=$(docker inspect "$BUILDER_CID" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^REDIS_URL=' | head -1 || true)
+if echo "$REDIS_RAW" | grep -qE '@[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:'; then
+  echo ""
+  echo "  >>> ERRO: REDIS_URL usa IP fixo (rede antiga). Use host: typebot_typebot-walkup-redis"
+  echo "  >>> Rode: bash fix-typebot-redis-url-vps.sh"
+fi
 echo ""
 
 echo "--- 4) Teste DENTRO do container (localhost:3000) ---"

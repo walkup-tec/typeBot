@@ -118,6 +118,30 @@ Ordem: **db** → **redis** → **minio** → **builder** → **viewer**
 
 Erros comuns: Redis `WRONGPASS`, `S3_ACCESS_KEY` com `@`, builder sem `HOSTNAME=0.0.0.0`.
 
+### Caso real 2026-06-02 (seu VPS)
+
+Log do builder:
+```text
+[ioredis] connect EHOSTUNREACH 10.11.227.126:6379
+```
+
+**Causa:** `REDIS_URL` no Easypanel apontava para **IP antigo** do Redis, não para o host Docker atual.
+
+**Correção:** no Easypanel, serviços **builder** e **viewer**:
+
+```env
+REDIS_URL=redis://:<SENHA>@typebot_typebot-walkup-redis:6379
+```
+
+Gerar linha correta no VPS:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/walkup-tec/typeBot/master/scripts/fix-typebot-redis-url-vps.sh -o /tmp/fix-redis.sh
+bash /tmp/fix-redis.sh
+```
+
+Restart builder + viewer → `curl -sI .../signin` deve retornar **307** (não 502).
+
 ---
 
 ## Variáveis na API SaaS (`api`)
