@@ -1,5 +1,6 @@
 import { FlowService } from "./flow.service";
 import type { SavedFlow } from "./flow.repository";
+import { listSystemMasterLibrary } from "./system-master-library.repository";
 import { flowRepository, tenantRepository } from "../lib/repositories";
 import { isFlowUrlActive } from "../lib/flow-url-health";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
@@ -106,10 +107,10 @@ const isTypebotPublishedInBuilder = (detail: SourceTypebotDetail | null, publicI
 
 const isWalkupMatrixViewerUrl = (url: string): boolean => {
   const normalized = normalizeKey(url);
-  if (!normalized) return false;
+  if (!normalized || normalized.includes("soma-typebot")) return false;
   return (
     normalized.includes("typebot-typebot-walkup-viewer") ||
-    normalized.includes("typebot-walkup-viewer")
+    normalized.includes("typebot-walkup-viewer.achpyp")
   );
 };
 
@@ -289,14 +290,18 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
   }
 
   if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_VIEWER_BASE_URL) {
-    const diskRows = await mapSavedFlowsToSourceRows(savedFlowsOnDisk);
-    return filterActiveWalkupMatrixRows(diskRows);
+    return [];
   }
 
   const matrixBots = await listSourceWorkspaceTypebots();
+  if (matrixBots.length === 0) {
+    return [];
+  }
+
   let savedFlows = flowService.listByTenant(sourceTenant.id);
   const rows: MasterLibrarySourceFlowRow[] = [];
   const owners = tenantOwnerLookup();
+  const activeRemoteIds = new Set<string>();
 
   for (const bot of matrixBots) {
     const typebotId = String(bot.id ?? "").trim();
@@ -320,6 +325,7 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
     const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
     if (!typebotPublished) continue;
 
+    activeRemoteIds.add(typebotId);
     const viewerReachable = await isFlowUrlActive(viewerUrl);
     const owner = owners.get(flow.tenantId);
     rows.push({
@@ -334,12 +340,29 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
     });
   }
 
-  if (rows.length > 0) {
-    return filterActiveWalkupMatrixRows(rows);
+  const activeRows = filterActiveWalkupMatrixRows(rows);
+
+  const protectedFlowIds = new Set(
+    listSystemMasterLibrary()
+      .map((item) => String(item.sourceFlowId ?? "").trim())
+      .filter(Boolean),
+  );
+  for (const flow of savedFlows) {
+    const remoteId = String(flow.typebotRemoteId ?? "").trim();
+    if (!remoteId || activeRemoteIds.has(remoteId)) continue;
+    if (protectedFlowIds.has(flow.id)) continue;
+    flowRepository.removeById(flow.id);
   }
 
-  const diskRows = await mapSavedFlowsToSourceRows(savedFlowsOnDisk);
-  return filterActiveWalkupMatrixRows(diskRows);
+  const byKey = new Map<string, MasterLibrarySourceFlowRow>();
+  for (const row of activeRows) {
+    const key =
+      normalizeKey(row.typebotRemoteId) ||
+      normalizeKey(row.typebotPublicId) ||
+      normalizeKey(row.url);
+    if (key) byKey.set(key, row);
+  }
+  return [...byKey.values()];
 };
 
 export const syncSourceWorkspaceFlowsToMasterTenant = async (): Promise<{

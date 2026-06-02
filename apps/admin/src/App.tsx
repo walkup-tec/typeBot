@@ -138,6 +138,15 @@ type CreateAttendantResponse = AttendantRow & {
 };
 
 type FlowStatus = "active" | "inactive" | "checking";
+
+const isWalkupMatrixViewerUrl = (url: string): boolean => {
+  const normalized = url.trim().toLowerCase();
+  if (!normalized || normalized.includes("soma-typebot")) return false;
+  return (
+    normalized.includes("typebot-typebot-walkup-viewer") ||
+    normalized.includes("typebot-walkup-viewer.achpyp")
+  );
+};
 type MasterProfile = "system_master" | "subscriber_master";
 type ScreenId =
   | "master"
@@ -725,15 +734,23 @@ export function App() {
   );
   const visibleLibraryFlowRows =
     activeLibraryFlowRows.length > 0 ? activeLibraryFlowRows : libraryFlowRows;
-  const activeMatrixSourceFlows = useMemo(
-    () =>
-      sourceMasterFlows.filter(
-        (flow) => flow.viewerUrlActive !== false && flow.typebotPublished !== false,
-      ),
-    [sourceMasterFlows],
-  );
-  /** Biblioteca Master: só fluxos Live do workspace Walkup (matriz Typebot). */
-  const walkupMasterLibraryFlows = activeMatrixSourceFlows;
+  /** Biblioteca Master: só fluxos Live do workspace Walkup (URL atual + publicado). */
+  const walkupMasterLibraryFlows = useMemo(() => {
+    const seen = new Set<string>();
+    return sourceMasterFlows.filter((flow) => {
+      if (!isWalkupMatrixViewerUrl(flow.url)) return false;
+      if (flow.viewerUrlActive === false) return false;
+      if (flow.typebotPublished === false) return false;
+      const dedupeKey =
+        String(flow.typebotRemoteId ?? "").trim() ||
+        String(flow.typebotPublicId ?? "").trim() ||
+        flow.url.trim().toLowerCase();
+      if (!dedupeKey || seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
+      return true;
+    });
+  }, [sourceMasterFlows]);
+  const activeMatrixSourceFlows = walkupMasterLibraryFlows;
   const hasAnyFlowListedInStep6 =
     visibleLibraryFlowRows.length > 0 ||
     tenantWorkspaceFlowsForStep6.length > 0 ||
@@ -1084,14 +1101,8 @@ export function App() {
         method: "POST",
         signal: controller.signal,
       });
-      if (!syncResponse.ok) {
-        const syncPayload = (await syncResponse.json().catch(() => ({}))) as { message?: string };
-        if (!options?.silent) {
-          setStatusMessage(
-            syncPayload.message ??
-              "Sync da matriz falhou; carregando fluxos já gravados na API…",
-          );
-        }
+      if (!syncResponse.ok && !options?.silent) {
+        setStatusMessage("Não foi possível sincronizar com o Typebot. Tente novamente.");
       }
 
       const response = await fetch(`${apiBase}/api/master/system-library/source-flows`, {
@@ -1105,22 +1116,16 @@ export function App() {
       const data = (await response.json()) as SavedFlow[];
       setSourceMasterFlows(data);
       if (!options?.silent) {
-        if (data.length === 0) {
-          setStatusMessage(
-            "Nenhum fluxo encontrado. Confira volume da API (saved-flows.json), token Typebot ou sincronize o workspace matriz.",
-          );
-        } else {
-          const activeCount = data.filter(
-            (flow) => flow.viewerUrlActive !== false && flow.typebotPublished !== false,
-          ).length;
-          setStatusMessage(
-            `Lista atualizada: ${activeCount} fluxo(s) Live no workspace Walkup.`,
-          );
+        const activeCount = data.filter(
+          (flow) => isWalkupMatrixViewerUrl(flow.url) && flow.viewerUrlActive !== false && flow.typebotPublished !== false,
+        ).length;
+        if (activeCount > 0) {
+          setStatusMessage(`Lista atualizada: ${activeCount} fluxo(s) Live.`);
         }
       }
     } catch {
       if (!options?.silent) {
-        setStatusMessage("Falha ao atualizar lista. Verifique a API e o token do builder.");
+        setStatusMessage("Falha ao atualizar lista. Tente novamente.");
       }
     } finally {
       window.clearTimeout(timeout);
@@ -3048,42 +3053,11 @@ export function App() {
                 Atualizar lista
               </button>
             </div>
-            {activeMatrixSourceFlows.length > 0 ? (
-              <div className="tenant-profile-card">
-                <h4>Fluxos ativos no workspace matriz</h4>
-                <p className="muted muted-subtle">
-                  Lista viva do Typebot matriz ({activeMatrixSourceFlows.length} fluxo
-                  {activeMatrixSourceFlows.length === 1 ? "" : "s"}). Promova como padrão na tabela abaixo.
-                </p>
-                <div className="saved-flows-table master-library-table">
-                  <div className="saved-flows-header master-library-row">
-                    <span>Nome</span>
-                    <span>Status</span>
-                    <span>URL</span>
-                  </div>
-                  {activeMatrixSourceFlows.map((flow) => (
-                    <div key={flow.id} className="saved-flows-row master-library-row">
-                      <span>{flow.displayLabel ?? flow.nickname}</span>
-                      <span className="flow-status active">
-                        <i />
-                        Ativo
-                      </span>
-                      <span className="flow-url-cell">
-                        <a href={flow.url} title={flow.url} target="_blank" rel="noreferrer">
-                          {abbreviateUrlForDisplay(flow.url)}
-                        </a>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
             <p className="muted muted-subtle">
-              Somente fluxos <strong>Live</strong> do workspace <strong>Walkup</strong> no Typebot Builder.
+              Fluxos <strong>Live</strong> do workspace <strong>Walkup</strong> no Typebot Builder.
             </p>
             <div className="saved-flows-table master-library-table">
               <div className="saved-flows-header master-library-row">
-                <span>Proprietário</span>
                 <span>Título</span>
                 <span>Fluxo origem</span>
                 <span>Status</span>
@@ -3102,15 +3076,8 @@ export function App() {
                 const flowOriginAlias =
                   flow.typebotPublicId?.trim() || flow.displayLabel?.trim() || flow.nickname;
                 const urlActive = flow.viewerUrlActive !== false;
-                const ownerLabel =
-                  flow.ownerName?.trim() ||
-                  flow.ownerEmail?.trim() ||
-                  (flow.tenantId ? `Tenant ${flow.tenantId.slice(0, 8)}` : "—");
                 return (
                   <div key={flow.id} className="saved-flows-row master-library-row">
-                    <span className="master-flow-owner" title={flow.ownerEmail ?? ""}>
-                      {ownerLabel}
-                    </span>
                     <span>
                       {editingMasterTitleFlowId === flow.id ? (
                         <input
@@ -3175,11 +3142,7 @@ export function App() {
                 );
               })}
               {walkupMasterLibraryFlows.length === 0 ? (
-                <p className="muted">
-                  Nenhum fluxo <strong>Live</strong> no workspace Walkup. Publique no Typebot Builder e use
-                  &quot;Atualizar lista&quot;. Confira <code>TYPEBOT_SOURCE_MASTER_WORKSPACE_ID</code> e o token do
-                  builder no Easypanel (serviço <code>api</code>).
-                </p>
+                <p className="muted">Nenhum fluxo Live no workspace Walkup. Publique no Typebot e clique em Atualizar lista.</p>
               ) : null}
             </div>
 

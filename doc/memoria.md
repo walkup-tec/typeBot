@@ -1,4 +1,12 @@
-﻿## 2026-06-02 - Traefik permanente VPS (fim 502 LP/painel)
+﻿## 2026-06-02 - Biblioteca Master: sem toast técnico + só Walkup Live
+
+- **Pedido:** não exibir mensagem com `TYPEBOT_SOURCE_MASTER_WORKSPACE_ID`; parar de listar 5 fluxos `soma-typebot` após F5.
+- **Causa:** produção ainda no bundle/API anterior (`appendPersistedFlowsFallback` / sem filtro URL). F5 ≠ redeploy.
+- **Código:** filtro `isWalkupMatrixViewerUrl` (admin + API), prune disco tenant walkup, toast só em sucesso (`Lista atualizada: N fluxo(s) Live.`).
+- **Ops:** push + redeploy **api** + **painel**; depois **Atualizar lista**.
+- **Log:** `doc/LOG-2026-06-02__232000__biblioteca-master-sem-toast-tecnico.md`
+
+## 2026-06-02 - Traefik permanente VPS (fim 502 LP/painel)
 
 - **Problema:** Swarm troca IP a cada redeploy; `main.yaml` desatualizado; Traefik fora da rede `easypanel-typebot`; `sed` global quebrou LP (tela Typebot).
 - **Solução:** `scripts/traefik-permanent-vps.sh install` — cron 1 min + `docker service update --network-add easypanel-typebot` no Traefik + patch por nome de serviço.
