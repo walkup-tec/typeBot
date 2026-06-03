@@ -2603,9 +2603,11 @@ button:disabled {
 }
 
 .master-library-table--refreshing {
-  opacity: 0.55;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+}
+
+.master-library-table--refreshing .saved-flows-row {
+  opacity: 0.92;
 }
 
 .master-title-display-row {

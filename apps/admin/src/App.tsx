@@ -1091,11 +1091,20 @@ export function App() {
     setSelectedLibraryId((current) => (current && data.some((item) => item.id === current) ? current : ""));
   }
 
+  function stopMasterLibraryRefreshUi() {
+    setIsRefreshingMasterLibrary(false);
+  }
+
   async function loadMasterLibrarySourceFlows(options?: { silent?: boolean }) {
     const showRefreshUi = !options?.silent;
     if (showRefreshUi) setIsRefreshingMasterLibrary(true);
+
+    const failSafeTimer = showRefreshUi
+      ? window.setTimeout(stopMasterLibraryRefreshUi, 50_000)
+      : undefined;
+
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    const abortTimer = window.setTimeout(() => controller.abort(), 45_000);
     try {
       const syncResponse = await fetch(`${apiBase}/api/master/system-library/sync-source`, {
         method: "POST",
@@ -1119,6 +1128,8 @@ export function App() {
       if (!options?.silent) {
         if (filtered.length > 0) {
           setStatusMessage(`Lista atualizada: ${filtered.length} fluxo(s) Live.`);
+        } else {
+          setStatusMessage("Nenhum fluxo Live no workspace Walkup.");
         }
       }
     } catch {
@@ -1126,8 +1137,9 @@ export function App() {
         setStatusMessage(formatApiConnectionError(new Error("timeout ou rede")));
       }
     } finally {
-      window.clearTimeout(timeout);
-      if (showRefreshUi) setIsRefreshingMasterLibrary(false);
+      window.clearTimeout(abortTimer);
+      if (failSafeTimer !== undefined) window.clearTimeout(failSafeTimer);
+      if (showRefreshUi) stopMasterLibraryRefreshUi();
     }
   }
 
@@ -1256,7 +1268,10 @@ export function App() {
   }, [authSession]);
 
   useEffect(() => {
-    if (activeScreen !== "masterLibrary") return;
+    if (activeScreen !== "masterLibrary") {
+      stopMasterLibraryRefreshUi();
+      return;
+    }
     void loadMasterLibrarySourceFlows({ silent: true });
     void loadSystemMasterLibrary();
   }, [activeScreen]);
@@ -3046,7 +3061,10 @@ export function App() {
                 className={`ghost-btn flow-list-refresh-btn flow-list-refresh-btn--compact${isRefreshingMasterLibrary ? " flow-list-refresh-btn--busy" : ""}`}
                 disabled={isRefreshingMasterLibrary}
                 aria-busy={isRefreshingMasterLibrary}
-                onClick={() => void loadMasterLibrarySourceFlows()}
+                onClick={() => {
+                  if (isRefreshingMasterLibrary) return;
+                  void loadMasterLibrarySourceFlows();
+                }}
               >
                 {isRefreshingMasterLibrary ? (
                   <span className="processing-inline-wrap">
