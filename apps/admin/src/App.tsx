@@ -19,6 +19,7 @@ import {
   type MasterWizardStepCompletion,
   type MasterWizardStepIndex,
 } from "./masterWizardProgress";
+import { resolveStatusToastTone } from "./lib/resolveStatusToastTone";
 
 type TenantDefaultChatTheme = {
   templateName?: string;
@@ -2128,13 +2129,10 @@ export function App() {
     window.open(SYSTEM_MASTER_TYPEBOT_BUILDER_URL, "_blank", "noopener,noreferrer");
   }
 
-  const statusToneClass = useMemo(() => {
-    const message = statusMessage.trim().toLowerCase();
-    if (!message) return "error";
-    const successPattern =
-      /(sucesso|bem-vindo|copiado|iniciado|atualizado|cadastrado|salvo|inclu[ií]do|removido|encerrada|definido)/i;
-    return successPattern.test(message) ? "success" : "error";
-  }, [statusMessage]);
+  const statusToneClass = useMemo(
+    () => resolveStatusToastTone(statusMessage),
+    [statusMessage],
+  );
 
   if (!authSession) {
     return (

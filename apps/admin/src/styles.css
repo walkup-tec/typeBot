@@ -2705,8 +2705,8 @@ button:disabled {
   max-width: min(760px, calc(100vw - 24px));
   min-width: 220px;
   z-index: 1200;
-  background: rgba(127, 29, 29, 0.52);
-  border: 1px solid rgba(248, 113, 113, 0.7);
+  background: rgba(30, 41, 59, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.45);
   box-shadow: 0 14px 36px rgba(2, 8, 23, 0.45);
   color: #e2e8f0;
   border-radius: 12px;
@@ -2718,6 +2718,11 @@ button:disabled {
   text-align: center;
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
+}
+
+.status-toast.info {
+  background: rgba(30, 41, 59, 0.82);
+  border-color: rgba(148, 163, 184, 0.45);
 }
 
 .status-toast.success {

@@ -1,9 +1,17 @@
-﻿## 2026-06-02 - Biblioteca Master: sem toast técnico + só Walkup Live
+﻿## 2026-06-02 - Toast: verde sucesso / vermelho erro
+
+- **Sintoma:** "Lista atualizada" e outros sucessos em vermelho.
+- **Causa:** regex `atualizado` não casava `atualizada`; default era `error`; CSS base vermelho.
+- **Fix:** `resolveStatusToastTone.ts` + CSS neutro/info/success/error.
+- **Deploy:** rebuild **painel**.
+- **Log:** `doc/LOG-2026-06-02__234500__fix-toast-cores-sucesso-verde.md`
+
+## 2026-06-02 - Biblioteca Master: sem toast técnico + só Walkup Live
 
 - **Pedido:** não exibir mensagem com `TYPEBOT_SOURCE_MASTER_WORKSPACE_ID`; parar de listar 5 fluxos `soma-typebot` após F5.
 - **Causa:** produção ainda no bundle/API anterior (`appendPersistedFlowsFallback` / sem filtro URL). F5 ≠ redeploy.
 - **Código:** filtro `isWalkupMatrixViewerUrl` (admin + API), prune disco tenant walkup, toast só em sucesso (`Lista atualizada: N fluxo(s) Live.`).
-- **Ops:** push + redeploy **api** + **painel**; depois **Atualizar lista**.
+- **Ops:** push feito (`b7ae08f`); redeploy serviço **`api`** (domínio `app.chattypebot.com`) + **painel**; depois **Atualizar lista**. Serviço antigo `api-typebot-crm` **removido**.
 - **Log:** `doc/LOG-2026-06-02__232000__biblioteca-master-sem-toast-tecnico.md`
 
 ## 2026-06-02 - Traefik permanente VPS (fim 502 LP/painel)
