@@ -23,7 +23,8 @@ Variáveis obrigatórias no serviço **`api`**:
 
 Ou manualmente:
 
-- `GET https://app.chattypebot.com/health` → `deployMarker` = `DEPLOY-2026-06-03-api-biblioteca-v3-safe` e `masterLibraryLogicVersion` = `walkup-live-only-v3-safe-prune`
+- `GET https://app.chattypebot.com/health` → `deployMarker` = `DEPLOY-2026-06-03-api-biblioteca-v4-pos-traefik` e `masterLibraryLogicVersion` = `walkup-live-only-v4-pos-traefik`
+- Guia pós-incidente Traefik: `doc/REDEPLOY-BIBLIOTECA-TRAEFIK-2026-06-03.md`
 - `GET .../api/master/system-library/source-flows` → **0 ou 1** fluxo; **nunca** URLs `soma-typebot`
 - Painel → Biblioteca Master → **Atualizar lista**
 

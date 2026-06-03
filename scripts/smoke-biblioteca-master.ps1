@@ -5,9 +5,9 @@ $ErrorActionPreference = "Stop"
 $ApiBase = if ($env:SMOKE_API_BASE) { $env:SMOKE_API_BASE } else { "https://app.chattypebot.com" }
 $PainelBase = if ($env:SMOKE_PAINEL_BASE) { $env:SMOKE_PAINEL_BASE } else { "https://painel.chattypebot.com" }
 
-$ExpectedApiMarker = "DEPLOY-2026-06-03-api-biblioteca-v3-safe"
-$ExpectedLibraryLogic = "walkup-live-only-v3-safe-prune"
-$ExpectedAdminMarker = "DEPLOY-2026-06-03-admin-biblioteca-v3-safe"
+$ExpectedApiMarker = "DEPLOY-2026-06-03-api-biblioteca-v4-pos-traefik"
+$ExpectedLibraryLogic = "walkup-live-only-v4-pos-traefik"
+$ExpectedAdminMarker = "DEPLOY-2026-06-03-admin-biblioteca-v4-pos-traefik"
 
 Write-Host "=== Smoke Biblioteca Master ===" -ForegroundColor Cyan
 Write-Host "API: $ApiBase"

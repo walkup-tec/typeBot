@@ -1,4 +1,41 @@
-﻿## 2026-06-03 - Fix prune perigoso no redeploy (v3-safe)
+﻿## 2026-06-03 - Commit redeploy Biblioteca v4 pós-Traefik
+
+- **Markers:** `DEPLOY-2026-06-03-api-biblioteca-v4-pos-traefik` / admin v4 / `walkup-live-only-v4-pos-traefik`.
+- **Guia:** `doc/REDEPLOY-BIBLIOTECA-TRAEFIK-2026-06-03.md` + smoke atualizado.
+- **VPS resolvido:** painel sem porta host; LP force update; fix-traefik 502.
+- **Log:** `doc/LOG-2026-06-03__070000__commit-redeploy-biblioteca-v4-pos-traefik.md`
+
+## 2026-06-03 - Causa raiz Swarm: host-mode port in use (painel)
+
+- **Diagnóstico ChatGPT confirmado:** `typebot_painel-typebot-crm` **Pending** — `no suitable node (host-mode port already in use)`.
+- **Por que Traefik não resolve:** redeploy não troca container; script só corrige `main.yaml` para IP da task **velha**.
+- **Evidência:** painel publicado `3002→3000` no host; LP já sem porta host (OK). Mesmo bug da API na **3333** e LP na **3000**.
+- **Fix:** remover porta host do painel no Easypanel → `scale 0` → `scale 1` → traefik-permanent run.
+- **Log:** `doc/LOG-2026-06-03__060000__swarm-host-port-painel-pending.md`
+
+## 2026-06-03 - 502 com IPs patchados (Traefik alcança?)
+
+- **VPS:** `LP=10.0.4.210 PAINEL=10.0.4.126 BUILDER=10.0.4.200` — containers UP, main.yaml patchado, ainda `lp:502 painel:502 builder:502 app:200`.
+- **Conclusão:** não é container parado; falta teste wget **de dentro do Traefik** para esses IPs.
+- **Log:** `doc/LOG-2026-06-03__050000__502-com-ips-patchados-traefik.md`
+
+## 2026-06-03 - LP/painel/builder 502 (app OK)
+
+- **Resultado usuário:** `lp:502 painel:502 app:200 builder_signin:502`
+- **Interpretação:** Traefik/API OK; upstream LP, painel e builder inacessíveis ou main.yaml desatualizado.
+- **Repo:** `scripts/diagnose-502-lp-painel-vps.sh` + traefik-permanent reinicia Traefik se painel **ou** LP 502 após patch (`d91b741`).
+- **Próximo passo VPS:** rodar diagnose + `/root/traefik-permanent-vps.sh run`; colar saída.
+- **Log:** `doc/LOG-2026-06-03__040000__502-lp-painel-builder-diagnose.md`
+
+## 2026-06-03 - Logs pos-deploy: builder 502, marker antigo
+
+- Logs `ECONNRESET`/`502` = Typebot builder inacessivel, nao Biblioteca Master.
+- Health `typebot-api.achpyp` ainda marker `2026-06-02` — build nao pegou commit v3-safe.
+- `app.chattypebot.com` 502 pos-redeploy (Traefik).
+- Fix `849545e`: fetch try/catch + log boot deployMarker.
+- **Log:** `doc/LOG-2026-06-03__030000__logs-api-deploy-builder-502.md`
+
+## 2026-06-03 - Fix prune perigoso no redeploy (v3-safe)
 
 - **Logs vistos:** `no_new_active_typebots` = rotina normal a cada 7s, nao erro Biblioteca Master.
 - **Bug:** prune apagava fluxos walkup quando builder 502 ou env ausente no redeploy.
