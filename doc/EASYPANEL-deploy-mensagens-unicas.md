@@ -17,19 +17,19 @@ Antes de quereres que o Easypanel mostre **outro nome** de deploy, cria um commi
 
 ```bash
 cd /caminho/para/typebot-Saas
-node scripts/easypanel-deploy-empty.cjs "api-typebot-crm: descrever a mudança em uma linha"
+node scripts/easypanel-deploy-empty.cjs "api: descrever a mudança em uma linha"
 ```
 
 No Windows PowerShell podes definir o serviço (aparece no commit):
 
 ```powershell
-$env:EASYPANEL_SERVICE="api-typebot-crm"
+$env:EASYPANEL_SERVICE="api"
 node scripts/easypanel-deploy-empty.cjs "fix flow-library + sync auth"
 ```
 
 Isto faz:
 
-1. `git commit --allow-empty -m "deploy[api-typebot-crm]: … | ISO8601 | shortsha"`
+1. `git commit --allow-empty -m "deploy[api]: … | ISO8601 | shortsha"`
 2. `git push`
 
 O próximo build no Easypanel passa a mostrar **essa** mensagem como identificador do deploy.

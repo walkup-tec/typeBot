@@ -2,7 +2,7 @@
 
 | Serviço Easypanel | Repositório | Commit (Pix Automático) |
 |-------------------|-------------|-------------------------|
-| **api-typebot-crm** | `walkup-tec/typeBot` (`master`) | `b833624` (ou ≥ `59869d2`) |
+| **`api`** (domínio `app.chattypebot.com`) | `walkup-tec/typeBot` (`master`) | **`DEPLOY-2026-06-01-api-pix-v2`** |
 | **paginadevendas** | `walkup-tec/PV-typebot-chat` (`main`) | `709dadc` |
 
 **Você só precisa redeployar** (um passo de cada vez conforme combinado).
@@ -22,7 +22,7 @@ Se o checkout já funcionava com cartão, mantenha:
 - `ASAAS_WEBHOOK_ACCESS_TOKEN`
 - `SALES_PLAN_*`
 
-Webhook Asaas: `POST https://api.chattypebot.com/api/webhooks/asaas` (eventos de pagamento + Pix Automático).
+Webhook Asaas: `POST https://app.chattypebot.com/api/webhooks/asaas` (eventos de pagamento + Pix Automático).
 
 ## Conta Asaas
 

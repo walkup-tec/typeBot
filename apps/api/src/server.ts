@@ -135,7 +135,6 @@ const DEFAULT_FRAME_ANCESTORS = [
   "'self'",
   "https://painel.chattypebot.com",
   "https://app.chattypebot.com",
-  "https://api.chattypebot.com",
   "https://chattypebot.com",
   "http://localhost:5173",
   "http://localhost:4173",

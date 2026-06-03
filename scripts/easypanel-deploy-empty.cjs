@@ -7,7 +7,7 @@
  *   node scripts/easypanel-deploy-empty.cjs "api: correção flow-library"
  *
  * Opcional — nome do serviço no Easypanel (aparece no texto do commit):
- *   set EASYPANEL_SERVICE=api-typebot-crm
+ *   set EASYPANEL_SERVICE=api
  *   node scripts/easypanel-deploy-empty.cjs "painel: fallback biblioteca"
  */
 const { execSync } = require("node:child_process");

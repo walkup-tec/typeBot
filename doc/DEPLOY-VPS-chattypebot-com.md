@@ -9,16 +9,16 @@ No registador do domínio:
 | Tipo | Nome | Valor |
 |------|------|--------|
 | A | `@` ou `www` | IP público do VPS |
-| A | `api` (recomendado) | mesmo IP |
+| A | `app` (API Node) | mesmo IP |
 | A | `widget` (opcional) | mesmo IP |
 
-Podes usar só `chattypebot.com` para o admin e `api.chattypebot.com` para a API (padrão abaixo).
+Podes usar só `chattypebot.com` para o admin e `app.chattypebot.com` para a API (padrão abaixo).
 
 ## 2. TLS
 
 Usa o mesmo fluxo que já tens no VPS (Certbot, painel Easypanel, etc.) para emitir certificado para:
 
-- `api.chattypebot.com`
+- `app.chattypebot.com`
 - `chattypebot.com` (e/ou `www`)
 - `widget.chattypebot.com` se existir
 
@@ -59,7 +59,7 @@ npm run build:api
 **Admin (obrigatório definir a API pública no build):**
 
 ```bash
-export VITE_API_BASE_URL=https://api.chattypebot.com
+export VITE_API_BASE_URL=https://app.chattypebot.com
 export VITE_WIDGET_BASE_URL=https://widget.chattypebot.com
 npm run build:admin
 ```
@@ -67,7 +67,7 @@ npm run build:admin
 **Widget** (por tenant ou genérico):
 
 ```bash
-export VITE_API_BASE_URL=https://api.chattypebot.com
+export VITE_API_BASE_URL=https://app.chattypebot.com
 export VITE_TENANT_ID=<tenant-demo>
 export VITE_TYPEBOT_PUBLIC_URL=https://<viewer>/<publicId>
 npm run build:widget
@@ -93,12 +93,12 @@ pm2 start dist/server.js --name typebot-saas-api
 pm2 save
 ```
 
-## 7. Nginx — API (`api.chattypebot.com`)
+## 7. Nginx — API (`app.chattypebot.com`)
 
 ```nginx
 server {
   listen 443 ssl http2;
-  server_name api.chattypebot.com;
+  server_name app.chattypebot.com;
 
   location / {
     proxy_pass http://127.0.0.1:3333;
@@ -120,7 +120,7 @@ Servir o app TanStack Start em `apps/sales` (SSR Node). O painel admin fica em `
 Build (no serviço Easypanel da landing, pasta `apps/sales`, **sem** workspace npm da raiz):
 
 ```bash
-export VITE_API_BASE_URL=https://api.chattypebot.com
+export VITE_API_BASE_URL=https://app.chattypebot.com
 export VITE_PAINEL_URL=https://painel.chattypebot.com
 npm ci
 npm run build
@@ -175,11 +175,11 @@ Servir `apps/widget/dist` num hostname à parte ou subpath; respeitar `VITE_*` u
 
 ## 11. Depois do deploy
 
-1. `curl -sS https://api.chattypebot.com/health`
+1. `curl -sS https://app.chattypebot.com/health`
 2. Abrir `https://chattypebot.com` e confirmar checkout/assinatura contra a API (DevTools → Network).
 3. Abrir `https://painel.chattypebot.com` e confirmar login/chamadas à API.
 3. Handoff Typebot:
-   - **Webhook (POST):** `TYPEBOT_HANDOFF_WEBHOOK_URL` → ex. `https://app.chattypebot.com/api/typebot/handoff` ou `https://api.chattypebot.com/api/typebot/handoff`
+   - **Webhook (POST):** `TYPEBOT_HANDOFF_WEBHOOK_URL` → ex. `https://app.chattypebot.com/api/typebot/handoff` ou `https://app.chattypebot.com/api/typebot/handoff`
    - **Redirect:** usar variável `{{url_direct}}` da resposta do webhook (não a URL do webhook).
    - **GET** no mesmo path redireciona (302) para `/handoff-view` — necessário se o bloco Redirect apontar direto para `/api/typebot/handoff`.
 

@@ -1,2 +1,2 @@
 /*
-  Content-Security-Policy: frame-ancestors 'self' https://painel.chattypebot.com https://app.chattypebot.com https://api.chattypebot.com http://localhost:5173
+  Content-Security-Policy: frame-ancestors 'self' https://painel.chattypebot.com https://app.chattypebot.com http://localhost:5173

@@ -2,7 +2,7 @@
 # Uso: powershell -ExecutionPolicy Bypass -File scripts\set-master-walkup-logo.ps1
 
 param(
-  [string]$ApiBase = "https://typebot-api-typebot-crm.achpyp.easypanel.host",
+  [string]$ApiBase = "https://app.chattypebot.com",
   [string]$LogoPath = ""
 )
 

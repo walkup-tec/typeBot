@@ -675,7 +675,7 @@ function Pricing() {
       const message = err instanceof Error ? err.message : "Erro ao processar assinatura.";
       if (/CREDIT_CARD.*RECURRENT|RECURRENT.*CREDIT_CARD/i.test(message)) {
         setError(
-          "A API de pagamentos ainda não foi atualizada para Pix Automático mensal. Use cartão ou aguarde o redeploy da API (api-typebot-crm) e tente de novo.",
+          "A API de pagamentos ainda não foi atualizada para Pix Automático mensal. Use cartão ou aguarde o redeploy do serviço api (app.chattypebot.com) e tente de novo.",
         );
       } else {
         setError(message);

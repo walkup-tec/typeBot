@@ -20,11 +20,35 @@ Teste externo (`curl` em `/signin`):
 
 | Host | HTTP |
 |------|------|
-| `typebot-typebot-walkup-builder` | **502** |
+| `typebot-typebot-walkup-builder` | **502** (público) — app **200** na rede `easypanel-typebot` |
 | `typebot-walkup-builder` | **502** |
 | `soma-typebot-walkup-builder` | **502** |
 
-Conclusão: o **serviço Typebot Builder no Easypanel está fora** (container parado, porta errada ou app não escuta em `0.0.0.0`). Não é só URL errada no painel.
+### OK na rede Docker, 502 no HTTPS (2026-06-02)
+
+Sintoma confirmado no VPS:
+
+- `http://typebot_typebot-walkup-builder:3000/signin` na rede `easypanel-typebot` → **HTTP 200**
+- `https://typebot-typebot-walkup-builder.achpyp.easypanel.host/signin` → **HTTP 502**
+
+**Causa:** Traefik/Easypanel não alcança o upstream (Traefik fora da rede Docker, rota com IP/hostname Swarm morto no `main.yaml`, ou domínio Easypanel desatualizado).
+
+**Correção automática no VPS:**
+
+```bash
+curl -sSL https://raw.githubusercontent.com/walkup-tec/typeBot/master/scripts/fix-typebot-builder-proxy-502-vps.sh -o /tmp/fix-typebot-proxy.sh
+bash /tmp/fix-typebot-proxy.sh
+```
+
+Ou incluído no script geral (LP + painel + builder):
+
+```bash
+bash /root/fix-traefik-easypanel-502.sh
+```
+
+Se ainda **502** após o script: Easypanel → **Domínios** do builder → destino `http://<IP-atual-builder>:3000/` (IP em `docker inspect` na rede `easypanel-typebot`).
+
+Conclusão antiga (container parado): só vale se **falhar** o teste em `127.0.0.1:3000` dentro do container.
 
 Após corrigir o builder, validar:
 
@@ -61,7 +85,7 @@ O script mostra: container Running?, app em `127.0.0.1:3000`, IP na rede `easypa
 |---------------------|------|
 | Container **não** Running | Easypanel → **Start**; subir **db** e **redis** antes |
 | Falha em `127.0.0.1:3000` | Corrigir env (ver abaixo) — ver log (Redis WRONGPASS, DB, ENCRYPTION) |
-| OK interno, 502 público | Easypanel → **Domínios** porta **3000**; redeploy/restart builder |
+| OK interno, 502 público | `bash fix-typebot-builder-proxy-502-vps.sh` ou `fix-traefik-easypanel-502.sh`; depois Domínios porta **3000** |
 
 ---
 
@@ -205,7 +229,8 @@ Fluxo no painel: **Assinantes** → **Ativar Typebot** → **Acessar Typebot** (
 | `doc/EASYPANEL-TYPEBOT-ENV-REFERENCIA.md` | Env completo builder/viewer/minio |
 | `doc/LOG-2026-05-18__205226__snapshot-encerramento-typebot-easypanel.md` | Migração soma→typebot, 502 PORT/HOSTNAME |
 | `doc/LOG-2026-04-22__181500__typebot-acesso-direto-por-tenant.md` | `TYPEBOT_TENANT_URL_TEMPLATE` |
-| `doc/FIX-EASYPANEL-TRAEFIK-ESTAVEL.md` | 502 em LP/painel/API (não builder achpyp) |
+| `doc/FIX-EASYPANEL-TRAEFIK-ESTAVEL.md` | 502 em LP/painel/API + builder/viewer no `main.yaml` |
+| `scripts/fix-typebot-builder-proxy-502-vps.sh` | Passos 12–16: Traefik + main.yaml + reteste HTTPS |
 | `scripts/diagnose-typebot-access.ps1` | Teste rápido de URLs |
 
 ---

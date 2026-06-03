@@ -1,3 +1,12 @@
+const PRODUCTION_API_BASE_URL = "https://app.chattypebot.com";
+
+const normalizePublicApiBaseUrl = (raw: string): string => {
+  const trimmed = String(raw ?? "").trim().replace(/\/$/, "");
+  if (!trimmed) return "";
+  if (/^https?:\/\/api\.chattypebot\.com\/?$/i.test(trimmed)) return PRODUCTION_API_BASE_URL;
+  return trimmed;
+};
+
 const resolveInjectedApiBase = (): string => {
   if (typeof window === "undefined") return "";
   return String(
@@ -7,8 +16,8 @@ const resolveInjectedApiBase = (): string => {
 
 export const resolveApiBase = (): string => {
   const injected = resolveInjectedApiBase();
-  if (injected) return injected.replace(/\/$/, "");
-  const fromEnv = String(import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+  if (injected) return normalizePublicApiBaseUrl(injected);
+  const fromEnv = normalizePublicApiBaseUrl(String(import.meta.env.VITE_API_BASE_URL ?? ""));
   if (fromEnv) return fromEnv;
   // Em produção nunca usar localhost embutido: evita bundle com API errada se o build não tiver VITE_*.
   if (import.meta.env.DEV) return "http://localhost:3333".replace(/\/$/, "");

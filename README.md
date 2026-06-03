@@ -42,7 +42,7 @@ npm run dev:admin
 
 **Produção:** o admin precisa de `VITE_API_BASE_URL` **na fase de build** do Vite (ver `apps/admin/.env.example`). Sem isso o bundle continua a apontar para `localhost:3333`.
 
-**Easypanel (dois serviços):** no **`api-typebot-crm`** não defines `VITE_*` — a API Node não usa essas variáveis. Define `VITE_API_BASE_URL` (e opcionalmente `VITE_WIDGET_BASE_URL`) no serviço do **painel** (`painel-typebot-crm`, ou equivalente), como ambiente do **passo de build**, não como runtime só na API. Guia: `doc/EASYPANEL-PAINEL-VITE-build.env.example`.
+**Easypanel (dois serviços):** no serviço **`api`** não defines `VITE_*` — a API Node não usa essas variáveis. Define `VITE_API_BASE_URL` (e opcionalmente `VITE_WIDGET_BASE_URL`) no serviço do **painel** (`painel-typebot-crm`, ou equivalente), como ambiente do **passo de build**, não como runtime só na API. Guia: `doc/EASYPANEL-PAINEL-VITE-build.env.example`.
 
 Deploy no VPS com domínio próprio: `doc/DEPLOY-VPS-chattypebot-com.md`.
 

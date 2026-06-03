@@ -60,6 +60,14 @@ if (/localhost|127\.0\.0\.1/i.test(api)) {
   process.exit(1);
 }
 
+if (/^https?:\/\/api\.chattypebot\.com\/?$/i.test(api)) {
+  console.error(
+    "[apps/sales] api.chattypebot.com está descontinuado (DNS/serviço antigo).",
+  );
+  console.error("Use VITE_API_BASE_URL=https://app.chattypebot.com (serviço Easypanel api).");
+  process.exit(1);
+}
+
 if (painel && /localhost|127\.0\.0\.1/i.test(painel)) {
   console.error(
     "[apps/sales] VITE_PAINEL_URL não pode ser localhost no build. Valor efetivo:",

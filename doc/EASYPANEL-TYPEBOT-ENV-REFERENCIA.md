@@ -1,6 +1,8 @@
 # Referência de ambiente — Typebot no Easypanel (projeto `typebot`)
 
-Atualizado em **2026-05-18** após migração do projeto `soma`.
+Atualizado em **2026-06-02** após migração do projeto `soma`.
+
+**Checklist completo (502 + login + upload):** [`doc/TYPEBOT-MIGRACAO-WALKUP-FIX-COMPLETO.md`](TYPEBOT-MIGRACAO-WALKUP-FIX-COMPLETO.md)
 
 ## URLs públicas
 
@@ -26,7 +28,8 @@ NODE_OPTIONS=--no-node-snapshot
 PORT=3000
 HOSTNAME=0.0.0.0
 
-DATABASE_URL=postgresql://postgres:<senha>@typebot_typebot-walkup-db:5432/typebot
+DATABASE_URL=postgresql://postgres:<senha>@<IP_DB>:5432/typebot
+# IP na rede easypanel-typebot (jun/2026: 10.0.4.69). Hostname Swarm pode falhar (10.11.x).
 
 NEXTAUTH_URL=https://typebot-typebot-walkup-builder.achpyp.easypanel.host
 NEXT_PUBLIC_VIEWER_URL=https://typebot-typebot-walkup-viewer.achpyp.easypanel.host
@@ -34,7 +37,8 @@ NEXT_PUBLIC_VIEWER_URL=https://typebot-typebot-walkup-viewer.achpyp.easypanel.ho
 ADMIN_EMAIL=walkup@walkuptec.com.br
 DISABLE_SIGNUP=false
 
-REDIS_URL=redis://:<senha-redis>@typebot_typebot-walkup-redis:6379
+REDIS_URL=redis://:<senha-redis>@<IP_REDIS>:6379
+# jun/2026: 10.0.4.71
 
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
@@ -66,17 +70,19 @@ PORT=3000
 HOSTNAME=0.0.0.0
 ```
 
-## API SaaS (`api-typebot-crm`)
+## API SaaS (serviço `api` — domínio `app.chattypebot.com`)
+
+> O serviço antigo `api-typebot-crm` foi removido. Toda a API Node roda em **`api`**.
 
 ```env
 TYPEBOT_BUILDER_API_BASE_URL=https://typebot-typebot-walkup-builder.achpyp.easypanel.host/api
 TYPEBOT_TARGET_VIEWER_BASE_URL=https://typebot-typebot-walkup-viewer.achpyp.easypanel.host
 ```
 
-## Painel (`painel-typebot-crm` — build)
+## Painel (serviço `painel` — build)
 
 ```env
-VITE_API_BASE_URL=https://api.chattypebot.com
+VITE_API_BASE_URL=https://app.chattypebot.com
 VITE_WIDGET_BASE_URL=https://widget.chattypebot.com
 VITE_SYSTEM_MASTER_TYPEBOT_BUILDER_URL=https://typebot-typebot-walkup-builder.achpyp.easypanel.host/pt-BR/typebots
 ```

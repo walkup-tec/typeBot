@@ -1,4 +1,10 @@
-﻿## 2026-06-03 - Fix build painel Easypanel (publicApiBase ausente)
+﻿## 2026-06-03 - Release DEPLOY walkup-correcoes-completas
+
+- **Commit:** `DEPLOY-2026-06-03-walkup-correcoes-completas` (bundle promote + assinantes + painel + limpeza api antiga).
+- **Redeploy:** serviço **api** → **painel** (validar `/health` e etapa 6 Drax).
+- **Log:** `doc/LOG-2026-06-03__DEPLOY-walkup-correcoes-completas.md`
+
+## 2026-06-03 - Fix build painel Easypanel (publicApiBase ausente)
 
 - **Erro:** `Could not resolve "./lib/publicApiBase"` no `npm run build:admin` (deploy 0969c71).
 - **Fix:** commit `apps/admin/src/lib/publicApiBase.ts`; marker `DEPLOY-2026-06-03-admin-public-api-base-module`.
