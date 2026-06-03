@@ -450,19 +450,58 @@ export type ResolveMasterSourceFlowHints = {
   url?: string;
 };
 
+const resolveMasterTenant = () =>
+  tenantRepository
+    .list()
+    .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
+
+/** Grava fluxo matriz no disco a partir dos hints do painel (promote sem depender só do UUID da lista). */
+const ensureMasterSourceFlowFromPromoteHints = (
+  sourceTenantId: string,
+  hints: ResolveMasterSourceFlowHints & { displayName?: string },
+): SavedFlow | null => {
+  const remote = String(hints.typebotRemoteId ?? "").trim();
+  const publicId = String(hints.typebotPublicId ?? "").trim();
+  let viewerUrl = String(hints.url ?? "").trim();
+  if (!viewerUrl && publicId && TYPEBOT_SOURCE_VIEWER_BASE_URL) {
+    viewerUrl = `${TYPEBOT_SOURCE_VIEWER_BASE_URL.replace(/\/$/, "")}/${encodeURIComponent(publicId)}`;
+  }
+  if (!isWalkupMatrixViewerUrl(viewerUrl)) return null;
+  if (!remote && !publicId) return null;
+
+  flowRepository.reloadFromStorage();
+  const savedFlows = flowService.listByTenant(sourceTenantId);
+  const resolvedPublicId = publicId || typebotPublicIdFromViewerUrl(viewerUrl);
+  const name =
+    String(hints.displayName ?? "").trim() ||
+    resolvedPublicId ||
+    "Fluxo matriz";
+
+  try {
+    return upsertMatrixFlowOnTenant(
+      sourceTenantId,
+      remote || String(savedFlows.find((f) => normalizeKey(f.url) === normalizeKey(viewerUrl))?.typebotRemoteId ?? "").trim(),
+      name,
+      resolvedPublicId,
+      viewerUrl,
+      savedFlows,
+    );
+  } catch {
+    return findSavedFlowForMatrixBot(savedFlows, remote, resolvedPublicId, viewerUrl) ?? null;
+  }
+};
+
 /** Resolve fluxo da matriz para promote (id, remoteId, publicId ou URL). */
 export const resolveMasterSourceFlowForPromote = async (
   sourceFlowId: string,
-  hints?: ResolveMasterSourceFlowHints,
+  hints?: ResolveMasterSourceFlowHints & { displayName?: string },
 ): Promise<SavedFlow | null> => {
   const findInStorage = (): SavedFlow | null => {
     flowRepository.reloadFromStorage();
     const direct = flowRepository.getById(sourceFlowId);
     if (direct) return direct;
 
-    const masterTenant = tenantRepository
-      .list()
-      .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
+    const masterTenant = resolveMasterTenant();
     if (!masterTenant?.id) return null;
 
     const remote = String(hints?.typebotRemoteId ?? "").trim();
@@ -486,13 +525,22 @@ export const resolveMasterSourceFlowForPromote = async (
   let flow = findInStorage();
   if (flow) return flow;
 
-  const sourceTenant = tenantRepository
-    .list()
-    .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
+  const sourceTenant = resolveMasterTenant();
   if (!sourceTenant?.id) return null;
 
+  if (hints) {
+    flow = ensureMasterSourceFlowFromPromoteHints(sourceTenant.id, hints);
+    if (flow) return flow;
+  }
+
   await syncMasterLibraryFromTypebot(sourceTenant.id);
-  return findInStorage();
+  flow = findInStorage();
+  if (flow) return flow;
+
+  if (hints) {
+    return ensureMasterSourceFlowFromPromoteHints(sourceTenant.id, hints);
+  }
+  return null;
 };
 
 /**
