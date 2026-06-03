@@ -2843,22 +2843,14 @@ export function App() {
                     )}
                   </button>
                 </div>
-                <p className="muted muted-subtle">
-                  {selectedTenantObject &&
-                (isSystemMasterTenant(selectedTenantObject) ||
-                  isTenantTypebotProvisioned(selectedTenantObject)) ? (
-                    <>
-                      Nesta conta, a lista reflete os <strong>fluxos ativos do workspace Typebot</strong> vinculado
-                      {isSystemMasterTenant(selectedTenantObject) ? " à matriz" : " ao assinante"}.
-                      Use <strong>Atualizar lista</strong> após criar ou publicar um fluxo no builder.
-                    </>
-                  ) : (
-                    <>
-                      Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
-                      <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
-                    </>
-                  )}
-                </p>
+                {selectedTenantObject &&
+                !isSystemMasterTenant(selectedTenantObject) &&
+                !isTenantTypebotProvisioned(selectedTenantObject) ? (
+                  <p className="muted muted-subtle">
+                    Fluxos definidos como <strong>padrão</strong> na Biblioteca Master são incluídos aqui automaticamente; use{" "}
+                    <strong>Copiar link</strong> para o link de compartilhamento do workspace deste assinante.
+                  </p>
+                ) : null}
                 {selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject) ? null : selectableFlowLibrary.some(
                     (item) => !systemDefaultLibraryIds.has(item.id),
                   ) ? (
