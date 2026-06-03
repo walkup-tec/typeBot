@@ -1,4 +1,8 @@
-﻿## 2026-06-04 - DEPLOY fluxo padrão definitivo (não regredir)
+﻿## 2026-06-04 - Arquivo traefik_memoria.txt
+
+- Histórico Traefik ordenado + problemas para Hostinger: `doc/traefik_memoria.txt`
+
+## 2026-06-04 - DEPLOY fluxo padrão definitivo (não regredir)
 
 - **Commit:** `DEPLOY-2026-06-04-walkup-fluxo-padrao-definitivo`
 - **API:** reparo automático `librarySourceId` + boot/watcher + endpoint repair

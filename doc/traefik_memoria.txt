@@ -1,0 +1,465 @@
+================================================================================
+TRAEFIK_MEMORIA — Walkup / ChatTypebot (Easypanel + VPS Hostinger)
+================================================================================
+Arquivo gerado em: 2026-06-04
+Projeto: typebot-Saas (repositório walkup-tec/typeBot)
+Objetivo: histórico legível de tudo feito sobre Traefik, problemas para
+          evidência ao suporte Hostinger, e pendências futuras.
+
+IMPORTANTE: A maior parte dos 502 em LP/painel/builder NÃO é “bug da aplicação
+Node/React”, e sim proxy + Docker Swarm + arquivo main.yaml desatualizado.
+O script traefik-permanent-vps.sh foi criado para corrigir isso automaticamente.
+
+================================================================================
+1. AMBIENTE TÉCNICO (CONTEXTO PARA SUPORTE)
+================================================================================
+
+- Provedor VPS: Hostinger (servidor exemplo: srv1261237)
+- Painel: Easypanel (gerencia Traefik embutido)
+- Orquestração: Docker Swarm (serviços typebot_*)
+- Rede overlay principal dos apps: easypanel-typebot
+- Arquivo crítico do proxy: /etc/easypanel/traefik/config/main.yaml
+- Traefik: serviço Swarm easypanel-traefik (container do proxy)
+
+Domínios públicos envolvidos:
+- app.chattypebot.com        → API Node (porta host 172.17.0.1:3333)
+- chattypebot.com            → Landing (paginadevendas, porta 3000 no container)
+- painel.chattypebot.com     → Admin (painel-typebot-crm, porta 3000 no container)
+- *.achpyp.easypanel.host    → Typebot builder/viewer (Easypanel)
+
+Serviços Swarm citados com frequência:
+- typebot_paginadevendas
+- typebot_painel-typebot-crm
+- typebot_api (ou api após migração)
+- typebot_typebot-walkup-builder
+- typebot_typebot-walkup-viewer
+- easypanel-traefik
+
+================================================================================
+2. CRONOLOGIA (ORDEM CRONOLÓGICA — DATA APROXIMADA / LOG DO REPO)
+================================================================================
+
+------------------------------------------------------------------------------
+2026-05-28 (manhã) — Easypanel: destino automático e 502 na API
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-05-28__114500__easypanel-destino-automatico-502-api.md
+
+Problema:
+- UI Easypanel não permite editar “destino” do domínio manualmente (comportamento
+  normal do produto).
+- Destino gerado: http://typebot_api-typebot-crm:3333/ — hostname interno que
+  não resolve na rede que o Traefik usa.
+- Teste externo: app.chattypebot.com/health → 502.
+- Dentro do container API: localhost → 200.
+
+Ação:
+- Documentado FIX-EASYPANEL-API-502-DOMINIO.md
+- Recomendado serviço renomeado para "api", HOST=0.0.0.0, porta 3333 publicada.
+
+------------------------------------------------------------------------------
+2026-05-28 (tarde/noite) — Correção manual main.yaml + painel ainda 502
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-05-28__190000__snapshot-pausa-proxy-traefik.md
+
+Estado após patches SSH no main.yaml:
+- app.chattypebot.com/health  → OK
+- chattypebot.com             → 200
+- painel.chattypebot.com      → 502
+
+Comandos que restauraram API + LP (substituir hostnames Swarm por IP host):
+  sed typebot_api:3333           → http://172.17.0.1:3333
+  sed typebot_paginadevendas     → http://172.17.0.1:3000
+  sed typebot_painel-typebot-crm → http://172.17.0.1:3001  (tentativa)
+  docker restart traefik
+
+Problema painel pendente:
+- Porta publicada 3001→3000 no painel; wget do Traefik para 172.17.0.1:3001
+  → Connection reset (app não respondia na porta mapeada ou serviço parado).
+
+Lição: misturar “porta publicada no host” com “IP overlay 10.0.4.x” gera confusão;
+        o modelo estável passou a usar IP do container na rede easypanel-typebot.
+
+------------------------------------------------------------------------------
+2026-05-29 — Estabilização Traefik LP + Painel (script legado)
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-05-29__estabilizacao-traefik-lp-painel.md
+Doc: doc/FIX-EASYPANEL-TRAEFIK-ESTAVEL.md
+
+Problema:
+- LP OK após sed manual (ex.: 10.0.4.115:3000).
+- Painel caiu pelo mesmo motivo: URL typebot_painel-typebot-crm:3000/ no main.yaml
+  apontando para IP/hostname morto após redeploy.
+
+Solução no repositório:
+- scripts/fix-traefik-easypanel-502.sh
+  - Resolve IPs dinâmicos dos containers na rede easypanel-typebot
+  - Reconecta Traefik às redes easypanel/typebot
+  - Restart Traefik quando necessário
+- Recomendado cron */5 no VPS.
+
+Monitoria (mesmo período):
+- doc/LOG-2026-05-29__monitor-diario-traefik-email.md
+- scripts/monitor-traefik-proxy.sh — testes HTTPS + e-mail wakup@walkuptec.com.br
+
+------------------------------------------------------------------------------
+2026-06-01 — LP 502 por réplica Swarm “-1” com URL errada
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-01__211500__fix-traefik-paginadevendas-1-chattypebot.md
+
+Problema:
+- Container LP saudável (curl IP overlay → 200).
+- https://chattypebot.com → 502 porque bloco typebot_paginadevendas-1 no main.yaml
+  ainda apontava para URL antiga (réplica Swarm secundária).
+
+Fix:
+- sed manual no VPS para paginadevendas-1 → IP correto.
+- fix-traefik-easypanel-502.sh atualizado para corrigir bloco -1 automaticamente.
+
+------------------------------------------------------------------------------
+2026-06-01 — API Swarm: porta 3333 host-mode “already in use”
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-01__160000__lp-remover-porta-host-3000.md (LP)
+Log: doc/LOG-2026-06-03__151500__api-swarm-3333-host-port-pending.md (API, registrado depois)
+
+Problema (padrão Hostinger/Swarm + Easypanel):
+- Novo deploy da API não substitui task: status Pending
+- Mensagem: no suitable node (host-mode port already in use)
+- Porta 3333 presa ao container ANTIGO → código novo nunca entra em produção
+- Traefik pode continuar respondendo 200 no app antigo OU 502 se upstream cair
+
+Fix operacional:
+- docker service scale typebot_api=0 → aguardar → scale 1
+- Remover mapeamento de porta no host no Easypanel (definitivo)
+
+------------------------------------------------------------------------------
+2026-06-02 — Typebot Builder: 200 interno, 502 no HTTPS público
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-02__180500__fix-typebot-builder-proxy-502-traefik.md
+
+Problema:
+- curl na rede easypanel-typebot para builder:3000/signin → 200
+- URL pública HTTPS → 502
+- Causa: main.yaml / roteamento Traefik com hostname ou IP Swarm obsoleto
+
+Solução repo:
+- scripts/fix-typebot-builder-proxy-502-vps.sh
+- fix-traefik-easypanel-502.sh passou a incluir builder/viewer
+
+------------------------------------------------------------------------------
+2026-06-02 — INSTALAÇÃO DA SOLUÇÃO PERMANENTE (marco principal)
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-02__200000__traefik-permanente-vps-install.md
+Doc: doc/TRAEFIK-PERMANENTE-VPS.md
+Script: scripts/traefik-permanent-vps.sh
+
+Motivação:
+- 502 recorrente em LP e painel após cada redeploy Easypanel
+- sed genérico em 10.0.4.*:3000 já tinha apontado LP para tela do Typebot (erro grave)
+
+O que o install faz (VPS /root/traefik-permanent-vps.sh install):
+1) docker service update --network-add easypanel-typebot no serviço easypanel-traefik
+2) Cron /etc/cron.d/traefik-permanent-fix — execução a cada 1 minuto
+3) Patch do main.yaml por NOME de serviço → IP atual na overlay
+4) Rotina SEM restart Traefik (evita queda a cada minuto)
+5) Restart Traefik SOMENTE se LP continuar 502 após patch
+6) Detecta LP mostrando tela “Entrar” do Typebot → reaplica upstream da LP
+
+Scripts relacionados no repo:
+- scripts/fix-traefik-easypanel-502.sh (legado; delega ao permanent se instalado)
+- scripts/fix-traefik-restore-lp-painel-vps.sh
+- scripts/install-traefik-autofix-cron-vps.sh
+- scripts/monitor-traefik-proxy.sh
+- scripts/diagnose-502-lp-painel-vps.sh (commit d91b741, jun/2026)
+
+------------------------------------------------------------------------------
+2026-06-03 — 502 persistindo mesmo com IPs patchados
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-03__050000__502-com-ips-patchados-traefik.md
+
+Evidência usuário/VPS:
+  IPs: LP=10.0.4.210 PAINEL=10.0.4.126 BUILDER=10.0.4.200 ...
+  RESULTADO lp:502 painel:502 app:200 builder_signin:502
+
+Interpretação:
+- main.yaml foi alterado, mas Traefik ainda não alcançava upstream OU apps não
+  respondiam na :3000 OU Traefik precisava restart após patch.
+
+Log: doc/LOG-2026-06-03__040000__502-lp-painel-builder-diagnose.md
+- Melhoria: traefik-permanent reinicia Traefik se painel OU LP 502 após patch
+- Script diagnose-502-lp-painel-vps.sh para wget interno do Traefik
+
+------------------------------------------------------------------------------
+2026-06-03 — Swarm painel Pending (NÃO é Traefik — mas gera 502)
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-03__060000__swarm-host-port-painel-pending.md
+
+Problema:
+  typebot_painel-typebot-crm.1  Pending
+  no suitable node (host-mode port already in use)
+
+Causa:
+- Porta host 3002→3000 publicada no Easypanel
+- Task nova não sobe; Traefik aponta para container velho ou nenhum saudável
+
+Fix:
+1) Remover porta host 3002:3000 no serviço painel (Easypanel)
+2) docker service scale typebot_painel-typebot-crm=0 → 1
+3) /root/traefik-permanent-vps.sh run
+
+CRÍTICO PARA SUPORTE HOSTINGER:
+O script Traefik NÃO destrava deploy Swarm preso em Pending. Isso é limitação
+do modo host-mode + porta já em uso no nó, não falha do script de correção de IP.
+
+------------------------------------------------------------------------------
+2026-06-03 — Redeploy Biblioteca Master / Traefik estável na documentação
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-03__070000__commit-redeploy-biblioteca-v4-pos-traefik.md
+Doc: doc/REDEPLOY-BIBLIOTECA-TRAEFIK-2026-06-03.md
+
+Registro: painel sem porta host; LP force update; traefik OK após procedimentos.
+
+------------------------------------------------------------------------------
+2026-06-03 (tarde) — Painel Bad Gateway reportado no navegador
+------------------------------------------------------------------------------
+Log: doc/LOG-2026-06-03__painel-502-bad-gateway.md
+
+Sintoma: painel.chattypebot.com → Bad Gateway
+
+Causas identificadas no projeto (prioridade):
+1) Build do painel FALHOU no Easypanel (arquivo publicApiBase.ts não estava no git)
+   → container não sobe ou fica unhealthy — Traefik retorna 502
+2) Task Swarm Pending (porta host)
+3) IP antigo no main.yaml (Traefik) — cron corrige em até ~1 min
+
+NOTA: Testes externos alternaram 502 e 200 no mesmo dia.
+
+------------------------------------------------------------------------------
+2026-06-03 19:03:27 UTC — VALIDAÇÃO POSITIVA (executado pelo usuário no VPS)
+------------------------------------------------------------------------------
+
+Comando: /root/traefik-permanent-vps.sh run
+
+Saída resumida:
+- Swarm: rede easypanel-typebot no easypanel-traefik (OK)
+- IPs patchados:
+    LP=10.0.4.105  PAINEL=10.0.4.195  BUILDER=10.0.4.136  VIEWER=10.0.4.203
+- ALERTA: LP responde tela Typebot — script reaplicou patch LP (comportamento esperado)
+- RESULTADO: lp:200 painel:200 app:200 builder_signin:200
+
+Conclusão: em 03/06/2026 ~19:03 UTC o proxy Traefik estava FUNCIONAL para todos
+os destinos testados pelo script.
+
+Aviso bash (menor): "ignored null byte in input" na linha 247 — não impediu sucesso.
+
+------------------------------------------------------------------------------
+2026-06-04 — Esclarecimento projeto (código vs Traefik)
+------------------------------------------------------------------------------
+
+Confirmado na operação:
+- 502 no painel após deploy quebrado = problema de BUILD/COMMIT (código não no git),
+  não regressão do traefik-permanent.
+- Fluxo padrão assinantes / biblioteca master = problema de código API (corrigido
+  em commits DEPLOY-2026-06-03 e DEPLOY-2026-06-04), exige redeploy da API.
+
+================================================================================
+3. PROBLEMAS ENCONTRADOS — RESUMO PARA EVIDÊNCIA HOSTINGER / EASYPANEL
+================================================================================
+
+Use os itens abaixo ao abrir ticket. Numere e anexe logs se possível.
+
+--- PROBLEMA A: DNS interno Swarm não roteável pelo Traefik ---
+Sintoma: 502 em domínios públicos; apps saudáveis dentro da rede overlay.
+Detalhe: main.yaml usa http://typebot_paginadevendas:3000/ ou typebot_api:3333
+         que não resolve ou resolve para IP morto (10.11.x) após redeploy.
+Evidência: doc/LOG-2026-05-28__190000__snapshot-pausa-proxy-traefik.md
+Workaround: patch para IP overlay 10.0.4.x ou 172.17.0.1:3333 (API).
+
+--- PROBLEMA B: Traefik fora da rede easypanel-typebot ---
+Sintoma: timeout / 502 mesmo com container UP.
+Detalhe: após restart do Traefik, container proxy não estava na mesma overlay.
+Fix: docker service update --network-add easypanel-typebot easypanel-traefik
+      (automatizado pelo traefik-permanent-vps.sh install).
+
+--- PROBLEMA C: Easypanel regenera main.yaml em redeploys ---
+Sintoma: site volta a 502 minutos/horas após deploy bem-sucedido.
+Detalhe: upstreams voltam para hostnames Swarm antigos.
+Mitigação: cron 1 min atualizando main.yaml (solução nossa no VPS).
+
+--- PROBLEMA D: host-mode port already in use (Swarm) ---
+Sintoma: serviço mostra 1/1 mas código novo nunca entra; task nova Pending.
+Mensagem: no suitable node (host-mode port already in use)
+Afetou: typebot_api (3333), typebot_painel-typebot-crm (3002), paginadevendas (3000)
+Evidência: doc/LOG-2026-06-03__060000__swarm-host-port-painel-pending.md
+          doc/LOG-2026-06-03__151500__api-swarm-3333-host-port-pending.md
+Fix: remover port binding no host no Easypanel + scale 0/1 do serviço.
+
+--- PROBLEMA E: sed incorreto apontou LP para Typebot ---
+Sintoma: chattypebot.com mostrava tela "Entrar" do Typebot builder.
+Causa: substituição ampla de 10.0.4.*:3000 para IP do builder.
+Prevenção: traefik-permanent patcha por serviço (paginadevendas, painel, etc.)
+           PROIBIDO: sed global 10.0.4.*:3000 → BUILDER_IP (doc TRAEFIK-PERMANENTE)
+
+--- PROBLEMA F: 172.17.0.1:3000 é Easypanel, não a landing ---
+Sintoma: LP com conteúdo errado ou 502.
+Detalhe: confundir gateway Docker com IP do container da LP.
+
+--- PROBLEMA G: Réplica Swarm paginadevendas-1 com URL desatualizada ---
+Sintoma: chattypebot.com 502 com paginadevendas-0 OK.
+Log: doc/LOG-2026-06-01__211500__fix-traefik-paginadevendas-1-chattypebot.md
+
+--- PROBLEMA H: Builder/viewer 502 com app interno 200 ---
+Sintoma: curl interno 200, HTTPS 502.
+Log: doc/LOG-2026-06-02__180500__fix-typebot-builder-proxy-502-traefik.md
+
+--- NÃO É TRAEFIK (mas aparece como 502 no browser) ---
+- Build Easypanel falhou (ex.: módulo publicApiBase ausente no commit).
+- Container painel/api parado ou crash loop.
+- Deploy em andamento (janela de 30–120 s até cron/subir nova task).
+
+================================================================================
+4. SOLUÇÕES IMPLEMENTADAS (O QUE FIZEMOS)
+================================================================================
+
+4.1 Script principal (OBRIGATÓRIO no VPS)
+    Arquivo repo: scripts/traefik-permanent-vps.sh
+    Instalação:   /root/traefik-permanent-vps.sh install
+    Verificação:  /root/traefik-permanent-vps.sh run
+    Log cron:     /var/log/traefik-permanent-fix.log
+    Config:       /etc/easypanel/traefik/config/main.yaml
+
+4.2 Scripts auxiliares
+    - scripts/fix-traefik-easypanel-502.sh
+    - scripts/fix-traefik-restore-lp-painel-vps.sh
+    - scripts/fix-typebot-builder-proxy-502-vps.sh
+    - scripts/diagnose-502-lp-painel-vps.sh
+    - scripts/monitor-traefik-proxy.sh (+ /root/monitor-traefik.env)
+    - scripts/install-traefik-autofix-cron-vps.sh
+
+4.3 Documentação no repositório
+    - doc/TRAEFIK-PERMANENTE-VPS.md          (guia principal)
+    - doc/FIX-EASYPANEL-TRAEFIK-ESTAVEL.md   (fix manual + tabela destinos)
+    - doc/MONITOR-TRAEFIK-PROXY-VPS.md        (monitor + e-mail)
+    - doc/FIX-EASYPANEL-API-502-DOMINIO.md
+    - doc/REDEPLOY-BIBLIOTECA-TRAEFIK-2026-06-03.md
+    - doc/TYPEBOT-ACESSO-E-502-HOJE.md
+
+4.4 Destinos corretos (referência rápida)
+    app.chattypebot.com     → http://172.17.0.1:3333
+    chattypebot.com         → http://<IP-LP-overlay>:3000/
+    painel.chattypebot.com  → http://<IP-PAINEL-overlay>:3000/
+    builder *.easypanel.host → http://<IP-BUILDER-overlay>:3000/
+    viewer *.easypanel.host  → http://<IP-VIEWER-overlay>:3000/
+
+4.5 Procedimento padrão após redeploy Easypanel
+    - Aguardar até 2 minutos (cron) OU rodar: /root/traefik-permanent-vps.sh run
+    - NÃO usar sed global em 10.0.4.*:3000
+
+4.6 Procedimento se serviço Swarm ficar Pending
+    - Remover porta publicada no host no Easypanel
+    - docker service scale <serviço>=0
+    - aguardar tasks zerarem
+    - docker service scale <serviço>=1
+    - traefik-permanent-vps.sh run
+
+================================================================================
+5. O QUE O TRAEFIK PERMANENTE FAZ E O QUE NÃO FAZ
+================================================================================
+
+FAZ:
+- Mantém Traefik na rede easypanel-typebot (Swarm network-add).
+- Atualiza IPs no main.yaml quando containers mudam de IP.
+- Corrige LP se detectar HTML do Typebot no lugar da landing.
+- Testa lp, painel, app, builder_signin e imprime RESULTADO.
+- Reinicia Traefik apenas em cenários de LP/painel ainda 502 após patch.
+
+NÃO FAZ:
+- Não substitui deploy Easypanel com build falho.
+- Não libera porta host presa (Pending host-mode).
+- Não corrige bugs de código da API/painel (ex.: biblioteca master, fluxos).
+- Não impede Easypanel de reescrever main.yaml — apenas corrige depois (cron).
+
+================================================================================
+6. PENDÊNCIAS / O QUE AINDA FAREMOS (TRAEFIK)
+================================================================================
+
+[ ] Confirmar cron ativo: ls -la /etc/cron.d/traefik-permanent-fix
+[ ] Opcional: monitor diário 08:00 — /root/monitor-traefik-proxy.sh
+[ ] Investigar aviso "null byte" no main.yaml (linha 247 do script) se reaparecer
+[ ] Garantir paginadevendas e painel SEM porta host no Easypanel (definitivo)
+[ ] Após cada migração de serviço no Easypanel: run do script + registrar RESULTADO
+[ ] Documentar no Hostinger ticket: dependência de cron customizado por limitação
+    Easypanel/Swarm (regeneração de main.yaml + DNS interno não estável)
+
+================================================================================
+7. COMANDOS ÚTEIS (COPIAR NO VPS)
+================================================================================
+
+# Status rápido (o mais importante)
+/root/traefik-permanent-vps.sh run
+
+# Últimas linhas do log automático
+tail -30 /var/log/traefik-permanent-fix.log
+
+# Tasks Swarm presas
+docker service ps typebot_painel-typebot-crm --no-trunc
+docker service ps typebot_api --no-trunc
+docker service ps typebot_paginadevendas --no-trunc
+
+# IP atual dos containers na overlay
+docker ps -q -f name=paginadevendas | head -1 | xargs -I{} docker inspect {} \
+  --format '{{index .NetworkSettings.Networks "easypanel-typebot" "IPAddress"}}'
+
+# Teste HTTPS externo
+curl -sI https://painel.chattypebot.com | head -5
+curl -sI https://chattypebot.com | head -5
+curl -s https://app.chattypebot.com/health
+
+# Reinstalar script (se atualizar do GitHub)
+curl -fsSL "https://raw.githubusercontent.com/walkup-tec/typeBot/master/scripts/traefik-permanent-vps.sh" \
+  -o /root/traefik-permanent-vps.sh
+sed -i 's/\r$//' /root/traefik-permanent-vps.sh
+chmod +x /root/traefik-permanent-vps.sh
+/root/traefik-permanent-vps.sh install
+
+================================================================================
+8. FRASE PRONTA PARA TICKET HOSTINGER (INGLÊS OU PORTUGUÊS)
+================================================================================
+
+"Temos VPS com Easypanel + Docker Swarm + Traefik. Após cada redeploy, o arquivo
+/etc/easypanel/traefik/config/main.yaml mantém upstreams com hostnames Swarm
+(typebot_*) que deixam de resolver ou apontam para IPs antigos da overlay
+(10.0.x), causando HTTP 502 nos domínios públicos. O Traefik também perde
+periodicamente a rede overlay easypanel-typebot. Implementamos cron no servidor
+para reescrever upstreams com IPs atuais dos containers. Adicionalmente, serviços
+Swarm ficam em Pending com 'host-mode port already in use' quando há port binding
+no host (3333, 3002, 3000), impedindo deploy da nova task. Solicitamos orientação
+se há forma nativa no Easypanel de evitar regeneração de upstreams mortos ou
+recomendação oficial para Swarm sem publicar portas no host."
+
+================================================================================
+9. REFERÊNCIA — LOGS DATADOS NO REPOSITÓRIO (doc/LOG-*)
+================================================================================
+
+2026-05-28  LOG-2026-05-28__114500__easypanel-destino-automatico-502-api.md
+2026-05-28  LOG-2026-05-28__190000__snapshot-pausa-proxy-traefik.md
+2026-05-29  LOG-2026-05-29__estabilizacao-traefik-lp-painel.md
+2026-05-29  LOG-2026-05-29__lp-easypanel-traefik-tasks.md
+2026-05-29  LOG-2026-05-29__monitor-diario-traefik-email.md
+2026-06-01  LOG-2026-06-01__211500__fix-traefik-paginadevendas-1-chattypebot.md
+2026-06-01  LOG-2026-06-01__160000__lp-remover-porta-host-3000.md
+2026-06-02  LOG-2026-06-02__180500__fix-typebot-builder-proxy-502-traefik.md
+2026-06-02  LOG-2026-06-02__200000__traefik-permanente-vps-install.md
+2026-06-03  LOG-2026-06-03__030000__logs-api-deploy-builder-502.md
+2026-06-03  LOG-2026-06-03__040000__502-lp-painel-builder-diagnose.md
+2026-06-03  LOG-2026-06-03__040000__painel-502-traefik-pos-redeploy.md
+2026-06-03  LOG-2026-06-03__050000__502-com-ips-patchados-traefik.md
+2026-06-03  LOG-2026-06-03__060000__swarm-host-port-painel-pending.md
+2026-06-03  LOG-2026-06-03__070000__commit-redeploy-biblioteca-v4-pos-traefik.md
+2026-06-03  LOG-2026-06-03__151500__api-swarm-3333-host-port-pending.md
+2026-06-03  LOG-2026-06-03__painel-502-bad-gateway.md
+
+Memória geral do projeto: doc/memoria.md (seções Traefik 2026-05-28 a 2026-06-03)
+
+================================================================================
+FIM DO ARQUIVO traefik_memoria.txt
+================================================================================
