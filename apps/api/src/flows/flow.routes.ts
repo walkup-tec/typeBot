@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { loadFlowLibrary } from "./flow-library.repository";
 import {
   listMasterLibrarySourceFlows,
+  resolveMasterSourceFlowForPromote,
   syncSourceWorkspaceFlowsToMasterTenant,
 } from "./source-master-sync.service";
 import { flowRepository, queueRepository, tenantRepository } from "../lib/repositories";
@@ -247,11 +248,19 @@ export const registerFlowRoutes = (app: Express) => {
     if (!sourceFlowId) {
       return res.status(400).json({ message: "sourceFlowId é obrigatório." });
     }
-    const sourceFlow = flowRepository.getById(sourceFlowId);
+    const sourceFlow = await resolveMasterSourceFlowForPromote(sourceFlowId, {
+      typebotRemoteId: String(req.body?.typebotRemoteId ?? "").trim() || undefined,
+      typebotPublicId: String(req.body?.typebotPublicId ?? "").trim() || undefined,
+      url: String(req.body?.url ?? "").trim() || undefined,
+    });
     if (!sourceFlow) {
-      return res.status(404).json({ message: "Fluxo de origem não encontrado." });
+      return res.status(404).json({
+        message:
+          "Fluxo de origem não encontrado. Clique em Atualizar lista na Biblioteca Master e tente novamente.",
+      });
     }
-    const existing = getSystemMasterLibraryBySourceFlowId(sourceFlowId);
+    const resolvedSourceFlowId = sourceFlow.id;
+    const existing = getSystemMasterLibraryBySourceFlowId(resolvedSourceFlowId);
     const title = String(req.body?.title ?? "").trim();
     if (title.length < 2) {
       return res.status(400).json({ message: "Informe um título com pelo menos 2 caracteres para definir como padrão." });
@@ -259,7 +268,7 @@ export const registerFlowRoutes = (app: Express) => {
     const description = String(req.body?.description ?? "Fluxo padrão disponibilizado pela Biblioteca Master.").trim();
     const row = upsertSystemMasterLibrary({
       id: existing?.id ?? randomUUID(),
-      sourceFlowId,
+      sourceFlowId: resolvedSourceFlowId,
       title,
       description: description || "Fluxo padrão disponibilizado pela Biblioteca Master.",
       suggestedNickname: sourceFlow.nickname,

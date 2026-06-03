@@ -4,6 +4,7 @@ import { listSystemMasterLibrary } from "./system-master-library.repository";
 import { flowRepository, tenantRepository } from "../lib/repositories";
 import { isFlowUrlActive } from "../lib/flow-url-health";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
+import { attachFlowActiveStatus } from "../lib/typebot-flow-publish-status";
 
 const flowService = new FlowService(flowRepository);
 const MASTER_SOURCE_EMAIL = "walkup@walkuptec.com.br";
@@ -414,8 +415,93 @@ const syncMasterLibraryFromTypebot = async (sourceTenantId: string): Promise<Mas
   };
 };
 
-/** Lista somente fluxos Live do workspace matriz Walkup (tenant walkup@). */
-export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourceFlowRow[]> => {
+/** Lista fluxos gravados do tenant matriz (sem sync destrutivo — IDs estáveis para promote). */
+export const listPersistedMasterLibrarySourceFlows = async (
+  sourceTenantId: string,
+): Promise<MasterLibrarySourceFlowRow[]> => {
+  const savedFlows = flowService.listByTenant(sourceTenantId).filter((flow) => {
+    const url = String(flow.url ?? "").trim();
+    return isWalkupMatrixViewerUrl(url) || Boolean(String(flow.typebotRemoteId ?? "").trim());
+  });
+
+  const withStatus = await attachFlowActiveStatus(savedFlows, {
+    workspaceId: TYPEBOT_SOURCE_MASTER_WORKSPACE_ID,
+    fast: true,
+  });
+  const owners = tenantOwnerLookup();
+  const rows: MasterLibrarySourceFlowRow[] = withStatus.map((flow) => {
+    const owner = owners.get(flow.tenantId);
+    return {
+      ...flow,
+      typebotPublicId:
+        String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(flow.url),
+      viewerUrlActive: flow.viewerUrlActive !== false,
+      typebotPublished: flow.typebotPublished !== false,
+      ownerEmail: owner?.email ?? MASTER_SOURCE_EMAIL,
+      ownerName: owner?.name ?? "Master Walkup",
+    };
+  });
+  return filterActiveWalkupMatrixRows(rows);
+};
+
+export type ResolveMasterSourceFlowHints = {
+  typebotRemoteId?: string;
+  typebotPublicId?: string;
+  url?: string;
+};
+
+/** Resolve fluxo da matriz para promote (id, remoteId, publicId ou URL). */
+export const resolveMasterSourceFlowForPromote = async (
+  sourceFlowId: string,
+  hints?: ResolveMasterSourceFlowHints,
+): Promise<SavedFlow | null> => {
+  const findInStorage = (): SavedFlow | null => {
+    flowRepository.reloadFromStorage();
+    const direct = flowRepository.getById(sourceFlowId);
+    if (direct) return direct;
+
+    const masterTenant = tenantRepository
+      .list()
+      .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
+    if (!masterTenant?.id) return null;
+
+    const remote = String(hints?.typebotRemoteId ?? "").trim();
+    const publicId = String(hints?.typebotPublicId ?? "").trim();
+    const urlKey = normalizeKey(hints?.url ?? "");
+
+    return (
+      flowRepository.listByTenant(masterTenant.id).find((flow) => {
+        if (flow.id === sourceFlowId) return true;
+        if (remote && normalizeKey(flow.typebotRemoteId) === normalizeKey(remote)) return true;
+        const flowPublicId = normalizeKey(
+          flow.typebotPublicId ?? typebotPublicIdFromViewerUrl(flow.url),
+        );
+        if (publicId && flowPublicId === normalizeKey(publicId)) return true;
+        if (urlKey && normalizeKey(flow.url) === urlKey) return true;
+        return false;
+      }) ?? null
+    );
+  };
+
+  let flow = findInStorage();
+  if (flow) return flow;
+
+  const sourceTenant = tenantRepository
+    .list()
+    .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
+  if (!sourceTenant?.id) return null;
+
+  await syncMasterLibraryFromTypebot(sourceTenant.id);
+  return findInStorage();
+};
+
+/**
+ * Lista fluxos Live da matriz.
+ * `syncFirst: true` — sincroniza com Typebot (POST sync-source). GET deve usar `false`.
+ */
+export const listMasterLibrarySourceFlows = async (options?: {
+  syncFirst?: boolean;
+}): Promise<MasterLibrarySourceFlowRow[]> => {
   const sourceTenant = tenantRepository
     .list()
     .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
@@ -424,8 +510,12 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
     return [];
   }
 
-  const result = await syncMasterLibraryFromTypebot(sourceTenant.id);
-  return result.rows;
+  if (options?.syncFirst) {
+    const result = await syncMasterLibraryFromTypebot(sourceTenant.id);
+    return result.rows;
+  }
+
+  return listPersistedMasterLibrarySourceFlows(sourceTenant.id);
 };
 
 export const syncSourceWorkspaceFlowsToMasterTenant = async (): Promise<MasterLibrarySyncResult> => {

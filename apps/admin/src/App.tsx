@@ -2070,7 +2070,13 @@ export function App() {
     const response = await fetch(`${apiBase}/api/master/system-library/promote`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sourceFlowId: flow.id, title }),
+      body: JSON.stringify({
+        sourceFlowId: flow.id,
+        title,
+        typebotRemoteId: flow.typebotRemoteId,
+        typebotPublicId: flow.typebotPublicId,
+        url: flow.url,
+      }),
     });
     if (!response.ok) {
       const err = (await response.json().catch(() => ({}))) as { message?: string };
@@ -2083,7 +2089,11 @@ export function App() {
       delete next[flow.id];
       return next;
     });
-    await Promise.all([loadSystemMasterLibrary(), loadFlowLibrary()]);
+    await Promise.all([
+      loadSystemMasterLibrary(),
+      loadFlowLibrary(),
+      loadMasterLibrarySourceFlows({ silent: true }),
+    ]);
   }
 
   async function removeFromSystemLibrary(id: string) {
