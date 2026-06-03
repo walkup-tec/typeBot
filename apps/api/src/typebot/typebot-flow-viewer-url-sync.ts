@@ -458,7 +458,16 @@ const applyWorkspaceRowToFlow = async (flow: SavedFlow, row: TypebotListRow, vie
   flowRepository.updateById(flow.id, patch);
 };
 
-/** Resposta da API: só fluxos cujo typebot está no workspace vinculado ao assinante. */
+const isLinkedToSystemMasterDefault = (flow: SavedFlow): boolean => {
+  const libId = String(flow.librarySourceId ?? "").trim();
+  if (!libId) return false;
+  return listSystemMasterLibrary().some(
+    (item) =>
+      item.isSystemDefault && (item.id === libId || item.sourceFlowId === libId),
+  );
+};
+
+/** Resposta da API: fluxos do workspace do assinante + padrões da Biblioteca Master vinculados. */
 export const filterTenantFlowsForWorkspace = async (
   tenantId: string,
   flows: SavedFlow[],
@@ -468,9 +477,13 @@ export const filterTenantFlowsForWorkspace = async (
   if (!workspaceId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) return flows;
 
   const catalog = await resolveWorkspaceTypebotCatalog(workspaceId);
-  if (!catalog.listOk) return flows;
+  if (!catalog.listOk) {
+    return flows.filter((flow) => isLinkedToSystemMasterDefault(flow));
+  }
 
-  return flows.filter((flow) => flowBelongsToWorkspaceCatalog(flow, catalog));
+  return flows.filter(
+    (flow) => flowBelongsToWorkspaceCatalog(flow, catalog) || isLinkedToSystemMasterDefault(flow),
+  );
 };
 
 /** Garante vínculo builder antes de filtrar/prunar (fluxos criados só com URL pública). */

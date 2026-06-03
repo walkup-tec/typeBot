@@ -1,4 +1,57 @@
-﻿## 2026-06-03 - Health api vs app + botão Atualizar travado
+﻿## 2026-06-03 - Fix fluxo padrão não aparece para assinantes (Drax etapa 6 vazia)
+
+- **Sintoma:** CLT em "Fluxos compartilhados" no master; assinante Drax sem fluxos (nem padrão nem workspace).
+- **Causas:** `librarySourceId` errado na propagação; GET flows filtrava sem linkar workspace nem garantir defaults.
+- **Fix:** `subscriber-default-flows.service.ts` — propagate com `libraryItemId`, `ensureSubscriberSavedFlowsFromDefaults`; GET flows + sync-workspace/sync-defaults; filtro mantém item padrão da biblioteca.
+- **Marker:** `DEPLOY-2026-06-03-api-subscriber-default-flows` / `walkup-live-only-v10-subscriber-default-flows`.
+- **Ops:** redeploy **api** → Drax etapa 6 **Atualizar lista** (ou sync-workspace).
+- **Log:** `doc/LOG-2026-06-03__subscriber-default-flows-assinantes.md`
+
+## 2026-06-03 - Limpeza referências API antiga (api-typebot-crm / api.chattypebot.com)
+
+- Removida rota legada `GET /api/master/source-flows` (usar `/api/master/system-library/source-flows`).
+- Front: `publicApiBase.ts` + normalização em admin/sales; build sales rejeita `api.chattypebot.com`.
+- Docs/scripts operacionais atualizados para serviço **`api`** + `app.chattypebot.com`.
+- Mantido: migração handoff `api.chattypebot.com` → `app` em `queue.routes.ts`; prune URLs `soma-typebot` (dados legados).
+- Log: `doc/LOG-2026-06-03__180000__limpeza-api-antiga.md`
+
+## 2026-06-03 - Fix promote 404 "Fluxo de origem não encontrado"
+
+- **Sintoma:** POST promote 404 com mensagem curta (API antiga em prod).
+- **Fix:** `ensureMasterSourceFlowFromPromoteHints` + resolve por remoteId/publicId/url; marker `DEPLOY-2026-06-03-api-promote-hints-upsert`.
+- **Ops:** redeploy serviço **api**; validar `/health` → novo deployMarker.
+- **Log:** `doc/LOG-2026-06-03__173700__fix-promote-fluxo-origem-404.md`
+
+## 2026-06-03 - Retomada sessão (recuperação)
+
+- Snapshot: `doc/LOG-2026-06-03__retomada-sessao.md`
+- **Últimos commits `master`:** promote por id/publicId (`715e543`), cache lista fluxos (`3d92498`), etapa 6 Ativo Live (`68ff612`), botão Atualizar Biblioteca (`04869a8`)
+- **Produção (última validação):** sync-source v5 OK (CLT Live); pendente redeploy api+painel com commits mais novos; remover portas host 3333/3002 no Easypanel
+- **Working tree:** alterações locais não commitadas em billing Asaas/Pix + `apps/sales`
+- **Aguardando usuário:** prioridade A deploy/validação prod, B billing/Pix, C outro
+
+## 2026-06-03 - Fix botão Atualizar travado + tela escura (painel)
+
+- **Causa:** bundle antigo sem `setIsRefreshingMasterLibrary(false)` no `finally`; CSS `opacity: 0.55` na tabela inteira.
+- **Fix:** `04869a8` — fail-safe 50s, reset ao sair da tela, sem escurecer card; marker `DEPLOY-2026-06-03-admin-fix-atualizar-lista-stuck`.
+- **Ação:** redeploy serviço **painel** no Easypanel (build `npm run build:admin`).
+
+## 2026-06-03 - Biblioteca Master sync OK em produção (v5)
+
+- **API v5** ativa após `scale 0/1` em `typebot_api`.
+- **POST sync-source:** `active:1`, fluxo CLT `emprestimo-clt`, `typebotPublished:true`, `created:1`.
+- **viewerReachable:false** — viewer URL pode estar lento/bloqueado no health check; fluxo segue Live no builder.
+- **Painel:** Atualizar lista; redeploy painel `5f81d59` se botão travar; remover porta host 3333 no serviço `api` (Easypanel).
+
+## 2026-06-03 - API Swarm 3333 host-mode (deploy v5 bloqueado)
+
+- **VPS:** `typebot_api` task nova **Pending** — `host-mode port already in use`; task antiga v4 ainda em `*:3333`.
+- **`docker service update --force`** não substitui container enquanto porta presa.
+- **Fix:** `docker service scale typebot_api=0` → aguardar → `scale 1` → validar marker v5 em `app.chattypebot.com/health`.
+- **Definitivo Easypanel:** remover porta host 3333 no serviço `api` (como painel).
+- **Log:** `doc/LOG-2026-06-03__151500__api-swarm-3333-host-port-pending.md`
+
+## 2026-06-03 - Health api vs app + botão Atualizar travado
 
 - **`api.chattypebot.com/health`:** DNS não resolve; usar **`https://app.chattypebot.com/health`** (API Node).
 - **Deploy `db1effd` OK** mas health ainda marker **v4** → `docker service update --force typebot_api` no VPS.

@@ -33,6 +33,10 @@ import {
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
 import {
+  ensureSubscriberSavedFlowsFromDefaults,
+  propagateSystemDefaultFlowToAllTenants,
+} from "./subscriber-default-flows.service";
+import {
   ensureTypebotShareMetadataPublished,
   getTypebotShareMetadataSnapshot,
 } from "../typebot/typebot-share-metadata.service";
@@ -139,36 +143,6 @@ const applyTenantLogoAsBotAvatar = <T extends { tenantId: string; redirectTheme?
       profileImageUrl: tenantLogo,
     },
   };
-};
-
-const propagateSystemDefaultFlowToAllTenants = (payload: {
-  sourceFlowId: string;
-  title: string;
-  sourceFlowNickname: string;
-  sourceFlowUrl: string;
-}) => {
-  const tenants = tenantRepository.list();
-  for (const tenant of tenants) {
-    const ownerEmail = normalizeText(tenant.ownerEmail);
-    if (!tenant.id || ownerEmail === MASTER_SOURCE_EMAIL) continue;
-    const existingFlows = flowService.listByTenant(tenant.id);
-    const hasAlready = existingFlows.some(
-      (flow) =>
-        normalizeText(flow.url) === normalizeText(payload.sourceFlowUrl) ||
-        normalizeText(flow.librarySourceId) === normalizeText(payload.sourceFlowId),
-    );
-    if (hasAlready) continue;
-    try {
-      flowService.create(tenant.id, {
-        nickname: payload.sourceFlowNickname,
-        displayLabel: payload.title,
-        url: payload.sourceFlowUrl,
-        librarySourceId: payload.sourceFlowId,
-      });
-    } catch {
-      // ignora tenant específico e segue propagação dos demais
-    }
-  }
 };
 
 const removeSystemDefaultFlowFromAllTenants = async (payload: {
@@ -279,6 +253,7 @@ export const registerFlowRoutes = (app: Express) => {
     // Preserva o título definido como padrão no fluxo de origem para reaproveito ao remover/publicar novamente.
     flowRepository.updateById(sourceFlow.id, { displayLabel: title });
     propagateSystemDefaultFlowToAllTenants({
+      libraryItemId: row.id,
       sourceFlowId: sourceFlow.id,
       title: row.title,
       sourceFlowNickname: sourceFlow.nickname,
@@ -290,7 +265,10 @@ export const registerFlowRoutes = (app: Express) => {
       .list()
       .filter((tenant) => normalizeText(tenant.ownerEmail) !== MASTER_SOURCE_EMAIL && Boolean(tenant.id));
     await Promise.allSettled(
-      subscribers.map((tenant) => syncSystemDefaultsToRealTypebotWorkspace(tenant.id, defaults, { overwriteExisting: true })),
+      subscribers.map(async (tenant) => {
+        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, defaults, { overwriteExisting: true });
+        await ensureSubscriberSavedFlowsFromDefaults(tenant.id, defaults);
+      }),
     );
     return res.status(200).json(row);
   });
@@ -437,15 +415,23 @@ export const registerFlowRoutes = (app: Express) => {
 
     let flows = flowService.listByTenant(tenantId);
     if (hasTypebotWorkspace) {
-      if (!quick) {
-        try {
-          await ensureTenantFlowsLinkedToWorkspace(tenantId);
-        } catch {
-          // best-effort: não bloqueia listagem
-        }
+      try {
+        await ensureTenantFlowsLinkedToWorkspace(tenantId);
+      } catch {
+        // best-effort: não bloqueia listagem
       }
+
       // Conta matriz (walkup@): não filtrar por workspace — evita biblioteca vazia na etapa 6.
       if (!isMasterSourceTenant(tenant?.ownerEmail)) {
+        const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+        if (defaults.length > 0) {
+          try {
+            await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
+          } catch {
+            // best-effort
+          }
+        }
+        flows = flowService.listByTenant(tenantId);
         flows = await filterTenantFlowsForWorkspace(tenantId, flows);
       }
     }

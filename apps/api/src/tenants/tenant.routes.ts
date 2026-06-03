@@ -20,6 +20,7 @@ import { mailService } from "../mail/mail.service";
 import { buildTenantWelcomeTemplate } from "../mail/mail.templates";
 import { FlowService } from "../flows/flow.service";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
+import { ensureSubscriberSavedFlowsFromDefaults } from "../flows/subscriber-default-flows.service";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 import {
   importManualWorkspaceTypebotsIntoTenantFlows,
@@ -267,6 +268,8 @@ export const registerTenantRoutes = (app: Express) => {
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
     try {
       const importResult = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
+      const systemDefaultItems = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+      await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaultItems);
       await refreshTenantWorkspaceFlowUrlsFromTypebot(tenant.id);
       await refreshTenantFlowViewerUrls(tenant.id);
       const refreshed = tenantRepository.getById(tenant.id);
@@ -315,6 +318,7 @@ export const registerTenantRoutes = (app: Express) => {
     }
     try {
       await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: true });
+      await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaultItems);
       const refreshed = tenantRepository.getById(tenant.id);
       return res.status(200).json({
         status: "ok",
