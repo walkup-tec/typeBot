@@ -123,11 +123,34 @@ const fetchSourcePublicIdByTypebotId = async (typebotId: string): Promise<string
 };
 
 /** Alinhado ao badge "Live" do Typebot: só fluxo com publicação real no builder. */
-const isTypebotPublishedInBuilder = (detail: SourceTypebotDetail | null, publicId: string): boolean => {
+const isTypebotPublishedInBuilder = (
+  detail: SourceTypebotDetail | null,
+  publicId: string,
+  publishedTypebotId: string,
+): boolean => {
+  if (publishedTypebotId) return true;
   if (!publicId) return false;
   const publishedAt = String(detail?.publishedAt ?? "").trim();
-  return publishedAt.length > 0;
+  if (publishedAt.length > 0) return true;
+  const detailPublicId = String(detail?.publicId ?? "").trim();
+  return detailPublicId.length > 0 && detailPublicId === publicId;
 };
+
+const resolveMatrixTypebotPublicId = async (
+  typebotId: string,
+  fromList: string,
+  publishedTypebotId: string,
+): Promise<string> => {
+  if (fromList) return fromList;
+  const fromDraft = await fetchSourcePublicIdByTypebotId(typebotId);
+  if (fromDraft) return fromDraft;
+  if (publishedTypebotId) {
+    return fetchSourcePublicIdByTypebotId(publishedTypebotId);
+  }
+  return "";
+};
+
+const resolveMatrixViewerBaseUrl = (): string => TYPEBOT_SOURCE_VIEWER_BASE_URL;
 
 const isWalkupMatrixViewerUrl = (url: string): boolean => {
   const normalized = normalizeKey(url);
