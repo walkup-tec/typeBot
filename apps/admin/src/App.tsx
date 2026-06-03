@@ -585,6 +585,7 @@ export function App() {
   const [flowLibrary, setFlowLibrary] = useState<FlowLibraryItem[]>([]);
   const [sourceMasterFlows, setSourceMasterFlows] = useState<SavedFlow[]>([]);
   const [isRefreshingMasterLibrary, setIsRefreshingMasterLibrary] = useState(false);
+  const [isRefreshingTenantFlows, setIsRefreshingTenantFlows] = useState(false);
   const [systemMasterLibrary, setSystemMasterLibrary] = useState<SystemMasterLibraryItem[]>([]);
   /** Títulos digitados na Biblioteca Master antes de promover cada fluxo ativo (obrigatório ≥2 caracteres). */
   const [masterPromoteTitles, setMasterPromoteTitles] = useState<Record<string, string>>({});
@@ -967,7 +968,8 @@ export function App() {
       const next = { ...current };
       let changed = false;
       for (const flow of flows) {
-        const status: FlowStatus = flow.viewerUrlActive !== false ? "active" : "inactive";
+        const status: FlowStatus =
+          flow.typebotPublished === true || flow.viewerUrlActive !== false ? "active" : "inactive";
         if (next[flow.id] !== status) {
           next[flow.id] = status;
           changed = true;
@@ -1062,12 +1064,7 @@ export function App() {
       return { ...current, [tenantId]: data };
     });
     applyFlowStatusesFromList(data);
-    const needsProbe = data.some(
-      (flow) => flow.viewerUrlActive === undefined || flow.viewerUrlActive === false,
-    );
-    if (needsProbe) {
-      await refreshFlowStatuses(data);
-    }
+    await refreshFlowStatuses(data);
   }
 
   async function loadAttendants(tenantId: string) {
@@ -1146,10 +1143,12 @@ export function App() {
   }
 
   async function refreshTenantFlowList(tenantId: string) {
-    if (!tenantId) return;
+    if (!tenantId || isRefreshingTenantFlows) return;
+    setIsRefreshingTenantFlows(true);
     setStatusMessage("Atualizando lista de fluxos…");
+    const failSafeTimer = window.setTimeout(() => setIsRefreshingTenantFlows(false), 50_000);
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    const abortTimer = window.setTimeout(() => controller.abort(), 45_000);
     try {
       const syncResponse = await fetch(`${apiBase}/api/master/tenants/${tenantId}/flows/sync-workspace`, {
         method: "POST",
@@ -1190,9 +1189,11 @@ export function App() {
         setStatusMessage("Lista de fluxos atualizada.");
       }
     } catch {
-      setStatusMessage("Falha ao atualizar lista. Tente novamente.");
+      setStatusMessage(formatApiConnectionError(new Error("timeout ou rede")));
     } finally {
-      window.clearTimeout(timeout);
+      window.clearTimeout(abortTimer);
+      window.clearTimeout(failSafeTimer);
+      setIsRefreshingTenantFlows(false);
     }
   }
 
@@ -2827,10 +2828,19 @@ export function App() {
                   <h4>Etapa 6 — Biblioteca de Fluxos</h4>
                   <button
                     type="button"
-                    className="ghost-btn flow-list-refresh-btn flow-list-refresh-btn--compact"
+                    className={`ghost-btn flow-list-refresh-btn flow-list-refresh-btn--compact${isRefreshingTenantFlows ? " flow-list-refresh-btn--busy" : ""}`}
+                    disabled={isRefreshingTenantFlows}
+                    aria-busy={isRefreshingTenantFlows}
                     onClick={() => void refreshTenantFlowList(selectedTenant)}
                   >
-                    Atualizar lista
+                    {isRefreshingTenantFlows ? (
+                      <span className="processing-inline-wrap">
+                        <i className="processing-inline-dot" aria-hidden="true" />
+                        Atualizando…
+                      </span>
+                    ) : (
+                      "Atualizar lista"
+                    )}
                   </button>
                 </div>
                 <p className="muted muted-subtle">
@@ -2956,7 +2966,10 @@ export function App() {
                         : "Nenhum fluxo fora do catálogo da biblioteca neste assinante."}
                     </p>
                   ) : (
-                    <div className="saved-flows-table">
+                    <div
+                      className={`saved-flows-table${isRefreshingTenantFlows ? " master-library-table--refreshing" : ""}`}
+                      aria-busy={isRefreshingTenantFlows}
+                    >
                       <div className="saved-flows-header library-active-row">
                         <span>Nome</span>
                         <span>Status</span>

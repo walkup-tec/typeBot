@@ -26,6 +26,7 @@ type TypebotDetail = {
 
 type TypebotListRow = {
   id?: string;
+  name?: string | null;
   publicId?: string | null;
   publishedTypebotId?: string | null;
 };
@@ -72,21 +73,55 @@ export const fetchTypebotDetailById = async (typebotId: string): Promise<Typebot
   return null;
 };
 
-const fetchPublishedTypebotIdFromWorkspaceList = async (
-  typebotId: string,
-  workspaceId: string,
-): Promise<string> => {
-  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN || !typebotId || !workspaceId) return "";
+const listWorkspaceTypebotRows = async (workspaceId: string): Promise<TypebotListRow[]> => {
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN || !workspaceId) return [];
   const qs = `workspaceId=${encodeURIComponent(workspaceId)}&limit=200`;
   for (const root of builderApiRoots()) {
     const url = `${root.replace(/\/$/, "")}/v1/typebots?${qs}`;
     const response = await fetchWithTimeout(url, { method: "GET", headers: buildHeaders() });
     if (!response.ok) continue;
-    const rows = extractTypebotArray(await response.json());
-    const row = rows.find((item) => String(item.id ?? "").trim() === typebotId);
-    return String(row?.publishedTypebotId ?? "").trim();
+    return extractTypebotArray(await response.json());
   }
-  return "";
+  return [];
+};
+
+const normalizeFlowKey = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
+
+const fetchPublishedTypebotIdFromWorkspaceList = async (
+  typebotId: string,
+  workspaceId: string,
+): Promise<string> => {
+  if (!typebotId || !workspaceId) return "";
+  const rows = await listWorkspaceTypebotRows(workspaceId);
+  const row = rows.find((item) => String(item.id ?? "").trim() === typebotId);
+  return String(row?.publishedTypebotId ?? "").trim();
+};
+
+const findWorkspaceRowForFlowKeys = async (
+  workspaceId: string,
+  keys: { publicId: string; label: string },
+): Promise<TypebotListRow | null> => {
+  const rows = await listWorkspaceTypebotRows(workspaceId);
+  if (rows.length === 0) return null;
+
+  const publicKey = normalizeFlowKey(keys.publicId);
+  const labelKey = normalizeFlowKey(keys.label);
+
+  for (const row of rows) {
+    const rowPublicId = normalizeFlowKey(String(row.publicId ?? ""));
+    if (publicKey && rowPublicId && rowPublicId === publicKey) return row;
+
+    const rowName = normalizeFlowKey(String(row.name ?? ""));
+    if (labelKey && rowName && rowName === labelKey) return row;
+
+    const rowId = String(row.id ?? "").trim();
+    if (!rowId || rowId.length < 7) continue;
+    const suffix = rowId.slice(-7).toLowerCase();
+    if (publicKey && (publicKey === suffix || publicKey.endsWith(`-${suffix}`) || publicKey.endsWith(suffix))) {
+      return row;
+    }
+  }
+  return null;
 };
 
 const resolvePublishedTypebotMarker = async (
@@ -155,6 +190,8 @@ export const attachFlowActiveStatus = async <T extends {
   url: string;
   typebotRemoteId?: string;
   typebotPublicId?: string;
+  displayLabel?: string;
+  nickname?: string;
 }>(
   flows: T[],
   options?: { workspaceId?: string },
