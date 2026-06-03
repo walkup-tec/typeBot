@@ -1,4 +1,19 @@
-﻿## 2026-06-02 - Toast: verde sucesso / vermelho erro
+﻿## 2026-06-03 - Responsabilidade deploy + smoke Biblioteca Master
+
+- **Erro reconhecido:** entreguei fix no GitHub sem garantir deploy/validação em produção.
+- **Reforço código:** painel grava só fluxos filtrados no state; etapa 6 não usa lixo da matriz; `/health` expõe `masterLibraryLogicVersion`.
+- **Smoke:** `scripts/smoke-biblioteca-master.ps1` + `doc/DEPLOY-BIBLIOTECA-MASTER.md`.
+- **Produção agora:** API marker antigo; painel 502 intermitente; `source-flows` retornou 0 (builder 502).
+
+## 2026-06-03 - Biblioteca Master: produção sem deploy (causa raiz)
+
+- **Prova:** `source-flows` em prod devolve 5 fluxos multi-tenant; painel bundle **não contém** filtro walkup; API marker `DEPLOY-2026-06-02-api-typebot-health`.
+- **Fix:** remove fallback global API; filtro painel exige `typebotRemoteId` + owner `walkup@` + viewer walkup.
+- **Markers:** `DEPLOY-2026-06-03-api-biblioteca-walkup-only` + `DEPLOY-2026-06-03-admin-biblioteca-walkup-only`.
+- **Deploy Easypanel:** serviços **`api`** e **painel** (não basta F5).
+- **Log:** `doc/LOG-2026-06-03__001500__fix-biblioteca-master-deploy-obrigatorio.md`
+
+## 2026-06-02 - Toast: verde sucesso / vermelho erro
 
 - **Sintoma:** "Lista atualizada" e outros sucessos em vermelho.
 - **Causa:** regex `atualizado` não casava `atualizada`; default era `error`; CSS base vermelho.

@@ -20,7 +20,7 @@ import {
   type MasterWizardStepIndex,
 } from "./masterWizardProgress";
 import { resolveStatusToastTone } from "./lib/resolveStatusToastTone";
-import { dedupeMasterLibraryFlows, isMasterLibrarySourceFlow } from "./lib/masterLibraryFlows";
+import { dedupeMasterLibraryFlows } from "./lib/masterLibraryFlows";
 import { ADMIN_BUILD_MARKER } from "./deploy-marker";
 
 type TenantDefaultChatTheme = {
@@ -644,9 +644,7 @@ export function App() {
         suggestedNickname: item.suggestedNickname,
         viewerUrl: item.viewerUrl,
       }));
-    const fromActiveMatrix = sourceMasterFlows
-      .filter((flow) => flow.viewerUrlActive !== false)
-      .map((flow) => ({
+    const fromActiveMatrix = dedupeMasterLibraryFlows(sourceMasterFlows).map((flow) => ({
         id: flow.librarySourceId?.trim() || flow.id,
         title: flow.displayLabel?.trim() || flow.nickname,
         description: "Fluxo ativo no workspace matriz",
@@ -1098,11 +1096,11 @@ export function App() {
         return;
       }
       const data = (await response.json()) as SavedFlow[];
-      setSourceMasterFlows(data);
+      const filtered = dedupeMasterLibraryFlows(data);
+      setSourceMasterFlows(filtered);
       if (!options?.silent) {
-        const activeCount = data.filter((flow) => isMasterLibrarySourceFlow(flow)).length;
-        if (activeCount > 0) {
-          setStatusMessage(`Lista atualizada: ${activeCount} fluxo(s) Live.`);
+        if (filtered.length > 0) {
+          setStatusMessage(`Lista atualizada: ${filtered.length} fluxo(s) Live.`);
         }
       }
     } catch {
