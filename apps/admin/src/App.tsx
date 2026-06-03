@@ -198,6 +198,9 @@ const PRODUCTION_API_BASE_BY_PAINEL_HOST: Record<string, string> = {
   "painel.chattypebot.com": "https://app.chattypebot.com",
 };
 
+/** `api.chattypebot.com` pode não existir no DNS — o serviço Node responde em `app`. */
+const PRODUCTION_API_BASE_FALLBACK = "https://app.chattypebot.com";
+
 /**
  * Base da API usada pelo painel.
  * 1) Runtime: `window.__TYPEBOT_SAAS_API_BASE__` (override no HTML servido).
@@ -212,7 +215,19 @@ function resolveApiBase(): string {
     if (injected) return injected.replace(/\/$/, "");
   }
   const fromVite = import.meta.env.VITE_API_BASE_URL?.trim();
-  if (fromVite) return fromVite.replace(/\/$/, "");
+  if (fromVite) {
+    const normalized = fromVite.replace(/\/$/, "");
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname.trim().toLowerCase();
+      if (
+        host === "painel.chattypebot.com" &&
+        /\/\/api\.chattypebot\.com$/i.test(normalized)
+      ) {
+        return PRODUCTION_API_BASE_FALLBACK;
+      }
+    }
+    return normalized;
+  }
   if (typeof window !== "undefined") {
     const host = window.location.hostname.trim().toLowerCase();
     const fromHost = PRODUCTION_API_BASE_BY_PAINEL_HOST[host];
@@ -1108,10 +1123,11 @@ export function App() {
       }
     } catch {
       if (!options?.silent) {
-        setStatusMessage("Falha ao atualizar lista. Tente novamente.");
+        setStatusMessage(formatApiConnectionError(new Error("timeout ou rede")));
       }
     } finally {
       window.clearTimeout(timeout);
+      if (showRefreshUi) setIsRefreshingMasterLibrary(false);
     }
   }
 

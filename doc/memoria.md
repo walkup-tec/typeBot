@@ -1,4 +1,18 @@
-﻿## 2026-06-03 - Commit redeploy Biblioteca v4 pós-Traefik
+﻿## 2026-06-03 - Health api vs app + botão Atualizar travado
+
+- **`api.chattypebot.com/health`:** DNS não resolve; usar **`https://app.chattypebot.com/health`** (API Node).
+- **Deploy `db1effd` OK** mas health ainda marker **v4** → `docker service update --force typebot_api` no VPS.
+- **Painel:** bug `setIsRefreshingMasterLibrary(false)` ausente no `finally`; fallback build `api.` → `app.` no host painel.
+- **Log:** `doc/LOG-2026-06-03__150500__api-health-dns-e-botao-atualizar.md`
+
+## 2026-06-03 - Fix build biblioteca master (helpers TS faltantes)
+
+- **Causa:** commit `0fe53bd` chamava `resolveMatrixViewerBaseUrl`, `resolveMatrixTypebotPublicId` e `isTypebotPublishedInBuilder(3 args)` sem implementar.
+- **Fix:** `db1effd` — funções adicionadas em `source-master-sync.service.ts`; `npm run build:api` OK local.
+- **Próximo:** redeploy Easypanel `api` → validar marker v5 em `/health` → sync-source → Atualizar lista no painel.
+- **Log:** `doc/LOG-2026-06-03__144500__fix-build-biblioteca-master-helpers.md`
+
+## 2026-06-03 - Commit redeploy Biblioteca v4 pós-Traefik
 
 - **Markers:** `DEPLOY-2026-06-03-api-biblioteca-v4-pos-traefik` / admin v4 / `walkup-live-only-v4-pos-traefik`.
 - **Guia:** `doc/REDEPLOY-BIBLIOTECA-TRAEFIK-2026-06-03.md` + smoke atualizado.
