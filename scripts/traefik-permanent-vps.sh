@@ -239,6 +239,13 @@ PY
   if ! cmp -s "$before" "$after"; then
     cp -a "$CFG" "${CFG}.bak-permanent-$(date +%Y%m%d-%H%M%S)"
     echo "main.yaml atualizado"
+    local traefik
+    traefik=$(traefik_container)
+    if [[ -n "$traefik" ]]; then
+      docker kill -s HUP "$traefik" 2>/dev/null || docker restart "$traefik" >/dev/null
+      sleep 8
+      ensure_traefik_on_overlay
+    fi
   fi
   rm -f "$before" "$after"
   echo "IPs: LP=${lp_ip} PAINEL=${painel_ip} BUILDER=${builder_ip:-off} VIEWER=${viewer_ip:-off} MINIO=${minio_ip:-off}"
@@ -299,11 +306,11 @@ run_fix() {
     fi
   fi
 
-  if [[ "$lp" == "502" || "$lp" == "000" ]]; then
+  if [[ "$lp" == "502" || "$lp" == "000" || "$painel" == "502" || "$painel" == "000" ]]; then
     local traefik
     traefik=$(traefik_container)
     if [[ -n "$traefik" ]]; then
-      echo "LP=${lp} — restart Traefik (último recurso)"
+      echo "LP=${lp} painel=${painel} — restart Traefik (último recurso)"
       docker restart "$traefik" >/dev/null
       sleep 12
       ensure_traefik_on_overlay
