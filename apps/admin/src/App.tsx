@@ -20,6 +20,8 @@ import {
   type MasterWizardStepIndex,
 } from "./masterWizardProgress";
 import { resolveStatusToastTone } from "./lib/resolveStatusToastTone";
+import { dedupeMasterLibraryFlows, isMasterLibrarySourceFlow } from "./lib/masterLibraryFlows";
+import { ADMIN_BUILD_MARKER } from "./deploy-marker";
 
 type TenantDefaultChatTheme = {
   templateName?: string;
@@ -140,14 +142,6 @@ type CreateAttendantResponse = AttendantRow & {
 
 type FlowStatus = "active" | "inactive" | "checking";
 
-const isWalkupMatrixViewerUrl = (url: string): boolean => {
-  const normalized = url.trim().toLowerCase();
-  if (!normalized || normalized.includes("soma-typebot")) return false;
-  return (
-    normalized.includes("typebot-typebot-walkup-viewer") ||
-    normalized.includes("typebot-walkup-viewer.achpyp")
-  );
-};
 type MasterProfile = "system_master" | "subscriber_master";
 type ScreenId =
   | "master"
@@ -735,22 +729,11 @@ export function App() {
   );
   const visibleLibraryFlowRows =
     activeLibraryFlowRows.length > 0 ? activeLibraryFlowRows : libraryFlowRows;
-  /** Biblioteca Master: só fluxos Live do workspace Walkup (URL atual + publicado). */
-  const walkupMasterLibraryFlows = useMemo(() => {
-    const seen = new Set<string>();
-    return sourceMasterFlows.filter((flow) => {
-      if (!isWalkupMatrixViewerUrl(flow.url)) return false;
-      if (flow.viewerUrlActive === false) return false;
-      if (flow.typebotPublished === false) return false;
-      const dedupeKey =
-        String(flow.typebotRemoteId ?? "").trim() ||
-        String(flow.typebotPublicId ?? "").trim() ||
-        flow.url.trim().toLowerCase();
-      if (!dedupeKey || seen.has(dedupeKey)) return false;
-      seen.add(dedupeKey);
-      return true;
-    });
-  }, [sourceMasterFlows]);
+  /** Biblioteca Master: só fluxos Live do tenant matriz Walkup (typebotRemoteId + owner walkup). */
+  const walkupMasterLibraryFlows = useMemo(
+    () => dedupeMasterLibraryFlows(sourceMasterFlows),
+    [sourceMasterFlows],
+  );
   const activeMatrixSourceFlows = walkupMasterLibraryFlows;
   const hasAnyFlowListedInStep6 =
     visibleLibraryFlowRows.length > 0 ||
@@ -1117,9 +1100,7 @@ export function App() {
       const data = (await response.json()) as SavedFlow[];
       setSourceMasterFlows(data);
       if (!options?.silent) {
-        const activeCount = data.filter(
-          (flow) => isWalkupMatrixViewerUrl(flow.url) && flow.viewerUrlActive !== false && flow.typebotPublished !== false,
-        ).length;
+        const activeCount = data.filter((flow) => isMasterLibrarySourceFlow(flow)).length;
         if (activeCount > 0) {
           setStatusMessage(`Lista atualizada: ${activeCount} fluxo(s) Live.`);
         }
@@ -3053,6 +3034,9 @@ export function App() {
             </div>
             <p className="muted muted-subtle">
               Fluxos <strong>Live</strong> do workspace <strong>Walkup</strong> no Typebot Builder.
+              <span className="master-library-build-marker" hidden aria-hidden="true">
+                {ADMIN_BUILD_MARKER}
+              </span>
             </p>
             <div className="saved-flows-table master-library-table">
               <div className="saved-flows-header master-library-row">
