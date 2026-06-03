@@ -21,7 +21,7 @@ import {
   updateFlowDisplayLabelSchema,
 } from "./flow.service";
 import { isFlowUrlActive, probeFlowUrlStatus } from "../lib/flow-url-health";
-import { attachFlowActiveStatus } from "../lib/typebot-flow-publish-status";
+import { attachFlowActiveStatus, invalidateWorkspaceListCache } from "../lib/typebot-flow-publish-status";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   ensureTenantFlowsLinkedToWorkspace,
@@ -309,6 +309,8 @@ export const registerFlowRoutes = (app: Express) => {
     }
     try {
       const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
+      const tenant = tenantRepository.getById(tenantId);
+      invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
       return res.status(200).json(result);
     } catch (error) {
       return res.status(500).json({
@@ -391,39 +393,46 @@ export const registerFlowRoutes = (app: Express) => {
 
   app.get("/api/master/tenants/:tenantId/flows", async (req, res) => {
     const tenantId = String(req.params.tenantId ?? "").trim();
-    try {
-      await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
-    } catch {
-      // best-effort: lista do workspace pode falhar sem bloquear o painel
-    }
-    try {
-      await refreshTenantWorkspaceFlowUrlsFromTypebot(tenantId);
-    } catch {
-      // realinha publicId após renomear bot no Typebot
-    }
+    const quick =
+      String(req.query.quick ?? "").trim() === "1" || String(req.query.quick ?? "").toLowerCase() === "true";
     const tenant = tenantRepository.getById(tenantId);
     const hasTypebotWorkspace = Boolean(String(tenant?.typebotWorkspaceId ?? "").trim());
-    if (!hasTypebotWorkspace) {
+
+    if (!quick) {
       try {
-        await refreshTenantFlowViewerUrls(tenantId);
+        await refreshTenantWorkspaceFlowUrlsFromTypebot(tenantId);
       } catch {
-        // listagem ainda entrega; URLs podem ser corrigidas no "Copiar link" ou após sync
+        // realinha publicId após renomear bot no Typebot
       }
     }
+
     if (!hasTypebotWorkspace) {
+      if (!quick) {
+        try {
+          await refreshTenantFlowViewerUrls(tenantId);
+        } catch {
+          // listagem ainda entrega; URLs podem ser corrigidas no "Copiar link" ou após sync
+        }
+      }
       ensureTenantFlowLibraryFromQueue(tenantId);
     }
-    try {
-      await selfHealTenantFlowViewerUrls(tenantId);
-    } catch {
-      // auto-heal best-effort: não bloqueia listagem de fluxos
+
+    if (!quick) {
+      try {
+        await selfHealTenantFlowViewerUrls(tenantId);
+      } catch {
+        // auto-heal best-effort: não bloqueia listagem de fluxos
+      }
     }
+
     let flows = flowService.listByTenant(tenantId);
     if (hasTypebotWorkspace) {
-      try {
-        await ensureTenantFlowsLinkedToWorkspace(tenantId);
-      } catch {
-        // best-effort: não bloqueia listagem
+      if (!quick) {
+        try {
+          await ensureTenantFlowsLinkedToWorkspace(tenantId);
+        } catch {
+          // best-effort: não bloqueia listagem
+        }
       }
       // Conta matriz (walkup@): não filtrar por workspace — evita biblioteca vazia na etapa 6.
       if (!isMasterSourceTenant(tenant?.ownerEmail)) {
@@ -432,7 +441,7 @@ export const registerFlowRoutes = (app: Express) => {
     }
     const withAvatar = flows.map(applyTenantLogoAsBotAvatar);
     const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
-    const withStatus = await attachFlowActiveStatus(withAvatar, { workspaceId });
+    const withStatus = await attachFlowActiveStatus(withAvatar, { workspaceId, fast: true });
     return res.status(200).json(withStatus);
   });
 

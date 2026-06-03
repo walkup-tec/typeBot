@@ -238,6 +238,41 @@ function resolveApiBase(): string {
 
 const apiBase = resolveApiBase();
 
+const TENANT_FLOWS_CACHE_PREFIX = "typebot-saas-tenant-flows:";
+const TENANT_FLOWS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function tenantFlowsCacheKey(tenantId: string): string {
+  return `${TENANT_FLOWS_CACHE_PREFIX}${tenantId}`;
+}
+
+function readTenantFlowsCache(tenantId: string): SavedFlow[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(tenantFlowsCacheKey(tenantId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { flows?: SavedFlow[]; savedAt?: number };
+    if (!Array.isArray(parsed.flows)) return null;
+    if (typeof parsed.savedAt === "number" && Date.now() - parsed.savedAt > TENANT_FLOWS_CACHE_TTL_MS) {
+      return null;
+    }
+    return parsed.flows;
+  } catch {
+    return null;
+  }
+}
+
+function writeTenantFlowsCache(tenantId: string, flows: SavedFlow[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      tenantFlowsCacheKey(tenantId),
+      JSON.stringify({ flows, savedAt: Date.now() }),
+    );
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 function formatApiConnectionError(error: unknown): string {
   const detail = error instanceof Error ? error.message.trim() : "";
   const base = `Sem ligação à API em ${apiBase}. Confirme rede, TLS e se esta URL é mesmo o serviço Node (ex.: /health).`;
@@ -1049,13 +1084,27 @@ export function App() {
     await loadFlows(tenantId);
   }
 
-  async function loadFlows(tenantId: string, options?: { silentList?: boolean }) {
+  async function loadFlows(
+    tenantId: string,
+    options?: { silentList?: boolean; skipCache?: boolean },
+  ) {
     if (!tenantId) return;
-    const response = await fetch(`${apiBase}/api/master/tenants/${tenantId}/flows`);
+    if (!options?.skipCache) {
+      const cached = readTenantFlowsCache(tenantId);
+      if (cached && cached.length > 0) {
+        setSavedFlowsByTenant((current) => ({ ...current, [tenantId]: cached }));
+        applyFlowStatusesFromList(cached);
+      }
+    }
+    const response = await fetch(
+      `${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/flows?quick=1`,
+      { cache: "no-store" },
+    );
     if (!response.ok) {
       throw new Error("Falha ao carregar fluxos");
     }
     const data = (await response.json()) as SavedFlow[];
+    writeTenantFlowsCache(tenantId, data);
     setSavedFlowsByTenant((current) => {
       const previous = current[tenantId] ?? [];
       if (options?.silentList && flowListSignature(previous) === flowListSignature(data)) {
@@ -1064,7 +1113,6 @@ export function App() {
       return { ...current, [tenantId]: data };
     });
     applyFlowStatusesFromList(data);
-    await refreshFlowStatuses(data);
   }
 
   async function loadAttendants(tenantId: string) {
@@ -1145,15 +1193,13 @@ export function App() {
   async function refreshTenantFlowList(tenantId: string) {
     if (!tenantId || isRefreshingTenantFlows) return;
     setIsRefreshingTenantFlows(true);
-    setStatusMessage("Atualizando lista de fluxos…");
-    const failSafeTimer = window.setTimeout(() => setIsRefreshingTenantFlows(false), 50_000);
     const controller = new AbortController();
-    const abortTimer = window.setTimeout(() => controller.abort(), 45_000);
+    const abortTimer = window.setTimeout(() => controller.abort(), 28_000);
     try {
-      const syncResponse = await fetch(`${apiBase}/api/master/tenants/${tenantId}/flows/sync-workspace`, {
-        method: "POST",
-        signal: controller.signal,
-      });
+      const syncResponse = await fetch(
+        `${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/flows/sync-workspace`,
+        { method: "POST", signal: controller.signal },
+      );
       const syncPayload = (await syncResponse.json().catch(() => ({}))) as {
         message?: string;
         imported?: number;
@@ -1172,7 +1218,7 @@ export function App() {
       if (syncPayload.metadataRepublished && syncPayload.metadataRepublished > 0) {
         parts.push(`${syncPayload.metadataRepublished} republicado(s) para compartilhamento`);
       }
-      await loadFlows(tenantId);
+      await loadFlows(tenantId, { skipCache: true });
       const imported = Number(syncPayload.imported ?? 0);
       const scanned = Number(syncPayload.typebotsScanned ?? 0);
       if (imported > 0) {
@@ -1192,7 +1238,6 @@ export function App() {
       setStatusMessage(formatApiConnectionError(new Error("timeout ou rede")));
     } finally {
       window.clearTimeout(abortTimer);
-      window.clearTimeout(failSafeTimer);
       setIsRefreshingTenantFlows(false);
     }
   }
@@ -1284,10 +1329,20 @@ export function App() {
     const run = async () => {
       await loadAttendants(selectedTenant);
       await loadQueue(selectedTenant);
-      await loadFlows(selectedTenant);
+      await loadFlows(selectedTenant, { silentList: true });
     };
     run().catch(() => setStatusMessage("Falha ao carregar dados do assinante"));
   }, [selectedTenant]);
+
+  useEffect(() => {
+    if (masterWizardStep !== MASTER_WIZARD_FLOWS_STEP || !selectedTenant) return;
+    const cached = readTenantFlowsCache(selectedTenant);
+    if (cached && cached.length > 0) {
+      setSavedFlowsByTenant((current) => ({ ...current, [selectedTenant]: cached }));
+      applyFlowStatusesFromList(cached);
+    }
+    void loadFlows(selectedTenant, { silentList: true });
+  }, [masterWizardStep, selectedTenant]);
 
   /** Na etapa Biblioteca de Fluxos, inclui automaticamente cada fluxo padrão da Biblioteca Master. */
   useEffect(() => {

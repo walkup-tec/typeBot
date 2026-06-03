@@ -210,7 +210,12 @@ const resolveTargetViewerBaseUrl = (tenantId?: string): string => {
   return "";
 };
 
-type TypebotListRow = { id?: string; name?: string | null; publicId?: string | null };
+type TypebotListRow = {
+  id?: string;
+  name?: string | null;
+  publicId?: string | null;
+  publishedTypebotId?: string | null;
+};
 
 const slugifyForTypebotPublicId = (value: string): string => {
   return value
@@ -372,11 +377,10 @@ const resolveWorkspaceTypebotCatalog = async (workspaceId: string): Promise<Work
   for (const row of raw.rows) {
     const id = String(row.id ?? "").trim();
     if (!id) continue;
-    const detail = await fetchTypebotDetailById(id);
-    if (detail.workspaceId !== normalizedWorkspaceId) continue;
     remoteIds.add(id);
-    let publicId = (await resolvePublicIdForRow(row)) ?? "";
+    let publicId = String(row.publicId ?? "").trim();
     if (!publicId) publicId = derivePublicIdFromRowName(row);
+    if (!publicId) publicId = (await resolvePublicIdForRow(row)) ?? "";
     if (publicId) publicIds.add(normalizeText(publicId));
   }
   return { remoteIds, publicIds, listOk: true };
@@ -774,13 +778,7 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     };
   }
 
-  const rows: TypebotListRow[] = [];
-  for (const row of rawList.rows) {
-    const id = String(row.id ?? "").trim();
-    if (!id) continue;
-    const detail = await fetchTypebotDetailById(id);
-    if (detail.workspaceId === workspaceId) rows.push(row);
-  }
+  const rows: TypebotListRow[] = rawList.rows.filter((row) => String(row.id ?? "").trim());
 
   let pruned = await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
   const existingFlows = [...flowRepository.listByTenant(tenantId)];

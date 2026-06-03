@@ -10,6 +10,7 @@ const TYPEBOT_TARGET_BUILDER_API_TOKEN = String(
 ).trim();
 
 const FETCH_TIMEOUT_MS = 12_000;
+const WORKSPACE_LIST_CACHE_TTL_MS = 45_000;
 
 export type FlowActiveStatus = {
   viewerUrlActive: boolean;
@@ -30,6 +31,14 @@ type TypebotListRow = {
   publicId?: string | null;
   publishedTypebotId?: string | null;
 };
+
+type WorkspaceLiveIndex = {
+  byRemoteId: Map<string, TypebotListRow>;
+  byPublicKey: Map<string, TypebotListRow>;
+  byLabelKey: Map<string, TypebotListRow>;
+};
+
+const workspaceListCache = new Map<string, { rows: TypebotListRow[]; at: number }>();
 
 const builderApiRoots = (): string[] => {
   const raw = TYPEBOT_TARGET_BUILDER_API_BASE_URL.replace(/\/$/, "");
@@ -61,16 +70,13 @@ const extractTypebotArray = (payload: unknown): TypebotListRow[] => {
   return [];
 };
 
-export const fetchTypebotDetailById = async (typebotId: string): Promise<TypebotDetail | null> => {
-  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN || !typebotId) return null;
-  for (const root of builderApiRoots()) {
-    const url = `${root.replace(/\/$/, "")}/v1/typebots/${encodeURIComponent(typebotId)}?migrateToLatestVersion=true`;
-    const response = await fetchWithTimeout(url, { method: "GET", headers: buildHeaders() });
-    if (!response.ok) continue;
-    const payload = (await response.json()) as { typebot?: TypebotDetail };
-    return payload.typebot ?? null;
+export const invalidateWorkspaceListCache = (workspaceId?: string): void => {
+  const id = String(workspaceId ?? "").trim();
+  if (id) {
+    workspaceListCache.delete(id);
+    return;
   }
-  return null;
+  workspaceListCache.clear();
 };
 
 const listWorkspaceTypebotRows = async (workspaceId: string): Promise<TypebotListRow[]> => {
@@ -85,58 +91,83 @@ const listWorkspaceTypebotRows = async (workspaceId: string): Promise<TypebotLis
   return [];
 };
 
-const normalizeFlowKey = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
-
-const fetchPublishedTypebotIdFromWorkspaceList = async (
-  typebotId: string,
-  workspaceId: string,
-): Promise<string> => {
-  if (!typebotId || !workspaceId) return "";
-  const rows = await listWorkspaceTypebotRows(workspaceId);
-  const row = rows.find((item) => String(item.id ?? "").trim() === typebotId);
-  return String(row?.publishedTypebotId ?? "").trim();
+export const getCachedWorkspaceTypebotRows = async (workspaceId: string): Promise<TypebotListRow[]> => {
+  const id = String(workspaceId ?? "").trim();
+  if (!id) return [];
+  const hit = workspaceListCache.get(id);
+  if (hit && Date.now() - hit.at < WORKSPACE_LIST_CACHE_TTL_MS) return hit.rows;
+  const rows = await listWorkspaceTypebotRows(id);
+  workspaceListCache.set(id, { rows, at: Date.now() });
+  return rows;
 };
 
-const findWorkspaceRowForFlowKeys = async (
-  workspaceId: string,
-  keys: { publicId: string; label: string },
-): Promise<TypebotListRow | null> => {
-  const rows = await listWorkspaceTypebotRows(workspaceId);
-  if (rows.length === 0) return null;
-
-  const publicKey = normalizeFlowKey(keys.publicId);
-  const labelKey = normalizeFlowKey(keys.label);
-
-  for (const row of rows) {
-    const rowPublicId = normalizeFlowKey(String(row.publicId ?? ""));
-    if (publicKey && rowPublicId && rowPublicId === publicKey) return row;
-
-    const rowName = normalizeFlowKey(String(row.name ?? ""));
-    if (labelKey && rowName && rowName === labelKey) return row;
-
-    const rowId = String(row.id ?? "").trim();
-    if (!rowId || rowId.length < 7) continue;
-    const suffix = rowId.slice(-7).toLowerCase();
-    if (publicKey && (publicKey === suffix || publicKey.endsWith(`-${suffix}`) || publicKey.endsWith(suffix))) {
-      return row;
-    }
+export const fetchTypebotDetailById = async (typebotId: string): Promise<TypebotDetail | null> => {
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN || !typebotId) return null;
+  for (const root of builderApiRoots()) {
+    const url = `${root.replace(/\/$/, "")}/v1/typebots/${encodeURIComponent(typebotId)}?migrateToLatestVersion=true`;
+    const response = await fetchWithTimeout(url, { method: "GET", headers: buildHeaders() });
+    if (!response.ok) continue;
+    const payload = (await response.json()) as { typebot?: TypebotDetail };
+    return payload.typebot ?? null;
   }
   return null;
 };
 
-const resolvePublishedTypebotMarker = async (
-  typebotId: string,
-  detail: TypebotDetail | null,
-  workspaceIdHint?: string,
-): Promise<string> => {
-  const fromDetail = String(detail?.publishedTypebotId ?? "").trim();
-  if (fromDetail) return fromDetail;
+const normalizeFlowKey = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
 
-  const workspaceId =
-    String(workspaceIdHint ?? "").trim() || String(detail?.workspaceId ?? "").trim();
-  if (!workspaceId) return "";
+const buildWorkspaceLiveIndex = (rows: TypebotListRow[]): WorkspaceLiveIndex => {
+  const byRemoteId = new Map<string, TypebotListRow>();
+  const byPublicKey = new Map<string, TypebotListRow>();
+  const byLabelKey = new Map<string, TypebotListRow>();
 
-  return fetchPublishedTypebotIdFromWorkspaceList(typebotId, workspaceId);
+  for (const row of rows) {
+    const remoteId = String(row.id ?? "").trim();
+    if (remoteId) byRemoteId.set(remoteId, row);
+
+    const publicId = normalizeFlowKey(String(row.publicId ?? ""));
+    if (publicId) byPublicKey.set(publicId, row);
+
+    const label = normalizeFlowKey(String(row.name ?? ""));
+    if (label) byLabelKey.set(label, row);
+
+    if (remoteId.length >= 7) {
+      const suffix = remoteId.slice(-7).toLowerCase();
+      if (!byPublicKey.has(suffix)) byPublicKey.set(suffix, row);
+    }
+  }
+
+  return { byRemoteId, byPublicKey, byLabelKey };
+};
+
+const pickWorkspaceRowForFlow = (
+  index: WorkspaceLiveIndex,
+  keys: { remoteId: string; publicId: string; label: string },
+): TypebotListRow | null => {
+  const remoteId = keys.remoteId.trim();
+  if (remoteId) {
+    const hit = index.byRemoteId.get(remoteId);
+    if (hit) return hit;
+  }
+
+  const publicKey = normalizeFlowKey(keys.publicId);
+  if (publicKey) {
+    const byPublic = index.byPublicKey.get(publicKey);
+    if (byPublic) return byPublic;
+  }
+
+  const labelKey = normalizeFlowKey(keys.label);
+  if (labelKey) {
+    const byLabel = index.byLabelKey.get(labelKey);
+    if (byLabel) return byLabel;
+  }
+
+  if (publicKey.length >= 7) {
+    const suffix = publicKey.slice(-7);
+    const bySuffix = index.byPublicKey.get(suffix);
+    if (bySuffix) return bySuffix;
+  }
+
+  return null;
 };
 
 /** Alinhado ao badge Live do Typebot 3.x (publishedTypebotId ou publishedAt). */
@@ -153,14 +184,53 @@ export const isTypebotPublishedInBuilder = (
   return detailPublicId.length > 0 && detailPublicId === publicId;
 };
 
+const resolveFlowActiveStatusFromIndex = (
+  flow: {
+    url: string;
+    typebotRemoteId?: string;
+    typebotPublicId?: string;
+    displayLabel?: string;
+    nickname?: string;
+  },
+  index: WorkspaceLiveIndex | null,
+  options?: { probeViewerUrl?: boolean },
+): FlowActiveStatus => {
+  const url = String(flow.url ?? "").trim();
+  const remoteId = String(flow.typebotRemoteId ?? "").trim();
+  const publicId = String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(url);
+  const label = String(flow.displayLabel ?? flow.nickname ?? "").trim();
+
+  const row = index
+    ? pickWorkspaceRowForFlow(index, { remoteId, publicId, label })
+    : null;
+  const publishedTypebotId = String(row?.publishedTypebotId ?? "").trim();
+  const typebotPublished = isTypebotPublishedInBuilder(null, publicId, publishedTypebotId);
+
+  return {
+    typebotPublished,
+    viewerReachable: false,
+    viewerUrlActive: typebotPublished,
+  };
+};
+
 export const resolveFlowActiveStatus = async (flow: {
   url: string;
   typebotRemoteId?: string;
   typebotPublicId?: string;
   typebotWorkspaceId?: string;
+  displayLabel?: string;
+  nickname?: string;
 }): Promise<FlowActiveStatus> => {
+  const workspaceId = String(flow.typebotWorkspaceId ?? "").trim();
+  if (workspaceId) {
+    const rows = await getCachedWorkspaceTypebotRows(workspaceId);
+    const index = buildWorkspaceLiveIndex(rows);
+    const fast = resolveFlowActiveStatusFromIndex(flow, index, { probeViewerUrl: true });
+    if (fast.typebotPublished) return fast;
+  }
+
   const url = String(flow.url ?? "").trim();
-  const remoteId = String(flow.typebotRemoteId ?? "").trim();
+  let remoteId = String(flow.typebotRemoteId ?? "").trim();
   let publicId = String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(url);
 
   let detail: TypebotDetail | null = null;
@@ -169,11 +239,26 @@ export const resolveFlowActiveStatus = async (flow: {
     detail = await fetchTypebotDetailById(remoteId);
     const fromDetail = String(detail?.publicId ?? "").trim();
     if (fromDetail) publicId = fromDetail;
-    publishedTypebotId = await resolvePublishedTypebotMarker(
+    publishedTypebotId = String(detail?.publishedTypebotId ?? "").trim();
+    if (!publishedTypebotId && workspaceId) {
+      const rows = await getCachedWorkspaceTypebotRows(workspaceId);
+      const row = rows.find((item) => String(item.id ?? "").trim() === remoteId);
+      publishedTypebotId = String(row?.publishedTypebotId ?? "").trim();
+    }
+  } else if (workspaceId) {
+    const rows = await getCachedWorkspaceTypebotRows(workspaceId);
+    const index = buildWorkspaceLiveIndex(rows);
+    const row = pickWorkspaceRowForFlow(index, {
       remoteId,
-      detail,
-      flow.typebotWorkspaceId,
-    );
+      publicId,
+      label: String(flow.displayLabel ?? flow.nickname ?? "").trim(),
+    });
+    if (row) {
+      remoteId = String(row.id ?? "").trim();
+      publishedTypebotId = String(row.publishedTypebotId ?? "").trim();
+      const rowPublicId = String(row.publicId ?? "").trim();
+      if (rowPublicId) publicId = rowPublicId;
+    }
   }
 
   const typebotPublished = isTypebotPublishedInBuilder(detail, publicId, publishedTypebotId);
@@ -194,14 +279,27 @@ export const attachFlowActiveStatus = async <T extends {
   nickname?: string;
 }>(
   flows: T[],
-  options?: { workspaceId?: string },
-): Promise<Array<T & FlowActiveStatus>> =>
-  Promise.all(
+  options?: { workspaceId?: string; fast?: boolean },
+): Promise<Array<T & FlowActiveStatus>> => {
+  const workspaceId = String(options?.workspaceId ?? "").trim();
+  const useFast = options?.fast !== false;
+
+  if (useFast && workspaceId && flows.length > 0) {
+    const rows = await getCachedWorkspaceTypebotRows(workspaceId);
+    const index = buildWorkspaceLiveIndex(rows);
+    return flows.map((flow) => ({
+      ...flow,
+      ...resolveFlowActiveStatusFromIndex(flow, index),
+    }));
+  }
+
+  return Promise.all(
     flows.map(async (flow) => ({
       ...flow,
       ...(await resolveFlowActiveStatus({
         ...flow,
-        typebotWorkspaceId: options?.workspaceId,
+        typebotWorkspaceId: workspaceId,
       })),
     })),
   );
+};
