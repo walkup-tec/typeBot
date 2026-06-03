@@ -86,7 +86,12 @@ const listTargetWorkspacesWithProbe = async (): Promise<WorkspaceListProbe> => {
   for (const root of builderApiRoots()) {
     const base = root.replace(/\/$/, "");
     const url = `${base}/v1/workspaces`;
-    const response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+    let response: Response | null = null;
+    try {
+      response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+    } catch {
+      continue;
+    }
     lastStatus = response.status;
     if (!response.ok) continue;
     const payload = (await response.json()) as { workspaces?: Array<{ id?: string | null; name?: string | null }> };
@@ -270,7 +275,12 @@ const fetchTypebotDetailById = async (
   if (!TYPEBOT_TARGET_BUILDER_API_TOKEN) return { publicId: null, workspaceId: null };
   for (const root of builderApiRoots()) {
     const url = `${root.replace(/\/$/, "")}/v1/typebots/${encodeURIComponent(typebotId)}`;
-    const response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+    let response: Response | null = null;
+    try {
+      response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+    } catch {
+      continue;
+    }
     if (!response.ok) continue;
     const body = (await response.json()) as {
       typebot?: { publicId?: string | null; workspaceId?: string | null };
@@ -305,7 +315,12 @@ const listWorkspaceTypebotsRaw = async (workspaceId: string): Promise<WorkspaceT
     const base = root.replace(/\/$/, "");
     for (const suffix of [`/v1/typebots?${qs}`, `/v1/typebots?${qsShort}`]) {
       const url = `${base}${suffix}`;
-      const response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+      let response: Response | null = null;
+      try {
+        response = await fetch(url, { method: "GET", headers: buildTargetHeaders() });
+      } catch {
+        continue;
+      }
       if (!response.ok) {
         if (process.env.NODE_ENV === "development") {
           // eslint-disable-next-line no-console

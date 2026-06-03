@@ -112,8 +112,9 @@ const runTenantFlowWatcher = async () => {
           );
         }
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         // eslint-disable-next-line no-console
-        console.error(`[typebot-tenant-flow-sync] tenant=${tenant.id} failed:`, error);
+        console.warn(`[typebot-tenant-flow-sync] tenant=${tenant.id} skipped: ${message}`);
       }
     }
     // eslint-disable-next-line no-console
@@ -362,6 +363,10 @@ async function startApi(): Promise<void> {
   }
 
   app.listen(port, host, () => {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[saas-api] running deployMarker=${API_DEPLOY_MARKER} masterLibrary=${MASTER_LIBRARY_LOGIC_VERSION}`,
+    );
     // eslint-disable-next-line no-console
     console.log(`API running on http://${host}:${port}`);
 

@@ -79,7 +79,12 @@ const fetchMatrixWorkspaceTypebots = async (): Promise<MatrixWorkspaceScan> => {
   }
   for (const root of resolveSourceBuilderRoots()) {
     const url = `${root}/v1/typebots?workspaceId=${encodeURIComponent(TYPEBOT_SOURCE_MASTER_WORKSPACE_ID)}&limit=200`;
-    const response = await fetchWithTimeout(url, { method: "GET", headers: sourceHeaders() });
+    let response: Response | null = null;
+    try {
+      response = await fetchWithTimeout(url, { method: "GET", headers: sourceHeaders() });
+    } catch {
+      continue;
+    }
     if (!response.ok) continue;
     const payload = (await response.json()) as { typebots?: SourceTypebotRow[]; results?: SourceTypebotRow[] };
     if (Array.isArray(payload.typebots)) return { typebots: payload.typebots, reachable: true };
