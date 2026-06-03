@@ -610,6 +610,8 @@ export function App() {
   const [isRefreshingMasterLibrary, setIsRefreshingMasterLibrary] = useState(false);
   const [isRefreshingTenantFlows, setIsRefreshingTenantFlows] = useState(false);
   const [systemMasterLibrary, setSystemMasterLibrary] = useState<SystemMasterLibraryItem[]>([]);
+  /** Fluxos em promote (API lenta); item já aparece em «Fluxos compartilhados» com indicador. */
+  const [promotingSourceFlowIds, setPromotingSourceFlowIds] = useState<Record<string, true>>({});
   /** Títulos digitados na Biblioteca Master antes de promover cada fluxo ativo (obrigatório ≥2 caracteres). */
   const [masterPromoteTitles, setMasterPromoteTitles] = useState<Record<string, string>>({});
   const [editingMasterTitleFlowId, setEditingMasterTitleFlowId] = useState<string | null>(null);
@@ -1230,10 +1232,43 @@ export function App() {
     }
   }
 
-  async function loadSystemMasterLibrary() {
+  const isOptimisticSystemMasterItem = (item: SystemMasterLibraryItem): boolean =>
+    item.id.startsWith("optimistic-");
+
+  const buildOptimisticSystemMasterItem = (flow: SavedFlow, title: string): SystemMasterLibraryItem => {
+    const now = new Date().toISOString();
+    return {
+      id: `optimistic-${flow.id}`,
+      sourceFlowId: flow.id,
+      title,
+      description: "Fluxo padrão disponibilizado pela Biblioteca Master.",
+      suggestedNickname: flow.nickname,
+      viewerUrl: flow.url,
+      isSystemDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
+
+  const mergeSystemMasterLibraryFromServer = (
+    current: SystemMasterLibraryItem[],
+    data: SystemMasterLibraryItem[],
+  ): SystemMasterLibraryItem[] => {
+    const optimistic = current.filter(isOptimisticSystemMasterItem);
+    const stillPending = optimistic.filter(
+      (item) => !data.some((row) => row.sourceFlowId === item.sourceFlowId),
+    );
+    return [...data, ...stillPending];
+  };
+
+  async function loadSystemMasterLibrary(options?: { mergeOptimistic?: boolean }) {
     const response = await fetch(`${apiBase}/api/master/system-library`);
     if (!response.ok) return;
     const data = (await response.json()) as SystemMasterLibraryItem[];
+    if (options?.mergeOptimistic) {
+      setSystemMasterLibrary((current) => mergeSystemMasterLibraryFromServer(current, data));
+      return;
+    }
     setSystemMasterLibrary(data);
   }
 
@@ -2055,42 +2090,81 @@ export function App() {
       setStatusMessage("Informe um título com pelo menos 2 caracteres ao lado do fluxo.");
       return;
     }
-    const response = await fetch(`${apiBase}/api/master/system-library/promote`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        sourceFlowId: flow.id,
-        title,
-        typebotRemoteId: flow.typebotRemoteId,
-        typebotPublicId: flow.typebotPublicId,
-        url: flow.url,
-      }),
-    });
-    if (!response.ok) {
-      const err = (await response.json().catch(() => ({}))) as { message?: string };
-      setStatusMessage(err.message ?? "Não foi possível definir o fluxo como padrão.");
-      return;
-    }
-    const promoted = (await response.json()) as SystemMasterLibraryItem;
+    if (promotingSourceFlowIds[flow.id]) return;
+
+    const flowUrl = flow.url.trim().toLowerCase();
+    const optimisticItem = buildOptimisticSystemMasterItem(flow, title);
+    setPromotingSourceFlowIds((current) => ({ ...current, [flow.id]: true }));
     setSystemMasterLibrary((current) => {
       const without = current.filter(
         (item) =>
-          item.sourceFlowId !== promoted.sourceFlowId &&
-          item.viewerUrl.trim().toLowerCase() !== flow.url.trim().toLowerCase(),
+          item.sourceFlowId !== flow.id &&
+          item.viewerUrl.trim().toLowerCase() !== flowUrl &&
+          item.id !== optimisticItem.id,
       );
-      return [...without, promoted];
+      return [...without, optimisticItem];
     });
-    setStatusMessage("Fluxo definido como padrão e disponibilizado aos assinantes.");
-    setMasterPromoteTitles((current) => {
-      const next = { ...current };
-      delete next[flow.id];
-      return next;
-    });
-    void Promise.all([
-      loadSystemMasterLibrary(),
-      loadFlowLibrary(),
-      loadMasterLibrarySourceFlows({ silent: true }),
-    ]);
+    setStatusMessage("Definindo fluxo como padrão…");
+
+    try {
+      const response = await fetch(`${apiBase}/api/master/system-library/promote`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceFlowId: flow.id,
+          title,
+          typebotRemoteId: flow.typebotRemoteId,
+          typebotPublicId: flow.typebotPublicId,
+          url: flow.url,
+        }),
+      });
+      if (!response.ok) {
+        const err = (await response.json().catch(() => ({}))) as { message?: string };
+        setSystemMasterLibrary((current) =>
+          current.filter(
+            (item) => item.id !== optimisticItem.id && item.sourceFlowId !== flow.id,
+          ),
+        );
+        setStatusMessage(err.message ?? "Não foi possível definir o fluxo como padrão.");
+        return;
+      }
+      const promoted = (await response.json()) as SystemMasterLibraryItem;
+      setSystemMasterLibrary((current) => {
+        const without = current.filter(
+          (item) =>
+            item.id !== optimisticItem.id &&
+            item.sourceFlowId !== promoted.sourceFlowId &&
+            item.viewerUrl.trim().toLowerCase() !== flowUrl,
+        );
+        return [...without, promoted];
+      });
+      setStatusMessage("Fluxo definido como padrão e disponibilizado aos assinantes.");
+      setMasterPromoteTitles((current) => {
+        const next = { ...current };
+        delete next[flow.id];
+        return next;
+      });
+      window.setTimeout(() => {
+        void Promise.all([
+          loadSystemMasterLibrary({ mergeOptimistic: true }),
+          loadFlowLibrary(),
+          loadMasterLibrarySourceFlows({ silent: true }),
+        ]);
+      }, 1200);
+    } catch (error) {
+      setSystemMasterLibrary((current) =>
+        current.filter(
+          (item) => item.id !== optimisticItem.id && item.sourceFlowId !== flow.id,
+        ),
+      );
+      setStatusMessage(formatApiConnectionError(error));
+    } finally {
+      setPromotingSourceFlowIds((current) => {
+        const next = { ...current };
+        delete next[flow.id];
+        return next;
+      });
+    }
   }
 
   const restoreSourceFlowAfterLibraryRemove = (removedItem: SystemMasterLibraryItem) => {
@@ -3274,10 +3348,18 @@ export function App() {
                       <button
                         type="button"
                         className="compact-action-btn compact-action-btn-success"
-                        disabled={!canPromote}
+                        disabled={!canPromote || Boolean(promotingSourceFlowIds[flow.id])}
+                        aria-busy={Boolean(promotingSourceFlowIds[flow.id])}
                         onClick={() => void promoteFlowToSystemLibrary(flow, promoteTitle)}
                       >
-                        Definir como Padrão
+                        {promotingSourceFlowIds[flow.id] ? (
+                          <span className="processing-inline-wrap">
+                            <i className="processing-inline-dot" aria-hidden="true" />
+                            Processando…
+                          </span>
+                        ) : (
+                          "Definir como Padrão"
+                        )}
                       </button>
                     </span>
                   </div>
@@ -3304,26 +3386,49 @@ export function App() {
                     <span>Atualizado</span>
                     <span>Ação</span>
                   </div>
-                  {systemMasterLibrary.map((item) => (
-                    <div className="saved-flows-row master-library-published-row" key={item.id}>
-                      <span>{item.title}</span>
-                      <span className="flow-url-cell">
-                        <a href={item.viewerUrl} title={item.viewerUrl} target="_blank" rel="noreferrer">
-                          {abbreviateUrlForDisplay(item.viewerUrl)}
-                        </a>
-                      </span>
-                      <span>{new Date(item.updatedAt).toLocaleString("pt-BR")}</span>
-                      <span>
-                        <button
-                          type="button"
-                          className="ghost-btn danger-btn"
-                          onClick={() => void removeFromSystemLibrary(item.id)}
-                        >
-                          Remover
-                        </button>
-                      </span>
-                    </div>
-                  ))}
+                  {systemMasterLibrary.map((item) => {
+                    const isPromotingRow =
+                      Boolean(promotingSourceFlowIds[item.sourceFlowId]) ||
+                      isOptimisticSystemMasterItem(item);
+                    return (
+                      <div
+                        className={`saved-flows-row master-library-published-row${isPromotingRow ? " master-library-published-row--processing" : ""}`}
+                        key={item.id}
+                        aria-busy={isPromotingRow}
+                      >
+                        <span>
+                          {isPromotingRow ? (
+                            <span className="processing-inline-wrap" aria-live="polite">
+                              <i className="processing-inline-dot" aria-hidden="true" />
+                              {item.title}
+                            </span>
+                          ) : (
+                            item.title
+                          )}
+                        </span>
+                        <span className="flow-url-cell">
+                          <a href={item.viewerUrl} title={item.viewerUrl} target="_blank" rel="noreferrer">
+                            {abbreviateUrlForDisplay(item.viewerUrl)}
+                          </a>
+                        </span>
+                        <span>
+                          {isPromotingRow
+                            ? "Processando…"
+                            : new Date(item.updatedAt).toLocaleString("pt-BR")}
+                        </span>
+                        <span>
+                          <button
+                            type="button"
+                            className="ghost-btn danger-btn"
+                            disabled={isPromotingRow}
+                            onClick={() => void removeFromSystemLibrary(item.id)}
+                          >
+                            Remover
+                          </button>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

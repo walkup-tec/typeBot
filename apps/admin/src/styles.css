@@ -2626,6 +2626,23 @@ button:disabled {
   opacity: 0.92;
 }
 
+.master-library-published-row--processing {
+  opacity: 0.95;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 8px;
+  animation: master-library-promote-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes master-library-promote-pulse {
+  0%,
+  100% {
+    background: rgba(99, 102, 241, 0.06);
+  }
+  50% {
+    background: rgba(99, 102, 241, 0.14);
+  }
+}
+
 .master-title-display-row {
   display: inline-flex;
   align-items: center;

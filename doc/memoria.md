@@ -1,4 +1,10 @@
-﻿## 2026-06-04 - Arquivo traefik_memoria.txt
+﻿## 2026-06-04 - UX promote Biblioteca Master (lista compartilhados instantânea)
+
+- **Fix:** otimista + «Processando…»; merge no reload; marker `DEPLOY-2026-06-04-admin-promote-ux-instant`
+- **Redeploy:** painel
+- **Log:** `doc/LOG-2026-06-04__admin-promote-ux-instant.md`
+
+## 2026-06-04 - Arquivo traefik_memoria.txt
 
 - Histórico Traefik ordenado + problemas para Hostinger: `doc/traefik_memoria.txt`
 
