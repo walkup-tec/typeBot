@@ -33,7 +33,9 @@ import {
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
 import {
+  ensureSubscriberFlowsQuick,
   ensureSubscriberSavedFlowsFromDefaults,
+  propagateDefaultsToSubscriberWorkspacesInBackground,
   propagateSystemDefaultFlowToAllTenants,
   repairAllSubscriberDefaultsOnBoot,
 } from "./subscriber-default-flows.service";
@@ -296,17 +298,8 @@ export const registerFlowRoutes = (app: Express) => {
       sourceFlowNickname: sourceFlow.nickname,
       sourceFlowUrl: sourceFlow.url,
     });
-    // Ao promover como padrão, dispara importação imediata para os workspaces Typebot dos assinantes.
     const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
-    const subscribers = tenantRepository
-      .list()
-      .filter((tenant) => normalizeText(tenant.ownerEmail) !== MASTER_SOURCE_EMAIL && Boolean(tenant.id));
-    await Promise.allSettled(
-      subscribers.map(async (tenant) => {
-        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, defaults, { overwriteExisting: true });
-        await syncSubscriberFlowsForListing(tenant.id);
-      }),
-    );
+    propagateDefaultsToSubscriberWorkspacesInBackground(defaults);
     return res.status(200).json(row);
   });
 
@@ -422,6 +415,8 @@ export const registerFlowRoutes = (app: Express) => {
     const tenantId = String(req.params.tenantId ?? "").trim();
     const quick =
       String(req.query.quick ?? "").trim() === "1" || String(req.query.quick ?? "").toLowerCase() === "true";
+    const forceSync =
+      String(req.query.sync ?? "").trim() === "1" || String(req.query.sync ?? "").toLowerCase() === "true";
     const tenant = tenantRepository.getById(tenantId);
     const hasTypebotWorkspace = Boolean(String(tenant?.typebotWorkspaceId ?? "").trim());
 
@@ -455,7 +450,11 @@ export const registerFlowRoutes = (app: Express) => {
     let flows = flowService.listByTenant(tenantId);
     if (hasTypebotWorkspace && !isMasterSourceTenant(tenant?.ownerEmail)) {
       try {
-        await syncSubscriberFlowsForListing(tenantId);
+        if (forceSync || !quick) {
+          await syncSubscriberFlowsForListing(tenantId);
+        } else {
+          await ensureSubscriberFlowsQuick(tenantId);
+        }
       } catch {
         // best-effort: não bloqueia listagem
       }

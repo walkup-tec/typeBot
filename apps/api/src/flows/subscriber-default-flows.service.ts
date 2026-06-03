@@ -4,6 +4,7 @@ import {
   importManualWorkspaceTypebotsIntoTenantFlows,
   refreshTenantFlowViewerUrls,
 } from "../typebot/typebot-flow-viewer-url-sync";
+import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 import { FlowService } from "./flow.service";
 import { listSystemMasterLibrary, type SystemMasterLibraryItem } from "./system-master-library.repository";
 
@@ -83,6 +84,62 @@ export const flowMatchesSystemDefaultItem = (
     normalizeText(flow.url) === normalizeText(item.viewerUrl) ||
     normalizeText(flow.displayLabel ?? flow.nickname) === normalizeText(item.title)
   );
+};
+
+/** Só disco + vínculo (rápido). Import completo do workspace fica para sync=1 ou sync-workspace. */
+export const ensureSubscriberFlowsQuick = async (tenantId: string): Promise<void> => {
+  const activeDefaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+  repairSubscriberDefaultLibrarySourceIds(tenantId);
+  for (const item of activeDefaults) {
+    const flows = flowService.listByTenant(tenantId);
+    if (flows.some((flow) => flowMatchesSystemDefaultItem(flow, item))) continue;
+    try {
+      flowService.create(tenantId, {
+        nickname: item.suggestedNickname.trim() || item.title.trim(),
+        displayLabel: item.title.trim(),
+        url: item.viewerUrl.trim(),
+        librarySourceId: item.id,
+      });
+    } catch {
+      const byUrl = flows.find((flow) => normalizeText(flow.url) === normalizeText(item.viewerUrl));
+      if (byUrl) {
+        flowRepository.updateById(byUrl.id, {
+          librarySourceId: item.id,
+          displayLabel: item.title,
+        });
+      }
+    }
+  }
+  try {
+    await ensureTenantFlowsLinkedToWorkspace(tenantId);
+  } catch {
+    // best-effort
+  }
+};
+
+export const propagateDefaultsToSubscriberWorkspacesInBackground = (defaults: SystemMasterLibraryItem[]): void => {
+  const activeDefaults = defaults.filter((item) => item.isSystemDefault);
+  if (activeDefaults.length === 0) return;
+
+  const subscribers = tenantRepository
+    .list()
+    .filter((tenant) => tenant.id && !isMasterTenant(tenant.ownerEmail));
+
+  void (async () => {
+    for (const tenant of subscribers) {
+      try {
+        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id!, activeDefaults, { overwriteExisting: true });
+        await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id!);
+        await ensureSubscriberSavedFlowsFromDefaults(tenant.id!, activeDefaults);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[subscriber-default-flows] background sync failed tenant=${tenant.id}:`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+  })();
 };
 
 /** Cria/atualiza fluxos no disco do assinante e vincula ao workspace Typebot. */

@@ -612,6 +612,8 @@ export function App() {
   const [systemMasterLibrary, setSystemMasterLibrary] = useState<SystemMasterLibraryItem[]>([]);
   /** Fluxos em promote (API lenta); item já aparece em «Fluxos compartilhados» com indicador. */
   const [promotingSourceFlowIds, setPromotingSourceFlowIds] = useState<Record<string, true>>({});
+  const sharedFlowsSectionRef = useRef<HTMLDivElement | null>(null);
+  const isPromotingAnyMasterFlow = Object.keys(promotingSourceFlowIds).length > 0;
   /** Títulos digitados na Biblioteca Master antes de promover cada fluxo ativo (obrigatório ≥2 caracteres). */
   const [masterPromoteTitles, setMasterPromoteTitles] = useState<Record<string, string>>({});
   const [editingMasterTitleFlowId, setEditingMasterTitleFlowId] = useState<string | null>(null);
@@ -1076,7 +1078,7 @@ export function App() {
 
   async function loadFlows(
     tenantId: string,
-    options?: { silentList?: boolean; skipCache?: boolean },
+    options?: { silentList?: boolean; skipCache?: boolean; forceSync?: boolean },
   ) {
     if (!tenantId) return;
     if (!options?.skipCache) {
@@ -1086,8 +1088,9 @@ export function App() {
         applyFlowStatusesFromList(cached);
       }
     }
+    const syncQuery = options?.forceSync ? "&sync=1" : "";
     const response = await fetch(
-      `${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/flows?quick=1`,
+      `${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/flows?quick=1${syncQuery}`,
       { cache: "no-store" },
     );
     if (!response.ok) {
@@ -1208,7 +1211,7 @@ export function App() {
       if (syncPayload.metadataRepublished && syncPayload.metadataRepublished > 0) {
         parts.push(`${syncPayload.metadataRepublished} republicado(s) para compartilhamento`);
       }
-      await loadFlows(tenantId, { skipCache: true });
+      await loadFlows(tenantId, { skipCache: true, forceSync: true });
       const imported = Number(syncPayload.imported ?? 0);
       const scanned = Number(syncPayload.typebotsScanned ?? 0);
       if (imported > 0) {
@@ -1261,15 +1264,12 @@ export function App() {
     return [...data, ...stillPending];
   };
 
-  async function loadSystemMasterLibrary(options?: { mergeOptimistic?: boolean }) {
+  async function loadSystemMasterLibrary() {
+    if (isPromotingAnyMasterFlow) return;
     const response = await fetch(`${apiBase}/api/master/system-library`);
     if (!response.ok) return;
     const data = (await response.json()) as SystemMasterLibraryItem[];
-    if (options?.mergeOptimistic) {
-      setSystemMasterLibrary((current) => mergeSystemMasterLibraryFromServer(current, data));
-      return;
-    }
-    setSystemMasterLibrary(data);
+    setSystemMasterLibrary((current) => mergeSystemMasterLibraryFromServer(current, data));
   }
 
   useEffect(() => {
@@ -2104,7 +2104,10 @@ export function App() {
       );
       return [...without, optimisticItem];
     });
-    setStatusMessage("Definindo fluxo como padrão…");
+    setStatusMessage("Fluxo adicionado em «Fluxos compartilhados». Sincronizando assinantes…");
+    window.requestAnimationFrame(() => {
+      sharedFlowsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
 
     try {
       const response = await fetch(`${apiBase}/api/master/system-library/promote`, {
@@ -2138,19 +2141,14 @@ export function App() {
         );
         return [...without, promoted];
       });
-      setStatusMessage("Fluxo definido como padrão e disponibilizado aos assinantes.");
+      setStatusMessage("Fluxo definido como padrão. Assinantes serão atualizados em segundo plano.");
       setMasterPromoteTitles((current) => {
         const next = { ...current };
         delete next[flow.id];
         return next;
       });
-      window.setTimeout(() => {
-        void Promise.all([
-          loadSystemMasterLibrary({ mergeOptimistic: true }),
-          loadFlowLibrary(),
-          loadMasterLibrarySourceFlows({ silent: true }),
-        ]);
-      }, 1200);
+      void loadFlowLibrary();
+      void loadMasterLibrarySourceFlows({ silent: true });
     } catch (error) {
       setSystemMasterLibrary((current) =>
         current.filter(
@@ -3279,6 +3277,14 @@ export function App() {
                 {ADMIN_BUILD_MARKER}
               </span>
             </p>
+            {isPromotingAnyMasterFlow ? (
+              <p className="master-library-promote-banner" role="status" aria-live="polite">
+                <span className="processing-inline-wrap">
+                  <i className="processing-inline-dot" aria-hidden="true" />
+                  Definindo padrão — o fluxo já está em «Fluxos compartilhados» abaixo.
+                </span>
+              </p>
+            ) : null}
             <div
               className={`saved-flows-table master-library-table${isRefreshingMasterLibrary ? " master-library-table--refreshing" : ""}`}
               aria-busy={isRefreshingMasterLibrary}
@@ -3374,9 +3380,9 @@ export function App() {
               ) : null}
             </div>
 
-            <div className="tenant-profile-card">
+            <div className="tenant-profile-card" ref={sharedFlowsSectionRef}>
               <h4>Fluxos compartilhados</h4>
-              {systemMasterLibrary.length === 0 ? (
+              {systemMasterLibrary.length === 0 && !isPromotingAnyMasterFlow ? (
                 <p className="muted">Nenhum fluxo padrão publicado ainda.</p>
               ) : (
                 <div className="saved-flows-table master-library-table">

@@ -460,10 +460,18 @@ const applyWorkspaceRowToFlow = async (flow: SavedFlow, row: TypebotListRow, vie
 
 const isLinkedToSystemMasterDefault = (flow: SavedFlow): boolean => {
   const libId = String(flow.librarySourceId ?? "").trim();
-  if (!libId) return false;
+  if (libId) {
+    const byLib = listSystemMasterLibrary().some(
+      (item) =>
+        item.isSystemDefault && (item.id === libId || item.sourceFlowId === libId),
+    );
+    if (byLib) return true;
+  }
   return listSystemMasterLibrary().some(
     (item) =>
-      item.isSystemDefault && (item.id === libId || item.sourceFlowId === libId),
+      item.isSystemDefault &&
+      (normalizeText(flow.url) === normalizeText(item.viewerUrl) ||
+        normalizeText(flow.displayLabel ?? flow.nickname) === normalizeText(item.title)),
   );
 };
 

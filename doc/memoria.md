@@ -1,4 +1,11 @@
-﻿## 2026-06-04 - Fix lista fluxos assinante (Drax etapa 6 vazia)
+﻿## 2026-06-04 - Promote rápido + lista assinante Drax (v14)
+
+- **Commit:** `DEPLOY-2026-06-04-walkup-fluxos-assinantes-promote-rapido`
+- **API:** promote não bloqueia; GET quick leve + sync=1 no Atualizar lista
+- **Painel:** otimista visível + banner + scroll compartilhados
+- **Log:** `doc/LOG-2026-06-04__walkup-fluxos-assinantes-promote-rapido.md`
+
+## 2026-06-04 - Fix lista fluxos assinante (Drax etapa 6 vazia)
 
 - **Causa:** prune apagava padrão sem remoteId; GET quick não importava workspace.
 - **Commit:** `DEPLOY-2026-06-04-walkup-assinante-fluxos-lista`
