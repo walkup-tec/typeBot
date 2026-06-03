@@ -26,7 +26,7 @@ container_ip() {
 }
 
 LP_IP=$(container_ip paginadevendas || true)
-PAINEL_IP=$(container_ip painel-typebot-crm || true)
+PAINEL_IP=$(container_ip painel-typebot-crm || container_ip painel || true)
 BUILDER_IP=$(container_ip typebot-walkup-builder || true)
 VIEWER_IP=$(container_ip typebot-walkup-viewer || true)
 MINIO_IP=$(container_ip minio || true)
