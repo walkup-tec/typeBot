@@ -1,10 +1,12 @@
 import { flowRepository, tenantRepository } from "../lib/repositories";
 import {
   ensureTenantFlowsLinkedToWorkspace,
-  filterTenantFlowsForWorkspace,
-  importManualWorkspaceTypebotsIntoTenantFlows,
   refreshTenantFlowViewerUrls,
 } from "../typebot/typebot-flow-viewer-url-sync";
+import {
+  listTenantFlowsAfterWorkspaceSync,
+  syncWorkspaceTypebotFlowsForTenant,
+} from "./tenant-workspace-flows.service";
 import type { SavedFlow } from "./flow.repository";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 import { FlowService } from "./flow.service";
@@ -113,9 +115,7 @@ export const ensureSubscriberFlowsQuick = async (tenantId: string): Promise<void
     }
   }
   try {
-    await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
-    await ensureTenantFlowsLinkedToWorkspace(tenantId);
-    await refreshTenantFlowViewerUrls(tenantId);
+    await syncWorkspaceTypebotFlowsForTenant(tenantId);
   } catch {
     // best-effort
   }
@@ -128,7 +128,7 @@ export const syncSubscriberFlowsForListing = async (tenantId: string): Promise<v
     await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
   }
   try {
-    await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
+    await syncWorkspaceTypebotFlowsForTenant(tenantId);
   } catch {
     // best-effort
   }
@@ -179,12 +179,8 @@ export const listSubscriberTenantFlowsForMaster = async (
     }
   }
 
-  let flows = flowService.listByTenant(tenantId);
-  if (hasWorkspace) {
-    const filtered = await filterTenantFlowsForWorkspace(tenantId, flows);
-    flows = filtered.length > 0 ? filtered : flows;
-  }
-  return flows;
+  const flows = flowService.listByTenant(tenantId);
+  return listTenantFlowsAfterWorkspaceSync(tenantId, flows);
 };
 
 export const propagateDefaultsToSubscriberWorkspacesInBackground = (defaults: SystemMasterLibraryItem[]): void => {
@@ -199,7 +195,7 @@ export const propagateDefaultsToSubscriberWorkspacesInBackground = (defaults: Sy
     for (const tenant of subscribers) {
       try {
         await syncSystemDefaultsToRealTypebotWorkspace(tenant.id!, activeDefaults, { overwriteExisting: true });
-        await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id!);
+        await syncWorkspaceTypebotFlowsForTenant(tenant.id!);
         await ensureSubscriberSavedFlowsFromDefaults(tenant.id!, activeDefaults);
       } catch (error) {
         // eslint-disable-next-line no-console
@@ -255,8 +251,7 @@ export const ensureSubscriberSavedFlowsFromDefaults = async (
   );
   if (stillMissing) {
     try {
-      await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
-      await ensureTenantFlowsLinkedToWorkspace(tenantId);
+      await syncWorkspaceTypebotFlowsForTenant(tenantId);
     } catch {
       // best-effort
     }

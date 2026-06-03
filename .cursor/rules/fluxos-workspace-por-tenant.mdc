@@ -1,0 +1,31 @@
+---
+description: Regra multi-tenant — fluxos criados no workspace Typebot do assinante
+globs:
+  - apps/api/src/flows/**
+  - apps/api/src/typebot/**
+  - apps/admin/src/App.tsx
+---
+
+# Fluxos do workspace Typebot = 1 tenant
+
+## Regra obrigatória
+
+Fluxo criado no workspace Typebot do assinante **X** → visível **apenas** no tenant **X** no Drax.
+
+- Persistir sempre com `tenantId` do assinante.
+- Listar sempre com `listByTenant(tenantId)` ou `listSubscriberTenantFlowsForMaster(tenantId)`.
+- Nunca reutilizar o mesmo `SavedFlow` entre tenants.
+- Import/sync: usar `syncWorkspaceTypebotFlowsForTenant(tenantId)` (`tenant-workspace-flows.service.ts`).
+
+## Tipos de fluxo
+
+| Campo | Significado |
+|-------|-------------|
+| `librarySourceId` preenchido | Cópia biblioteca/padrão master **neste** tenant |
+| sem `librarySourceId` | Fluxo exclusivo do workspace Typebot **deste** tenant |
+
+## Ao alterar listagem ou sync
+
+1. Manter filtro: fluxos sem `librarySourceId` só se pertencem ao catálogo do `typebotWorkspaceId` do tenant.
+2. Manter `assertFlowsBelongToTenant` antes de responder a API.
+3. Documentar em `doc/REGRA-fluxos-workspace-por-tenant.md` se mudar comportamento.

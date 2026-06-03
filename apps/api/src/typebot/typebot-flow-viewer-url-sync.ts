@@ -490,7 +490,11 @@ const shouldAlwaysShowInSubscriberFlowList = (flow: SavedFlow): boolean => {
   return false;
 };
 
-/** Resposta da API: fluxos do workspace do assinante + padrões da Biblioteca Master vinculados. */
+/**
+ * Filtra fluxos do tenant para listagem master.
+ * - Com `librarySourceId`: cópia biblioteca/padrão no tenant (sempre mantém).
+ * - Sem `librarySourceId`: só fluxos do workspace Typebot **deste** tenant (regra workspace exclusivo).
+ */
 export const filterTenantFlowsForWorkspace = async (
   tenantId: string,
   flows: SavedFlow[],
@@ -506,10 +510,12 @@ export const filterTenantFlowsForWorkspace = async (
     return flows;
   }
 
-  const filtered = flows.filter(
-    (flow) =>
-      shouldAlwaysShowInSubscriberFlowList(flow) || flowBelongsToWorkspaceCatalog(flow, catalog),
-  );
+  const filtered = flows.filter((flow) => {
+    if (String(flow.librarySourceId ?? "").trim()) {
+      return shouldAlwaysShowInSubscriberFlowList(flow) || flowBelongsToWorkspaceCatalog(flow, catalog);
+    }
+    return flowBelongsToWorkspaceCatalog(flow, catalog);
+  });
   return filtered.length > 0 ? filtered : flows;
 };
 
@@ -749,8 +755,8 @@ const alignTenantFlowsWithWorkspaceRows = async (
 };
 
 /**
- * Typebots que existem só no workspace Typebot (criação manual no builder) passam a ter registro na biblioteca local do assinante.
- * Só inclui fluxos com URL de viewer publicada e respondendo (evita rascunhos).
+ * Typebots do workspace Typebot do tenant → `saved-flows` com `tenantId` fixo (isolamento multi-tenant).
+ * Ver `tenant-workspace-flows.service.ts` e doc/REGRA-fluxos-workspace-por-tenant.md.
  */
 export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   tenantId: string,

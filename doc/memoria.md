@@ -1,4 +1,10 @@
-﻿## 2026-06-04 - Drax padrão ativo + workspace visível (v16)
+﻿## 2026-06-04 - Regra workspace Typebot por tenant (v17)
+
+- **Regra:** fluxo criado no workspace do assinante X → só tenant X (doc + cursor rule + service)
+- **Arquivo:** `tenant-workspace-flows.service.ts`, `doc/REGRA-fluxos-workspace-por-tenant.md`
+- **Marker:** `DEPLOY-2026-06-04-walkup-regra-workspace-por-tenant`
+
+## 2026-06-04 - Drax padrão ativo + workspace visível (v16)
 
 - **Marker:** `DEPLOY-2026-06-04-walkup-drax-fluxos-ativo-workspace`
 - **API:** status por título biblioteca; import quick; prune conservador

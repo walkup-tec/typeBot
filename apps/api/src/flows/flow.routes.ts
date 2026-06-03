@@ -26,11 +26,11 @@ import { attachFlowActiveStatus, invalidateWorkspaceListCache } from "../lib/typ
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   ensureTenantFlowsLinkedToWorkspace,
-  importManualWorkspaceTypebotsIntoTenantFlows,
   refreshFlowViewerUrlFromTypebot,
   refreshTenantFlowViewerUrls,
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
+import { syncWorkspaceTypebotFlowsForTenant } from "./tenant-workspace-flows.service";
 import {
   ensureSubscriberSavedFlowsFromDefaults,
   listSubscriberTenantFlowsForMaster,
@@ -302,12 +302,15 @@ export const registerFlowRoutes = (app: Express) => {
       return res.status(400).json({ message: "tenantId obrigatório." });
     }
     try {
-      const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
-      await syncSubscriberFlowsForListing(tenantId);
+      const result = await syncWorkspaceTypebotFlowsForTenant(tenantId);
+      const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+      if (defaults.length > 0) {
+        await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
+      }
       const tenant = tenantRepository.getById(tenantId);
       invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
       const flowCount = flowService.listByTenant(tenantId).length;
-      return res.status(200).json({ ...result, flowCount });
+      return res.status(200).json({ ...(result ?? {}), flowCount });
     } catch (error) {
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",
