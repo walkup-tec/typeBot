@@ -23,7 +23,7 @@ Variáveis obrigatórias no serviço **`api`**:
 
 Ou manualmente:
 
-- `GET https://app.chattypebot.com/health` → `deployMarker` = `DEPLOY-2026-06-03-api-biblioteca-walkup-only` e `masterLibraryLogicVersion` = `walkup-live-only-v2`
+- `GET https://app.chattypebot.com/health` → `deployMarker` = `DEPLOY-2026-06-03-api-biblioteca-v3-safe` e `masterLibraryLogicVersion` = `walkup-live-only-v3-safe-prune`
 - `GET .../api/master/system-library/source-flows` → **0 ou 1** fluxo; **nunca** URLs `soma-typebot`
 - Painel → Biblioteca Master → **Atualizar lista**
 

@@ -1,4 +1,12 @@
-﻿## 2026-06-03 - Responsabilidade deploy + smoke Biblioteca Master
+﻿## 2026-06-03 - Fix prune perigoso no redeploy (v3-safe)
+
+- **Logs vistos:** `no_new_active_typebots` = rotina normal a cada 7s, nao erro Biblioteca Master.
+- **Bug:** prune apagava fluxos walkup quando builder 502 ou env ausente no redeploy.
+- **Fix:** prune so apos scan OK do builder; markers v3-safe.
+- **Commit fechado:** aguardar redeploy api + painel + smoke.
+- **Log:** `doc/LOG-2026-06-03__020000__fix-prune-biblioteca-redeploy-seguro.md`
+
+## 2026-06-03 - Responsabilidade deploy + smoke Biblioteca Master
 
 - **Erro reconhecido:** entreguei fix no GitHub sem garantir deploy/validação em produção.
 - **Reforço código:** painel grava só fluxos filtrados no state; etapa 6 não usa lixo da matriz; `/health` expõe `masterLibraryLogicVersion`.

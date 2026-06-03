@@ -105,7 +105,7 @@ const runTenantFlowWatcher = async () => {
       try {
         const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
         imported += result.imported;
-        if (result.imported === 0 && result.skipReason) {
+        if (result.imported === 0 && result.skipReason && result.skipReason !== "no_new_active_typebots") {
           // eslint-disable-next-line no-console
           console.warn(
             `[typebot-tenant-flow-sync] tenant=${tenant.id} imported=0 reason=${result.skipReason} candidates=${result.workspaceCandidates} workspaceId=${result.workspaceId || "none"}`,

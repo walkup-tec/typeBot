@@ -1,5 +1,5 @@
 /** Versão da lógica da Biblioteca Master — validar em /health após redeploy do serviço `api`. */
-export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-live-only-v2";
+export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-live-only-v3-safe-prune";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-03-api-biblioteca-walkup-only";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-03-api-biblioteca-v3-safe";

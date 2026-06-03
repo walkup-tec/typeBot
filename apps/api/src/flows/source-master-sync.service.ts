@@ -67,17 +67,31 @@ const resolveSourceBuilderRoots = (): string[] => {
   return [`${raw}/api`, raw];
 };
 
-export const listSourceWorkspaceTypebots = async (): Promise<SourceTypebotRow[]> => {
-  if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_BUILDER_API_TOKEN) return [];
+type MatrixWorkspaceScan = {
+  typebots: SourceTypebotRow[];
+  /** Builder respondeu HTTP OK ao listar o workspace matriz. */
+  reachable: boolean;
+};
+
+const fetchMatrixWorkspaceTypebots = async (): Promise<MatrixWorkspaceScan> => {
+  if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_BUILDER_API_TOKEN) {
+    return { typebots: [], reachable: false };
+  }
   for (const root of resolveSourceBuilderRoots()) {
     const url = `${root}/v1/typebots?workspaceId=${encodeURIComponent(TYPEBOT_SOURCE_MASTER_WORKSPACE_ID)}&limit=200`;
     const response = await fetchWithTimeout(url, { method: "GET", headers: sourceHeaders() });
     if (!response.ok) continue;
     const payload = (await response.json()) as { typebots?: SourceTypebotRow[]; results?: SourceTypebotRow[] };
-    if (Array.isArray(payload.typebots) && payload.typebots.length > 0) return payload.typebots;
-    if (Array.isArray(payload.results) && payload.results.length > 0) return payload.results;
+    if (Array.isArray(payload.typebots)) return { typebots: payload.typebots, reachable: true };
+    if (Array.isArray(payload.results)) return { typebots: payload.results, reachable: true };
+    return { typebots: [], reachable: true };
   }
-  return [];
+  return { typebots: [], reachable: false };
+};
+
+export const listSourceWorkspaceTypebots = async (): Promise<SourceTypebotRow[]> => {
+  const scan = await fetchMatrixWorkspaceTypebots();
+  return scan.typebots;
 };
 
 const fetchSourceTypebotDetail = async (typebotId: string): Promise<SourceTypebotDetail | null> => {
@@ -194,48 +208,83 @@ const tenantOwnerLookup = (): Map<string, { email: string; name: string }> => {
   return map;
 };
 
+const pruneLegacySomaUrlsOnMasterTenant = (
+  savedFlows: SavedFlow[],
+  protectedFlowIds: Set<string>,
+): number => {
+  let pruned = 0;
+  for (const flow of savedFlows) {
+    if (protectedFlowIds.has(flow.id)) continue;
+    const url = normalizeKey(flow.url);
+    if (!url.includes("soma-typebot")) continue;
+    flowRepository.removeById(flow.id);
+    pruned += 1;
+  }
+  return pruned;
+};
+
 const pruneStaleMasterTenantFlows = (
   savedFlows: SavedFlow[],
   activeRemoteIds: Set<string>,
   protectedFlowIds: Set<string>,
-): void => {
+): number => {
+  let pruned = 0;
   for (const flow of savedFlows) {
     if (protectedFlowIds.has(flow.id)) continue;
     const remoteId = String(flow.typebotRemoteId ?? "").trim();
     if (remoteId && activeRemoteIds.has(remoteId)) continue;
     flowRepository.removeById(flow.id);
+    pruned += 1;
   }
+  return pruned;
 };
 
-/** Lista somente fluxos Live do workspace matriz Walkup (tenant walkup@). */
-export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourceFlowRow[]> => {
-  const sourceTenant = tenantRepository
-    .list()
-    .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
+export type MasterLibrarySyncResult = {
+  rows: MasterLibrarySourceFlowRow[];
+  active: number;
+  created: number;
+  pruned: number;
+  skipReason?: "master_env_missing" | "builder_unreachable" | "workspace_empty";
+};
 
-  if (!sourceTenant?.id) {
-    return [];
-  }
-
+const syncMasterLibraryFromTypebot = async (sourceTenantId: string): Promise<MasterLibrarySyncResult> => {
   const protectedFlowIds = new Set(
     listSystemMasterLibrary()
       .map((item) => String(item.sourceFlowId ?? "").trim())
       .filter(Boolean),
   );
 
-  let savedFlows = flowService.listByTenant(sourceTenant.id);
-  const activeRemoteIds = new Set<string>();
-  const rows: MasterLibrarySourceFlowRow[] = [];
+  let savedFlows = flowService.listByTenant(sourceTenantId);
+  const savedBefore = savedFlows.length;
+  let pruned = pruneLegacySomaUrlsOnMasterTenant(savedFlows, protectedFlowIds);
+  if (pruned > 0) savedFlows = flowService.listByTenant(sourceTenantId);
 
   if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_VIEWER_BASE_URL) {
-    pruneStaleMasterTenantFlows(savedFlows, activeRemoteIds, protectedFlowIds);
-    return [];
+    return {
+      rows: [],
+      active: 0,
+      created: 0,
+      pruned,
+      skipReason: "master_env_missing",
+    };
   }
 
-  const matrixBots = await listSourceWorkspaceTypebots();
+  const matrixScan = await fetchMatrixWorkspaceTypebots();
+  if (!matrixScan.reachable) {
+    return {
+      rows: [],
+      active: 0,
+      created: 0,
+      pruned,
+      skipReason: "builder_unreachable",
+    };
+  }
+
+  const activeRemoteIds = new Set<string>();
+  const rows: MasterLibrarySourceFlowRow[] = [];
   const owners = tenantOwnerLookup();
 
-  for (const bot of matrixBots) {
+  for (const bot of matrixScan.typebots) {
     const typebotId = String(bot.id ?? "").trim();
     const name = String(bot.name ?? "").trim();
     if (!typebotId || !name) continue;
@@ -253,8 +302,8 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
 
     let flow: SavedFlow;
     try {
-      flow = upsertMatrixFlowOnTenant(sourceTenant.id, typebotId, name, publicId, viewerUrl, savedFlows);
-      savedFlows = flowService.listByTenant(sourceTenant.id);
+      flow = upsertMatrixFlowOnTenant(sourceTenantId, typebotId, name, publicId, viewerUrl, savedFlows);
+      savedFlows = flowService.listByTenant(sourceTenantId);
     } catch {
       continue;
     }
@@ -274,34 +323,50 @@ export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourc
     });
   }
 
-  pruneStaleMasterTenantFlows(savedFlows, activeRemoteIds, protectedFlowIds);
+  pruned += pruneStaleMasterTenantFlows(savedFlows, activeRemoteIds, protectedFlowIds);
 
   const byKey = new Map<string, MasterLibrarySourceFlowRow>();
   for (const row of filterActiveWalkupMatrixRows(rows)) {
-    if (row.tenantId !== sourceTenant.id) continue;
+    if (row.tenantId !== sourceTenantId) continue;
     const key =
       normalizeKey(row.typebotRemoteId) ||
       normalizeKey(row.typebotPublicId) ||
       normalizeKey(row.url);
     if (key) byKey.set(key, row);
   }
-  return [...byKey.values()];
+  const deduped = [...byKey.values()];
+  const savedAfter = flowService.listByTenant(sourceTenantId).length;
+
+  return {
+    rows: deduped,
+    active: deduped.length,
+    created: Math.max(0, savedAfter - savedBefore),
+    pruned,
+    skipReason: deduped.length === 0 ? "workspace_empty" : undefined,
+  };
 };
 
-export const syncSourceWorkspaceFlowsToMasterTenant = async (): Promise<{
-  created: number;
-  active: number;
-}> => {
+/** Lista somente fluxos Live do workspace matriz Walkup (tenant walkup@). */
+export const listMasterLibrarySourceFlows = async (): Promise<MasterLibrarySourceFlowRow[]> => {
   const sourceTenant = tenantRepository
     .list()
     .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
-  if (!sourceTenant) return { created: 0, active: 0 };
 
-  const savedBefore = flowService.listByTenant(sourceTenant.id).length;
-  const rows = await listMasterLibrarySourceFlows();
-  const savedAfter = flowService.listByTenant(sourceTenant.id).length;
-  return {
-    created: Math.max(0, savedAfter - savedBefore),
-    active: rows.filter((row) => row.viewerUrlActive).length,
-  };
+  if (!sourceTenant?.id) {
+    return [];
+  }
+
+  const result = await syncMasterLibraryFromTypebot(sourceTenant.id);
+  return result.rows;
+};
+
+export const syncSourceWorkspaceFlowsToMasterTenant = async (): Promise<MasterLibrarySyncResult> => {
+  const sourceTenant = tenantRepository
+    .list()
+    .find((tenant) => normalizeKey(tenant.ownerEmail) === normalizeKey(MASTER_SOURCE_EMAIL));
+  if (!sourceTenant?.id) {
+    return { rows: [], created: 0, active: 0, pruned: 0, skipReason: "master_env_missing" };
+  }
+
+  return syncMasterLibraryFromTypebot(sourceTenant.id);
 };
