@@ -1,4 +1,4 @@
-# Valida deploy da Biblioteca Master (API serviço `api` + painel).
+# Valida deploy da Biblioteca Master (API servico api + painel).
 # Uso: .\scripts\smoke-biblioteca-master.ps1
 
 $ErrorActionPreference = "Stop"
@@ -55,11 +55,11 @@ try {
       $fail++
     }
   }
-  if ($count -le 1 -and $fail -eq 0) {
+  if ($count -le 1) {
     Write-Host "OK: source-flows sem lixo multi-tenant" -ForegroundColor Green
   }
 } catch {
-  Write-Host "FALHA: source-flows — $($_.Exception.Message)" -ForegroundColor Red
+  Write-Host "FALHA: source-flows - $($_.Exception.Message)" -ForegroundColor Red
   $fail++
 }
 
@@ -77,7 +77,7 @@ try {
     $fail++
   }
 } catch {
-  Write-Host "FALHA: painel — $($_.Exception.Message)" -ForegroundColor Red
+  Write-Host "FALHA: painel - $($_.Exception.Message)" -ForegroundColor Red
   $fail++
 }
 
@@ -87,5 +87,5 @@ if ($fail -gt 0) {
   exit 1
 }
 
-Write-Host "RESULTADO: OK — Biblioteca Master deploy validado." -ForegroundColor Green
+Write-Host "RESULTADO: OK - Biblioteca Master deploy validado." -ForegroundColor Green
 exit 0
