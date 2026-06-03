@@ -2,8 +2,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { syncSourceWorkspaceFlowsToMasterTenant } from "../flows/source-master-sync.service";
 import { probeFlowUrlStatus } from "../lib/flow-url-health";
-import { isTypebotPublishedInBuilder, fetchTypebotDetailById } from "../lib/typebot-flow-publish-status";
-import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
+import { resolveFlowActiveStatus } from "../lib/typebot-flow-publish-status";
 
 const flowStatusSchema = z.object({
   url: z.string().url(),
@@ -35,15 +34,12 @@ export const registerTypebotRoutes = (app: Express) => {
     try {
       const { url, typebotRemoteId, typebotPublicId } = flowStatusSchema.parse(req.query);
       const probe = await probeFlowUrlStatus(url);
-      let publicId = String(typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(url);
-      let detail = null;
-      const remoteId = String(typebotRemoteId ?? "").trim();
-      if (remoteId) {
-        detail = await fetchTypebotDetailById(remoteId);
-        const fromDetail = String(detail?.publicId ?? "").trim();
-        if (fromDetail) publicId = fromDetail;
-      }
-      const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
+      const activeStatus = await resolveFlowActiveStatus({
+        url,
+        typebotRemoteId,
+        typebotPublicId,
+      });
+      const typebotPublished = activeStatus.typebotPublished;
       const status = typebotPublished || probe.status === "active" ? "active" : "inactive";
       return res.status(200).json({
         status,

@@ -20,6 +20,14 @@ export type FlowActiveStatus = {
 type TypebotDetail = {
   publicId?: string | null;
   publishedAt?: string | null;
+  publishedTypebotId?: string | null;
+  workspaceId?: string | null;
+};
+
+type TypebotListRow = {
+  id?: string;
+  publicId?: string | null;
+  publishedTypebotId?: string | null;
 };
 
 const builderApiRoots = (): string[] => {
@@ -44,6 +52,14 @@ const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Respon
   }
 };
 
+const extractTypebotArray = (payload: unknown): TypebotListRow[] => {
+  if (!payload || typeof payload !== "object") return [];
+  const record = payload as Record<string, unknown>;
+  if (Array.isArray(record.typebots)) return record.typebots as TypebotListRow[];
+  if (Array.isArray(record.results)) return record.results as TypebotListRow[];
+  return [];
+};
+
 export const fetchTypebotDetailById = async (typebotId: string): Promise<TypebotDetail | null> => {
   if (!TYPEBOT_TARGET_BUILDER_API_TOKEN || !typebotId) return null;
   for (const root of builderApiRoots()) {
@@ -56,29 +72,76 @@ export const fetchTypebotDetailById = async (typebotId: string): Promise<Typebot
   return null;
 };
 
-export const isTypebotPublishedInBuilder = (detail: TypebotDetail | null, publicId: string): boolean => {
-  if (!publicId) return false;
+const fetchPublishedTypebotIdFromWorkspaceList = async (
+  typebotId: string,
+  workspaceId: string,
+): Promise<string> => {
+  if (!TYPEBOT_TARGET_BUILDER_API_TOKEN || !typebotId || !workspaceId) return "";
+  const qs = `workspaceId=${encodeURIComponent(workspaceId)}&limit=200`;
+  for (const root of builderApiRoots()) {
+    const url = `${root.replace(/\/$/, "")}/v1/typebots?${qs}`;
+    const response = await fetchWithTimeout(url, { method: "GET", headers: buildHeaders() });
+    if (!response.ok) continue;
+    const rows = extractTypebotArray(await response.json());
+    const row = rows.find((item) => String(item.id ?? "").trim() === typebotId);
+    return String(row?.publishedTypebotId ?? "").trim();
+  }
+  return "";
+};
+
+const resolvePublishedTypebotMarker = async (
+  typebotId: string,
+  detail: TypebotDetail | null,
+  workspaceIdHint?: string,
+): Promise<string> => {
+  const fromDetail = String(detail?.publishedTypebotId ?? "").trim();
+  if (fromDetail) return fromDetail;
+
+  const workspaceId =
+    String(workspaceIdHint ?? "").trim() || String(detail?.workspaceId ?? "").trim();
+  if (!workspaceId) return "";
+
+  return fetchPublishedTypebotIdFromWorkspaceList(typebotId, workspaceId);
+};
+
+/** Alinhado ao badge Live do Typebot 3.x (publishedTypebotId ou publishedAt). */
+export const isTypebotPublishedInBuilder = (
+  detail: TypebotDetail | null,
+  publicId: string,
+  publishedTypebotId = "",
+): boolean => {
+  if (publishedTypebotId) return true;
   const publishedAt = String(detail?.publishedAt ?? "").trim();
-  return publishedAt.length > 0;
+  if (publishedAt.length > 0) return true;
+  if (!publicId) return false;
+  const detailPublicId = String(detail?.publicId ?? "").trim();
+  return detailPublicId.length > 0 && detailPublicId === publicId;
 };
 
 export const resolveFlowActiveStatus = async (flow: {
   url: string;
   typebotRemoteId?: string;
   typebotPublicId?: string;
+  typebotWorkspaceId?: string;
 }): Promise<FlowActiveStatus> => {
   const url = String(flow.url ?? "").trim();
   const remoteId = String(flow.typebotRemoteId ?? "").trim();
   let publicId = String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(url);
 
   let detail: TypebotDetail | null = null;
+  let publishedTypebotId = "";
   if (remoteId) {
     detail = await fetchTypebotDetailById(remoteId);
     const fromDetail = String(detail?.publicId ?? "").trim();
     if (fromDetail) publicId = fromDetail;
+    publishedTypebotId = await resolvePublishedTypebotMarker(
+      remoteId,
+      detail,
+      flow.typebotWorkspaceId,
+    );
   }
 
-  const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
+  const typebotPublished = isTypebotPublishedInBuilder(detail, publicId, publishedTypebotId);
   const viewerReachable = url ? await isFlowUrlActive(url) : false;
 
   return {
@@ -94,10 +157,14 @@ export const attachFlowActiveStatus = async <T extends {
   typebotPublicId?: string;
 }>(
   flows: T[],
+  options?: { workspaceId?: string },
 ): Promise<Array<T & FlowActiveStatus>> =>
   Promise.all(
     flows.map(async (flow) => ({
       ...flow,
-      ...(await resolveFlowActiveStatus(flow)),
+      ...(await resolveFlowActiveStatus({
+        ...flow,
+        typebotWorkspaceId: options?.workspaceId,
+      })),
     })),
   );

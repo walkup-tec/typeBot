@@ -1062,7 +1062,9 @@ export function App() {
       return { ...current, [tenantId]: data };
     });
     applyFlowStatusesFromList(data);
-    const needsProbe = data.some((flow) => flow.viewerUrlActive === undefined);
+    const needsProbe = data.some(
+      (flow) => flow.viewerUrlActive === undefined || flow.viewerUrlActive === false,
+    );
     if (needsProbe) {
       await refreshFlowStatuses(data);
     }

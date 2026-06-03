@@ -431,7 +431,8 @@ export const registerFlowRoutes = (app: Express) => {
       }
     }
     const withAvatar = flows.map(applyTenantLogoAsBotAvatar);
-    const withStatus = await attachFlowActiveStatus(withAvatar);
+    const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
+    const withStatus = await attachFlowActiveStatus(withAvatar, { workspaceId });
     return res.status(200).json(withStatus);
   });
 
