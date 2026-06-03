@@ -709,12 +709,12 @@ export function App() {
     () => selectedTenantFlows.filter((flow) => !flow.librarySourceId),
     [selectedTenantFlows],
   );
-  /** Etapa 6: assinantes listam tudo que a API devolveu; matriz mantém só fluxos fora do catálogo. */
+  /** Etapa 6: assinante — workspace Typebot (sem vínculo biblioteca); matriz — só fora do catálogo. */
   const tenantWorkspaceFlowsForStep6 = useMemo(() => {
     if (selectedTenantObject && isSystemMasterTenant(selectedTenantObject)) {
       return workspaceOnlyFlows;
     }
-    return selectedTenantFlows;
+    return selectedTenantFlows.filter((flow) => !flow.librarySourceId);
   }, [selectedTenantFlows, selectedTenantObject, workspaceOnlyFlows]);
   const activeWorkspaceOnlyFlows = useMemo(
     () =>

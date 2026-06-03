@@ -340,23 +340,30 @@ const listWorkspaceTypebotsRaw = async (workspaceId: string): Promise<WorkspaceT
   return { rows: [], listOk: false };
 };
 
-/** Lista typebots confirmando `workspaceId` no detalhe (evita vazar bots de outros workspaces). */
+/** Lista typebots do workspace; se o detalhe falhar, mantém linhas da listagem (evita etapa 6 vazia). */
 const listWorkspaceTypebots = async (workspaceId: string): Promise<TypebotListRow[]> => {
   const normalizedWorkspaceId = String(workspaceId ?? "").trim();
   if (!normalizedWorkspaceId) return [];
   const raw = await listWorkspaceTypebotsRaw(normalizedWorkspaceId);
   if (!raw.listOk) return [];
 
+  const rows = raw.rows.filter((row) => String(row.id ?? "").trim());
+  if (rows.length === 0) return [];
+
   const filtered: TypebotListRow[] = [];
-  for (const row of raw.rows) {
+  for (const row of rows) {
     const id = String(row.id ?? "").trim();
     if (!id) continue;
-    const detail = await fetchTypebotDetailById(id);
-    if (detail.workspaceId === normalizedWorkspaceId) {
+    try {
+      const detail = await fetchTypebotDetailById(id);
+      if (!detail?.workspaceId || detail.workspaceId === normalizedWorkspaceId) {
+        filtered.push(row);
+      }
+    } catch {
       filtered.push(row);
     }
   }
-  return filtered;
+  return filtered.length > 0 ? filtered : rows;
 };
 
 type WorkspaceTypebotCatalog = {
@@ -617,6 +624,9 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
   const np = normalizeText(publicId);
   for (const f of flows) {
     if (String(f.typebotRemoteId ?? "").trim() === typebotId) return true;
+    if (!String(f.typebotRemoteId ?? "").trim() && String(f.librarySourceId ?? "").trim()) {
+      continue;
+    }
     if (nu && normalizeText(f.url) === nu) return true;
     const pid = typebotPublicIdFromViewerUrl(f.url);
     if (np && pid && normalizeText(pid) === np) return true;
@@ -667,28 +677,32 @@ const pruneTenantFlowsToMatchWorkspace = async (
     if (String(flow.librarySourceId ?? "").trim()) continue;
 
     const remoteId = String(flow.typebotRemoteId ?? "").trim();
-    if (!remoteId || !remoteIds.has(remoteId)) {
-      const publicId = flowPublicIdKey(flow);
-      let keepByPublicId = false;
-      if (publicId) {
-        for (const row of rows) {
-          let pid = (await resolvePublicIdForRow(row)) ?? "";
-          if (!pid) pid = derivePublicIdFromRowName(row);
-          if (normalizeText(pid) === publicId) {
-            keepByPublicId = true;
-            break;
-          }
-        }
+    if (remoteId) {
+      if (!remoteIds.has(remoteId)) {
+        continue;
       }
-      if (keepByPublicId) continue;
-      toRemove.push(flow.id);
+      if (keptRemoteIds.has(remoteId)) {
+        toRemove.push(flow.id);
+      } else {
+        keptRemoteIds.add(remoteId);
+      }
       continue;
     }
-    if (keptRemoteIds.has(remoteId)) {
-      toRemove.push(flow.id);
-    } else {
-      keptRemoteIds.add(remoteId);
+
+    const publicId = flowPublicIdKey(flow);
+    let keepByPublicId = false;
+    if (publicId) {
+      for (const row of rows) {
+        let pid = (await resolvePublicIdForRow(row)) ?? "";
+        if (!pid) pid = derivePublicIdFromRowName(row);
+        if (normalizeText(pid) === publicId) {
+          keepByPublicId = true;
+          break;
+        }
+      }
     }
+    if (keepByPublicId) continue;
+    toRemove.push(flow.id);
   }
 
   for (const id of toRemove) {

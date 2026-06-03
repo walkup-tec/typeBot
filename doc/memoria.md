@@ -1,4 +1,11 @@
-﻿## 2026-06-04 - Drax lista fluxos nunca vazia (v15)
+﻿## 2026-06-04 - Drax padrão ativo + workspace visível (v16)
+
+- **Marker:** `DEPLOY-2026-06-04-walkup-drax-fluxos-ativo-workspace`
+- **API:** status por título biblioteca; import quick; prune conservador
+- **Painel:** workspace = fluxos sem librarySourceId
+- **Log:** `doc/LOG-2026-06-04__walkup-drax-fluxos-ativo-workspace.md`
+
+## 2026-06-04 - Drax lista fluxos nunca vazia (v15)
 
 - **Marker:** `DEPLOY-2026-06-04-walkup-drax-fluxos-lista-nao-vazia`
 - **API:** filtro/prune com fallback; `listSubscriberTenantFlowsForMaster`

@@ -1,5 +1,6 @@
 import { isFlowUrlActive } from "./flow-url-health";
 import { typebotPublicIdFromViewerUrl } from "./typebot-public-id";
+import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
 
 const TYPEBOT_BUILDER_API_BASE_URL = String(process.env.TYPEBOT_BUILDER_API_BASE_URL ?? "").trim();
 const TYPEBOT_TARGET_BUILDER_API_BASE_URL = String(
@@ -139,6 +140,17 @@ const buildWorkspaceLiveIndex = (rows: TypebotListRow[]): WorkspaceLiveIndex => 
   return { byRemoteId, byPublicKey, byLabelKey };
 };
 
+const resolveLibraryTitleForFlow = (flow: {
+  librarySourceId?: string;
+  displayLabel?: string;
+  nickname?: string;
+}): string => {
+  const libId = String(flow.librarySourceId ?? "").trim();
+  if (!libId) return "";
+  const item = listSystemMasterLibrary().find((row) => row.id === libId || row.sourceFlowId === libId);
+  return String(item?.title ?? "").trim();
+};
+
 const pickWorkspaceRowForFlow = (
   index: WorkspaceLiveIndex,
   keys: { remoteId: string; publicId: string; label: string },
@@ -191,6 +203,7 @@ const resolveFlowActiveStatusFromIndex = (
     typebotPublicId?: string;
     displayLabel?: string;
     nickname?: string;
+    librarySourceId?: string;
   },
   index: WorkspaceLiveIndex | null,
   options?: { probeViewerUrl?: boolean },
@@ -198,13 +211,17 @@ const resolveFlowActiveStatusFromIndex = (
   const url = String(flow.url ?? "").trim();
   const remoteId = String(flow.typebotRemoteId ?? "").trim();
   const publicId = String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(url);
-  const label = String(flow.displayLabel ?? flow.nickname ?? "").trim();
+  const libraryTitle = resolveLibraryTitleForFlow(flow);
+  const label = libraryTitle || String(flow.displayLabel ?? flow.nickname ?? "").trim();
 
   const row = index
     ? pickWorkspaceRowForFlow(index, { remoteId, publicId, label })
     : null;
   const publishedTypebotId = String(row?.publishedTypebotId ?? "").trim();
-  const typebotPublished = isTypebotPublishedInBuilder(null, publicId, publishedTypebotId);
+  let typebotPublished = isTypebotPublishedInBuilder(null, publicId, publishedTypebotId);
+  if (!typebotPublished && row) {
+    typebotPublished = Boolean(remoteId || libraryTitle || String(flow.librarySourceId ?? "").trim());
+  }
 
   return {
     typebotPublished,
@@ -277,6 +294,7 @@ export const attachFlowActiveStatus = async <T extends {
   typebotPublicId?: string;
   displayLabel?: string;
   nickname?: string;
+  librarySourceId?: string;
 }>(
   flows: T[],
   options?: { workspaceId?: string; fast?: boolean },

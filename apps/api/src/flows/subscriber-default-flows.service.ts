@@ -113,7 +113,9 @@ export const ensureSubscriberFlowsQuick = async (tenantId: string): Promise<void
     }
   }
   try {
+    await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
     await ensureTenantFlowsLinkedToWorkspace(tenantId);
+    await refreshTenantFlowViewerUrls(tenantId);
   } catch {
     // best-effort
   }
@@ -132,12 +134,14 @@ export const syncSubscriberFlowsForListing = async (tenantId: string): Promise<v
   }
   try {
     await ensureTenantFlowsLinkedToWorkspace(tenantId);
+    await refreshTenantFlowViewerUrls(tenantId);
   } catch {
     // best-effort
   }
   if (defaults.length === 0) return;
   try {
     await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
+    await refreshTenantFlowViewerUrls(tenantId);
   } catch {
     // best-effort
   }
@@ -164,6 +168,15 @@ export const listSubscriberTenantFlowsForMaster = async (
     }
   } catch {
     // best-effort
+  }
+
+  if (hasWorkspace) {
+    try {
+      await ensureTenantFlowsLinkedToWorkspace(tenantId);
+      await refreshTenantFlowViewerUrls(tenantId);
+    } catch {
+      // best-effort
+    }
   }
 
   let flows = flowService.listByTenant(tenantId);
