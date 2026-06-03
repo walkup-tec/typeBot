@@ -23,6 +23,11 @@ container_ip() {
   docker inspect "$cid" --format "{{index .NetworkSettings.Networks \"${NET}\" \"IPAddress\"}}"
 }
 
+# Easypanel pode nomear o serviço como painel-typebot-crm ou painel
+resolve_painel_ip() {
+  container_ip painel-typebot-crm || container_ip painel || return 1
+}
+
 traefik_container() {
   docker ps -q -f name=easypanel-traefik -f status=running | head -1
 }
@@ -71,7 +76,7 @@ ensure_traefik_on_overlay() {
 patch_main_yaml() {
   local lp_ip painel_ip builder_ip viewer_ip minio_ip
   lp_ip=$(container_ip paginadevendas || true)
-  painel_ip=$(container_ip painel-typebot-crm || true)
+  painel_ip=$(resolve_painel_ip || true)
   builder_ip=$(container_ip typebot-walkup-builder || true)
   viewer_ip=$(container_ip typebot-walkup-viewer || true)
   minio_ip=$(container_ip minio || true)
@@ -107,6 +112,8 @@ for svc, ip in [
     ("typebot_paginadevendas-1", lp),
     ("typebot_paginadevendas-0", lp),
     ("typebot_painel-typebot-crm-0", painel),
+    ("typebot_painel-0", painel),
+    ("typebot_painel-1", painel),
     ("typebot_typebot-walkup-builder-0", builder),
     ("typebot_typebot-typebot-walkup-builder-0", builder),
     ("typebot_typebot-walkup-viewer-0", viewer),
@@ -119,6 +126,7 @@ for svc, ip in [
 for host, ip, port in [
     ("typebot_paginadevendas", lp, "3000"),
     ("typebot_painel-typebot-crm", painel, "3000"),
+    ("typebot_painel", painel, "3000"),
     ("typebot_typebot-walkup-builder", builder, "3000"),
     ("typebot_typebot-walkup-viewer", viewer, "3000"),
     ("typebot_minio", minio, "9000"),
