@@ -1,4 +1,10 @@
-﻿## 2026-06-03 - Fix fluxo padrão não aparece para assinantes (Drax etapa 6 vazia)
+﻿## 2026-06-03 - Fix build painel Easypanel (publicApiBase ausente)
+
+- **Erro:** `Could not resolve "./lib/publicApiBase"` no `npm run build:admin` (deploy 0969c71).
+- **Fix:** commit `apps/admin/src/lib/publicApiBase.ts`; marker `DEPLOY-2026-06-03-admin-public-api-base-module`.
+- **Log:** `doc/LOG-2026-06-03__fix-admin-build-publicApiBase.md`
+
+## 2026-06-03 - Fix fluxo padrão não aparece para assinantes (Drax etapa 6 vazia)
 
 - **Sintoma:** CLT em "Fluxos compartilhados" no master; assinante Drax sem fluxos (nem padrão nem workspace).
 - **Causas:** `librarySourceId` errado na propagação; GET flows filtrava sem linkar workspace nem garantir defaults.
