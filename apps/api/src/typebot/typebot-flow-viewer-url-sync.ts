@@ -478,7 +478,12 @@ export const filterTenantFlowsForWorkspace = async (
 
   const catalog = await resolveWorkspaceTypebotCatalog(workspaceId);
   if (!catalog.listOk) {
-    return flows.filter((flow) => isLinkedToSystemMasterDefault(flow));
+    return flows.filter(
+      (flow) =>
+        isLinkedToSystemMasterDefault(flow) ||
+        Boolean(String(flow.typebotRemoteId ?? "").trim()) ||
+        Boolean(String(flow.librarySourceId ?? "").trim()),
+    );
   }
 
   return flows.filter(
@@ -643,6 +648,8 @@ const pruneTenantFlowsToMatchWorkspace = async (
   const toRemove: string[] = [];
 
   for (const flow of flows) {
+    if (isLinkedToSystemMasterDefault(flow)) continue;
+
     const remoteId = String(flow.typebotRemoteId ?? "").trim();
     if (!remoteId || !remoteIds.has(remoteId)) {
       const publicId = flowPublicIdKey(flow);

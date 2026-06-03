@@ -52,6 +52,31 @@ const MASTER_SOURCE_EMAIL = SYSTEM_MASTER_OWNER_EMAIL;
 const normalizeText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
 const isMasterSourceTenant = (ownerEmail: string | undefined): boolean =>
   normalizeText(ownerEmail) === normalizeText(MASTER_SOURCE_EMAIL);
+
+/** Importa workspace + padrões da Biblioteca Master no saved-flows do assinante (etapa 6). */
+const syncSubscriberFlowsForListing = async (tenantId: string): Promise<void> => {
+  const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+  if (defaults.length > 0) {
+    await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
+  }
+  try {
+    await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
+  } catch {
+    // best-effort
+  }
+  try {
+    await ensureTenantFlowsLinkedToWorkspace(tenantId);
+  } catch {
+    // best-effort
+  }
+  if (defaults.length === 0) return;
+  try {
+    await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
+  } catch {
+    // best-effort
+  }
+};
+
 const slugifyFlowNickname = (value: string): string =>
   String(value ?? "")
     .toLowerCase()
@@ -279,7 +304,7 @@ export const registerFlowRoutes = (app: Express) => {
     await Promise.allSettled(
       subscribers.map(async (tenant) => {
         await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, defaults, { overwriteExisting: true });
-        await ensureSubscriberSavedFlowsFromDefaults(tenant.id, defaults);
+        await syncSubscriberFlowsForListing(tenant.id);
       }),
     );
     return res.status(200).json(row);
@@ -309,9 +334,11 @@ export const registerFlowRoutes = (app: Express) => {
     }
     try {
       const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
+      await syncSubscriberFlowsForListing(tenantId);
       const tenant = tenantRepository.getById(tenantId);
       invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
-      return res.status(200).json(result);
+      const flowCount = flowService.listByTenant(tenantId).length;
+      return res.status(200).json({ ...result, flowCount });
     } catch (error) {
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",
@@ -426,25 +453,19 @@ export const registerFlowRoutes = (app: Express) => {
     }
 
     let flows = flowService.listByTenant(tenantId);
-    if (hasTypebotWorkspace) {
+    if (hasTypebotWorkspace && !isMasterSourceTenant(tenant?.ownerEmail)) {
       try {
-        await ensureTenantFlowsLinkedToWorkspace(tenantId);
+        await syncSubscriberFlowsForListing(tenantId);
       } catch {
         // best-effort: não bloqueia listagem
       }
-
-      // Conta matriz (walkup@): não filtrar por workspace — evita biblioteca vazia na etapa 6.
-      if (!isMasterSourceTenant(tenant?.ownerEmail)) {
-        const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
-        if (defaults.length > 0) {
-          try {
-            await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
-          } catch {
-            // best-effort
-          }
-        }
-        flows = flowService.listByTenant(tenantId);
-        flows = await filterTenantFlowsForWorkspace(tenantId, flows);
+      flows = flowService.listByTenant(tenantId);
+      flows = await filterTenantFlowsForWorkspace(tenantId, flows);
+    } else if (hasTypebotWorkspace) {
+      try {
+        await ensureTenantFlowsLinkedToWorkspace(tenantId);
+      } catch {
+        // best-effort
       }
     }
     const withAvatar = flows.map(applyTenantLogoAsBotAvatar);

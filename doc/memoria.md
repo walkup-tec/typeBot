@@ -1,4 +1,11 @@
-﻿## 2026-06-04 - UX promote Biblioteca Master (lista compartilhados instantânea)
+﻿## 2026-06-04 - Fix lista fluxos assinante (Drax etapa 6 vazia)
+
+- **Causa:** prune apagava padrão sem remoteId; GET quick não importava workspace.
+- **Commit:** `DEPLOY-2026-06-04-walkup-assinante-fluxos-lista`
+- **Redeploy:** api (+ painel opcional)
+- **Log:** `doc/LOG-2026-06-04__walkup-assinante-fluxos-lista.md`
+
+## 2026-06-04 - UX promote Biblioteca Master (lista compartilhados instantânea)
 
 - **Fix:** otimista + «Processando…»; merge no reload; marker `DEPLOY-2026-06-04-admin-promote-ux-instant`
 - **Redeploy:** painel
