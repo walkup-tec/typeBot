@@ -3052,14 +3052,6 @@ export function App() {
               className={`saved-flows-table master-library-table${isRefreshingMasterLibrary ? " master-library-table--refreshing" : ""}`}
               aria-busy={isRefreshingMasterLibrary}
             >
-              {isRefreshingMasterLibrary ? (
-                <p className="muted master-library-refresh-hint" aria-live="polite">
-                  <span className="processing-inline-wrap">
-                    <i className="processing-inline-dot" aria-hidden="true" />
-                    Sincronizando com o Typebot…
-                  </span>
-                </p>
-              ) : null}
               <div className="saved-flows-header master-library-row">
                 <span>Título</span>
                 <span>Fluxo origem</span>

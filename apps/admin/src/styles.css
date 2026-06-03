@@ -2602,14 +2602,6 @@ button:disabled {
   opacity: 0.92;
 }
 
-.master-library-refresh-hint {
-  margin: 0 0 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(0, 212, 170, 0.08);
-  border: 1px solid rgba(0, 212, 170, 0.22);
-}
-
 .master-library-table--refreshing {
   opacity: 0.55;
   pointer-events: none;
