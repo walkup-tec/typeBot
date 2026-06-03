@@ -7,7 +7,7 @@ $PainelBase = if ($env:SMOKE_PAINEL_BASE) { $env:SMOKE_PAINEL_BASE } else { "htt
 
 $ExpectedApiMarker = "DEPLOY-2026-06-03-api-biblioteca-v4-pos-traefik"
 $ExpectedLibraryLogic = "walkup-live-only-v4-pos-traefik"
-$ExpectedAdminMarker = "DEPLOY-2026-06-03-admin-biblioteca-v4-pos-traefik"
+$ExpectedAdminMarker = "DEPLOY-2026-06-03-admin-biblioteca-refresh-ui"
 
 Write-Host "=== Smoke Biblioteca Master ===" -ForegroundColor Cyan
 Write-Host "API: $ApiBase"

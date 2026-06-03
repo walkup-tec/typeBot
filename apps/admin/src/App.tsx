@@ -569,6 +569,7 @@ export function App() {
   const [lastAutoAttendantDraftKey, setLastAutoAttendantDraftKey] = useState("");
   const [flowLibrary, setFlowLibrary] = useState<FlowLibraryItem[]>([]);
   const [sourceMasterFlows, setSourceMasterFlows] = useState<SavedFlow[]>([]);
+  const [isRefreshingMasterLibrary, setIsRefreshingMasterLibrary] = useState(false);
   const [systemMasterLibrary, setSystemMasterLibrary] = useState<SystemMasterLibraryItem[]>([]);
   /** Títulos digitados na Biblioteca Master antes de promover cada fluxo ativo (obrigatório ≥2 caracteres). */
   const [masterPromoteTitles, setMasterPromoteTitles] = useState<Record<string, string>>({});
@@ -1076,6 +1077,8 @@ export function App() {
   }
 
   async function loadMasterLibrarySourceFlows(options?: { silent?: boolean }) {
+    const showRefreshUi = !options?.silent;
+    if (showRefreshUi) setIsRefreshingMasterLibrary(true);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 45_000);
     try {
@@ -3024,10 +3027,19 @@ export function App() {
               <h3>Biblioteca Master</h3>
               <button
                 type="button"
-                className="ghost-btn flow-list-refresh-btn flow-list-refresh-btn--compact"
+                className={`ghost-btn flow-list-refresh-btn flow-list-refresh-btn--compact${isRefreshingMasterLibrary ? " flow-list-refresh-btn--busy" : ""}`}
+                disabled={isRefreshingMasterLibrary}
+                aria-busy={isRefreshingMasterLibrary}
                 onClick={() => void loadMasterLibrarySourceFlows()}
               >
-                Atualizar lista
+                {isRefreshingMasterLibrary ? (
+                  <span className="processing-inline-wrap">
+                    <i className="processing-inline-dot" aria-hidden="true" />
+                    Atualizando…
+                  </span>
+                ) : (
+                  "Atualizar lista"
+                )}
               </button>
             </div>
             <p className="muted muted-subtle">
@@ -3036,7 +3048,18 @@ export function App() {
                 {ADMIN_BUILD_MARKER}
               </span>
             </p>
-            <div className="saved-flows-table master-library-table">
+            <div
+              className={`saved-flows-table master-library-table${isRefreshingMasterLibrary ? " master-library-table--refreshing" : ""}`}
+              aria-busy={isRefreshingMasterLibrary}
+            >
+              {isRefreshingMasterLibrary ? (
+                <p className="muted master-library-refresh-hint" aria-live="polite">
+                  <span className="processing-inline-wrap">
+                    <i className="processing-inline-dot" aria-hidden="true" />
+                    Sincronizando com o Typebot…
+                  </span>
+                </p>
+              ) : null}
               <div className="saved-flows-header master-library-row">
                 <span>Título</span>
                 <span>Fluxo origem</span>

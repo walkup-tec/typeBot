@@ -2597,6 +2597,25 @@ button:disabled {
   white-space: nowrap;
 }
 
+.flow-list-refresh-btn--busy {
+  cursor: wait;
+  opacity: 0.92;
+}
+
+.master-library-refresh-hint {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(0, 212, 170, 0.22);
+}
+
+.master-library-table--refreshing {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
 .master-title-display-row {
   display: inline-flex;
   align-items: center;
