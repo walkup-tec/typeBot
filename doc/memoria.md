@@ -1,4 +1,11 @@
-﻿## 2026-06-04 - Regra workspace Typebot por tenant (v17)
+﻿## 2026-06-04 - Fix apagou typebots workspace Drax (v18)
+
+- **Causa:** `pruneNonDefaultTypebotsOnTarget` + `overwriteExisting` deletava bots não-padrão no Typebot (promote/sync).
+- **Fix:** prune remoto desativado; Atualizar lista reimporta padrões.
+- **Marker:** `DEPLOY-2026-06-04-walkup-fix-nao-apagar-fluxos-workspace`
+- **Log:** `doc/LOG-2026-06-04__fix-apagou-typebots-workspace-drax.md`
+
+## 2026-06-04 - Regra workspace Typebot por tenant (v17)
 
 - **Regra:** fluxo criado no workspace do assinante X → só tenant X (doc + cursor rule + service)
 - **Arquivo:** `tenant-workspace-flows.service.ts`, `doc/REGRA-fluxos-workspace-por-tenant.md`

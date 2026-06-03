@@ -28,4 +28,5 @@ Fluxo criado no workspace Typebot do assinante **X** → visível **apenas** no 
 
 1. Manter filtro: fluxos sem `librarySourceId` só se pertencem ao catálogo do `typebotWorkspaceId` do tenant.
 2. Manter `assertFlowsBelongToTenant` antes de responder a API.
-3. Documentar em `doc/REGRA-fluxos-workspace-por-tenant.md` se mudar comportamento.
+3. **Nunca** reativar `pruneNonDefaultTypebotsOnTarget` que apaga bots no builder do assinante.
+4. Documentar em `doc/REGRA-fluxos-workspace-por-tenant.md` se mudar comportamento.

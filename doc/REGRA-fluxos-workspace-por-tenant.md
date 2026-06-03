@@ -22,6 +22,11 @@ Fluxos **sem** `librarySourceId` são exclusivos do workspace daquele tenant (cr
 | Listagem master | `GET /api/master/tenants/:tenantId/flows` → `listSubscriberTenantFlowsForMaster` |
 | UI etapa 6 | `tenantWorkspaceFlowsForStep6` = fluxos sem `librarySourceId` |
 
+## Proibido (causa perda de bots)
+
+- **Nunca** apagar typebots do workspace do assinante via sync/promote (`pruneNonDefaultTypebotsOnTarget` desativado).
+- Remoção remota só ao desmarcar padrão na Biblioteca Master (`removeSystemDefaultFromSubscriberWorkspaces`).
+
 ## Operação
 
 - Provisionar workspace: `typebotWorkspaceId` no tenant.

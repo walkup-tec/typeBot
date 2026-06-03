@@ -911,32 +911,16 @@ const deleteTypebotOnTarget = async (typebotId: string): Promise<boolean> => {
   return response.ok;
 };
 
+/**
+ * Nunca apaga typebots criados no workspace do assinante (ex.: Campanha, Drax Sistemas).
+ * `strictMode` legado é ignorado — remoção remota só via `removeSystemDefaultFromSubscriberWorkspaces`.
+ */
 const pruneNonDefaultTypebotsOnTarget = async (
-  workspaceId: string,
-  allowedDefaultNames: Set<string>,
-  strictMode: boolean,
+  _workspaceId: string,
+  _allowedDefaultNames: Set<string>,
+  _strictMode: boolean,
 ): Promise<string[]> => {
-  ensureTargetConfigured();
-  const removedNames: string[] = [];
-  const currentTypebots = await listWorkspaceTypebotsOnTarget(workspaceId);
-  const managedNames = new Set<string>(allowedDefaultNames);
-  if (TYPEBOT_SOURCE_MASTER_WORKSPACE_ID && TYPEBOT_IMPORT_FULL_SOURCE_WORKSPACE) {
-    try {
-      const masterBots = await listSourceWorkspaceTypebots(TYPEBOT_SOURCE_MASTER_WORKSPACE_ID);
-      for (const bot of masterBots) managedNames.add(normalizeText(bot.name));
-    } catch {
-      // Se não conseguir listar matriz, mantém operação com os nomes de padrão permitidos.
-    }
-  }
-  for (const tb of currentTypebots) {
-    const normalized = normalizeText(tb.name);
-    if (!normalized) continue;
-    if (!strictMode && !managedNames.has(normalized)) continue;
-    if (allowedDefaultNames.has(normalized)) continue;
-    const deleted = await deleteTypebotOnTarget(tb.id);
-    if (deleted) removedNames.push(tb.name);
-  }
-  return removedNames;
+  return [];
 };
 
 const publishAllWorkspaceTypebotsOnTarget = async (workspaceId: string): Promise<string[]> => {
@@ -1030,11 +1014,6 @@ const pruneTenantLocalLibraryFlows = (
 
   for (const [normalizedName, flows] of grouped.entries()) {
     if (strictMode && !allowedDefaultNames.has(normalizedName)) {
-      for (const flow of flows) {
-        if (flowRepository.removeById(flow.id)) {
-          removedLocalNames.push(flow.displayLabel ?? flow.nickname);
-        }
-      }
       continue;
     }
     if (flows.length <= 1) continue;
@@ -1233,8 +1212,8 @@ export const syncSystemDefaultsToRealTypebotWorkspace = async (
   const allowedDefaultNames = new Set<string>(
     defaults.map((item) => normalizeText(item.title)).filter((name) => Boolean(name)),
   );
-  const prunedLocalNames = pruneTenantLocalLibraryFlows(tenantId, allowedDefaultNames, overwriteExisting);
-  const prunedNames = await pruneNonDefaultTypebotsOnTarget(workspaceId, allowedDefaultNames, overwriteExisting);
+  const prunedLocalNames = pruneTenantLocalLibraryFlows(tenantId, allowedDefaultNames, false);
+  const prunedNames = await pruneNonDefaultTypebotsOnTarget(workspaceId, allowedDefaultNames, false);
 
   const importedNames: string[] = [];
   const metadataUpdatedNames: string[] = [];

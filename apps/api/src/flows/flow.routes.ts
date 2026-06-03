@@ -302,11 +302,12 @@ export const registerFlowRoutes = (app: Express) => {
       return res.status(400).json({ message: "tenantId obrigatório." });
     }
     try {
-      const result = await syncWorkspaceTypebotFlowsForTenant(tenantId);
       const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
       if (defaults.length > 0) {
+        await syncSystemDefaultsToRealTypebotWorkspace(tenantId, defaults, { overwriteExisting: true });
         await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
       }
+      const result = await syncWorkspaceTypebotFlowsForTenant(tenantId);
       const tenant = tenantRepository.getById(tenantId);
       invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
       const flowCount = flowService.listByTenant(tenantId).length;

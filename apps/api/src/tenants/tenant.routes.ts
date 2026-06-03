@@ -267,8 +267,11 @@ export const registerTenantRoutes = (app: Express) => {
     const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
     try {
-      const importResult = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
       const systemDefaultItems = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+      if (systemDefaultItems.length > 0) {
+        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: true });
+      }
+      const importResult = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
       await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaultItems);
       await refreshTenantWorkspaceFlowUrlsFromTypebot(tenant.id);
       await refreshTenantFlowViewerUrls(tenant.id);
