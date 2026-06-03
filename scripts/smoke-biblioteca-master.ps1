@@ -36,7 +36,7 @@ try {
     Write-Host "OK: logica Biblioteca Master na API" -ForegroundColor Green
   }
 } catch {
-  Write-Host "FALHA: nao foi possivel ler $ApiBase/health — $($_.Exception.Message)" -ForegroundColor Red
+  Write-Host "FALHA: nao foi possivel ler $ApiBase/health - $($_.Exception.Message)" -ForegroundColor Red
   $fail++
 }
 
