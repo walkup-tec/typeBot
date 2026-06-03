@@ -2543,14 +2543,30 @@ button:disabled {
 .master-library-table .saved-flows-row.master-library-row {
   display: grid;
   grid-template-columns:
-    minmax(120px, 0.9fr)
-    minmax(140px, 1.1fr)
-    minmax(100px, 0.75fr)
-    minmax(72px, 0.5fr)
+    minmax(280px, 2.6fr)
     minmax(120px, 1fr)
+    minmax(88px, 0.55fr)
+    minmax(140px, 1.1fr)
     minmax(148px, auto);
   column-gap: 12px;
   align-items: center;
+}
+
+.master-library-table .master-library-row > span:first-child {
+  min-width: 0;
+}
+
+.master-library-table .master-library-row > span:first-child .master-title-display-row {
+  max-width: none;
+  white-space: normal;
+  align-items: flex-start;
+}
+
+.master-library-table .master-library-row > span:first-child .master-title-display {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .master-flow-owner {
@@ -3693,10 +3709,10 @@ button.danger-btn:not(.ghost-btn):hover {
   .saved-flows-header.master-library-row,
   .saved-flows-row.master-library-row {
     grid-template-columns:
-      minmax(180px, 1.2fr)
-      minmax(120px, 0.8fr)
+      minmax(320px, 3fr)
+      minmax(120px, 0.9fr)
       minmax(80px, 0.5fr)
-      minmax(200px, 1.2fr)
+      minmax(180px, 1.2fr)
       minmax(160px, auto);
     column-gap: 16px;
     row-gap: 0;
