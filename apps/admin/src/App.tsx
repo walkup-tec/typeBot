@@ -20,7 +20,8 @@ import {
   type MasterWizardStepIndex,
 } from "./masterWizardProgress";
 import { resolveStatusToastTone } from "./lib/resolveStatusToastTone";
-import { dedupeMasterLibraryFlows } from "./lib/masterLibraryFlows";
+import { dedupeMasterLibraryFlows, MASTER_SOURCE_EMAIL } from "./lib/masterLibraryFlows";
+import { normalizePublicApiBaseUrl, PRODUCTION_API_BASE_URL } from "./lib/publicApiBase";
 import { ADMIN_BUILD_MARKER } from "./deploy-marker";
 
 type TenantDefaultChatTheme = {
@@ -195,11 +196,8 @@ const resolveQueueItemAssignedAgentName = (
 
 /** API pública quando o build não injetou VITE_API_BASE_URL (Easypanel). */
 const PRODUCTION_API_BASE_BY_PAINEL_HOST: Record<string, string> = {
-  "painel.chattypebot.com": "https://app.chattypebot.com",
+  "painel.chattypebot.com": PRODUCTION_API_BASE_URL,
 };
-
-/** `api.chattypebot.com` pode não existir no DNS — o serviço Node responde em `app`. */
-const PRODUCTION_API_BASE_FALLBACK = "https://app.chattypebot.com";
 
 /**
  * Base da API usada pelo painel.
@@ -212,21 +210,11 @@ function resolveApiBase(): string {
     const injected = String(
       (window as Window & { __TYPEBOT_SAAS_API_BASE__?: string }).__TYPEBOT_SAAS_API_BASE__ ?? "",
     ).trim();
-    if (injected) return injected.replace(/\/$/, "");
+    if (injected) return normalizePublicApiBaseUrl(injected);
   }
   const fromVite = import.meta.env.VITE_API_BASE_URL?.trim();
   if (fromVite) {
-    const normalized = fromVite.replace(/\/$/, "");
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname.trim().toLowerCase();
-      if (
-        host === "painel.chattypebot.com" &&
-        /\/\/api\.chattypebot\.com$/i.test(normalized)
-      ) {
-        return PRODUCTION_API_BASE_FALLBACK;
-      }
-    }
-    return normalized;
+    return normalizePublicApiBaseUrl(fromVite);
   }
   if (typeof window !== "undefined") {
     const host = window.location.hostname.trim().toLowerCase();
@@ -2083,27 +2071,90 @@ export function App() {
       setStatusMessage(err.message ?? "Não foi possível definir o fluxo como padrão.");
       return;
     }
+    const promoted = (await response.json()) as SystemMasterLibraryItem;
+    setSystemMasterLibrary((current) => {
+      const without = current.filter(
+        (item) =>
+          item.sourceFlowId !== promoted.sourceFlowId &&
+          item.viewerUrl.trim().toLowerCase() !== flow.url.trim().toLowerCase(),
+      );
+      return [...without, promoted];
+    });
     setStatusMessage("Fluxo definido como padrão e disponibilizado aos assinantes.");
     setMasterPromoteTitles((current) => {
       const next = { ...current };
       delete next[flow.id];
       return next;
     });
-    await Promise.all([
+    void Promise.all([
       loadSystemMasterLibrary(),
       loadFlowLibrary(),
       loadMasterLibrarySourceFlows({ silent: true }),
     ]);
   }
 
+  const restoreSourceFlowAfterLibraryRemove = (removedItem: SystemMasterLibraryItem) => {
+    const flowUrl = removedItem.viewerUrl.trim().toLowerCase();
+    setSourceMasterFlows((current) => {
+      if (
+        current.some(
+          (flow) =>
+            flow.id === removedItem.sourceFlowId || flow.url.trim().toLowerCase() === flowUrl,
+        )
+      ) {
+        return current;
+      }
+      const fromMatrix = walkupMasterLibraryFlows.find(
+        (flow) =>
+          flow.id === removedItem.sourceFlowId || flow.url.trim().toLowerCase() === flowUrl,
+      );
+      if (fromMatrix) return dedupeMasterLibraryFlows([...current, fromMatrix]);
+
+      const publicId = removedItem.viewerUrl.replace(/\/$/, "").split("/").pop() ?? "";
+      return dedupeMasterLibraryFlows([
+        ...current,
+        {
+          id: removedItem.sourceFlowId,
+          createdAt: removedItem.createdAt,
+          nickname: removedItem.suggestedNickname || removedItem.title,
+          displayLabel: removedItem.title,
+          url: removedItem.viewerUrl,
+          typebotPublicId: publicId,
+          typebotRemoteId: removedItem.sourceFlowId,
+          typebotPublished: true,
+          viewerUrlActive: true,
+          ownerEmail: MASTER_SOURCE_EMAIL,
+        },
+      ]);
+    });
+    setMasterPromoteTitles((current) => ({
+      ...current,
+      [removedItem.sourceFlowId]: current[removedItem.sourceFlowId] ?? removedItem.title,
+    }));
+  };
+
   async function removeFromSystemLibrary(id: string) {
+    const removedItem = systemMasterLibrary.find((item) => item.id === id);
+    setSystemMasterLibrary((current) => current.filter((item) => item.id !== id));
+    if (removedItem) restoreSourceFlowAfterLibraryRemove(removedItem);
+
     const response = await fetch(`${apiBase}/api/master/system-library/${id}`, { method: "DELETE" });
     if (!response.ok) {
+      if (removedItem) {
+        setSystemMasterLibrary((current) => {
+          if (current.some((item) => item.id === id)) return current;
+          return [...current, removedItem];
+        });
+      }
       setStatusMessage("Não foi possível remover da Biblioteca Master.");
       return;
     }
-    setStatusMessage("Fluxo removido da Biblioteca Master.");
-    await Promise.all([loadSystemMasterLibrary(), loadFlowLibrary()]);
+    setStatusMessage("Fluxo removido da biblioteca compartilhada. Você pode definí-lo como padrão novamente.");
+    await Promise.all([
+      loadSystemMasterLibrary(),
+      loadFlowLibrary(),
+      loadMasterLibrarySourceFlows({ silent: true }),
+    ]);
   }
 
   async function login() {
@@ -3165,15 +3216,9 @@ export function App() {
                 <span>URL</span>
                 <span>Ação</span>
               </div>
-              {walkupMasterLibraryFlows.map((flow) => {
-                const flowUrl = flow.url.trim().toLowerCase();
-                const alreadyInLibrary = systemMasterLibrary.some(
-                  (item) =>
-                    item.sourceFlowId === flow.id ||
-                    item.viewerUrl.trim().toLowerCase() === flowUrl,
-                );
+              {unpublishedSourceMasterFlows.map((flow) => {
                 const promoteTitle = masterPromoteTitles[flow.id] ?? flow.displayLabel ?? "";
-                const canPromote = !alreadyInLibrary && promoteTitle.trim().length >= 2;
+                const canPromote = promoteTitle.trim().length >= 2;
                 const flowOriginAlias =
                   flow.typebotPublicId?.trim() || flow.displayLabel?.trim() || flow.nickname;
                 const urlActive = flow.viewerUrlActive !== false;
@@ -3226,24 +3271,24 @@ export function App() {
                       </a>
                     </span>
                     <span className="master-library-action-cell">
-                      {alreadyInLibrary ? (
-                        <span className="muted">Já na biblioteca</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="compact-action-btn compact-action-btn-success"
-                          disabled={!canPromote}
-                          onClick={() => void promoteFlowToSystemLibrary(flow, promoteTitle)}
-                        >
-                          Definir como Padrão
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="compact-action-btn compact-action-btn-success"
+                        disabled={!canPromote}
+                        onClick={() => void promoteFlowToSystemLibrary(flow, promoteTitle)}
+                      >
+                        Definir como Padrão
+                      </button>
                     </span>
                   </div>
                 );
               })}
-              {walkupMasterLibraryFlows.length === 0 ? (
-                <p className="muted">Nenhum fluxo Live no workspace Walkup. Publique no Typebot e clique em Atualizar lista.</p>
+              {unpublishedSourceMasterFlows.length === 0 ? (
+                <p className="muted">
+                  {walkupMasterLibraryFlows.length === 0
+                    ? "Nenhum fluxo Live no workspace Walkup. Publique no Typebot e clique em Atualizar lista."
+                    : "Todos os fluxos Live listados já estão em «Fluxos compartilhados». Remova um fluxo compartilhado para voltar a defini-lo como padrão aqui."}
+                </p>
               ) : null}
             </div>
 
