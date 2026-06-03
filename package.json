@@ -20,6 +20,7 @@
     "build:widget": "npm --workspace @typebot-saas/widget run build",
     "build:sales": "npm --workspace @typebot-saas/sales run build",
     "build": "npm run build:api && npm run build:admin && npm run build:widget && npm run build:sales",
+    "predeploy:verify": "node scripts/predeploy-verify-builds.mjs",
     "start:api": "npm --workspace @typebot-saas/api run start",
     "start:admin": "npm --workspace @typebot-saas/admin run start:static",
     "start:sales": "npm --workspace @typebot-saas/sales run start:static",

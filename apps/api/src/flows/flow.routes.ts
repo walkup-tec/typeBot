@@ -35,6 +35,7 @@ import {
 import {
   ensureSubscriberSavedFlowsFromDefaults,
   propagateSystemDefaultFlowToAllTenants,
+  repairAllSubscriberDefaultsOnBoot,
 } from "./subscriber-default-flows.service";
 import {
   ensureTypebotShareMetadataPublished,
@@ -214,6 +215,17 @@ export const registerFlowRoutes = (app: Express) => {
 
   app.get("/api/master/system-library", (_req, res) => {
     return res.status(200).json(listSystemMasterLibrary());
+  });
+
+  app.post("/api/master/system-library/repair-subscriber-defaults", async (_req, res) => {
+    try {
+      const result = await repairAllSubscriberDefaultsOnBoot();
+      return res.status(200).json({ status: "ok", ...result });
+    } catch (error) {
+      return res.status(500).json({
+        message: error instanceof Error ? error.message : "Falha ao reparar fluxos padrão nos assinantes.",
+      });
+    }
   });
 
   app.post("/api/master/system-library/promote", async (req, res) => {

@@ -19,6 +19,12 @@ import { BillingOrderRepository } from "./billing/billing-order.repository";
 import { PixAutomaticRenewalService } from "./billing/pix-automatic-renewal.service";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
 import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
+import { listSystemMasterLibrary } from "./flows/system-master-library.repository";
+import {
+  ensureSubscriberSavedFlowsFromDefaults,
+  repairAllSubscriberDefaultsOnBoot,
+  repairSubscriberDefaultLibrarySourceIds,
+} from "./flows/subscriber-default-flows.service";
 import { seedTenantOnEmptyIfConfigured } from "./bootstrap/seed-tenant-on-empty";
 import {
   countOperationalSeedFlows,
@@ -105,6 +111,11 @@ const runTenantFlowWatcher = async () => {
       try {
         const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
         imported += result.imported;
+        const systemDefaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+        if (systemDefaults.length > 0) {
+          repairSubscriberDefaultLibrarySourceIds(tenant.id);
+          await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaults);
+        }
         if (result.imported === 0 && result.skipReason && result.skipReason !== "no_new_active_typebots") {
           // eslint-disable-next-line no-console
           console.warn(
@@ -378,6 +389,22 @@ async function startApi(): Promise<void> {
         void runMasterAutoSync();
       }, Math.max(20000, TYPEBOT_AUTO_SYNC_INTERVAL_MS));
     }
+
+    setTimeout(() => {
+      void repairAllSubscriberDefaultsOnBoot()
+        .then((result) => {
+          if (result.tenants > 0) {
+            // eslint-disable-next-line no-console
+            console.log(
+              `[subscriber-default-flows] boot repair tenants=${result.tenants} linksFixed=${result.linksFixed}`,
+            );
+          }
+        })
+        .catch((error) => {
+          // eslint-disable-next-line no-console
+          console.warn("[subscriber-default-flows] boot repair failed:", error);
+        });
+    }, 12_000);
 
     if (TYPEBOT_TENANT_FLOW_WATCHER_ENABLED) {
       const watcherIntervalMs = Math.min(8000, Math.max(5000, TYPEBOT_TENANT_FLOW_WATCHER_INTERVAL_MS));

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node ../../scripts/check-admin-source-imports.mjs && vite build",
     "preview": "vite preview",
     "start:static": "serve -s dist --listen tcp://0.0.0.0:3000"
   },

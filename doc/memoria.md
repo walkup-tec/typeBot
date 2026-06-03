@@ -1,4 +1,19 @@
-﻿## 2026-06-03 - Release DEPLOY walkup-correcoes-completas
+﻿## 2026-06-04 - DEPLOY fluxo padrão definitivo (não regredir)
+
+- **Commit:** `DEPLOY-2026-06-04-walkup-fluxo-padrao-definitivo`
+- **API:** reparo automático `librarySourceId` + boot/watcher + endpoint repair
+- **Painel:** `check-admin-source-imports` no build (evita commit sem `publicApiBase.ts`)
+- **Ops:** `npm run predeploy:verify` antes de push; redeploy **api** depois **painel**
+- **Log:** `doc/LOG-2026-06-04__walkup-fluxo-padrao-definitivo.md`
+
+## 2026-06-03 - Painel 502 Bad Gateway
+
+- **Sintoma:** `painel.chattypebot.com` → Bad Gateway.
+- **Causa provável:** Traefik IP morto ou Swarm painel Pending (porta host 3002).
+- **Nota:** teste externo alternou 502/200; API prod ainda marker antigo (`promote-hints-upsert`), não `walkup-correcoes-completas`.
+- **Log:** `doc/LOG-2026-06-03__painel-502-bad-gateway.md`
+
+## 2026-06-03 - Release DEPLOY walkup-correcoes-completas
 
 - **Commit:** `DEPLOY-2026-06-03-walkup-correcoes-completas` (bundle promote + assinantes + painel + limpeza api antiga).
 - **Redeploy:** serviço **api** → **painel** (validar `/health` e etapa 6 Drax).

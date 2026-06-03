@@ -8,8 +8,69 @@ import { FlowService } from "./flow.service";
 import { listSystemMasterLibrary, type SystemMasterLibraryItem } from "./system-master-library.repository";
 
 const flowService = new FlowService(flowRepository);
+const MASTER_SOURCE_EMAIL = "walkup@walkuptec.com.br";
 
 const normalizeText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
+
+const isMasterTenant = (ownerEmail: string | undefined): boolean =>
+  normalizeText(ownerEmail) === normalizeText(MASTER_SOURCE_EMAIL);
+
+/** Corrige vínculos antigos que gravaram sourceFlowId em vez do id do item da Biblioteca Master. */
+export const repairSubscriberDefaultLibrarySourceIds = (tenantId: string): number => {
+  const activeDefaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+  if (activeDefaults.length === 0) return 0;
+
+  const flows = flowService.listByTenant(tenantId);
+  let fixed = 0;
+  for (const item of activeDefaults) {
+    for (const flow of flows) {
+      const lib = normalizeText(flow.librarySourceId);
+      const shouldBe = normalizeText(item.id);
+      if (!lib) {
+        if (normalizeText(flow.url) === normalizeText(item.viewerUrl)) {
+          flowRepository.updateById(flow.id, {
+            librarySourceId: item.id,
+            displayLabel: flow.displayLabel?.trim() || item.title,
+          });
+          fixed += 1;
+        }
+        continue;
+      }
+      if (lib === shouldBe) continue;
+      const matchesLegacy =
+        lib === normalizeText(item.sourceFlowId) ||
+        normalizeText(flow.url) === normalizeText(item.viewerUrl) ||
+        flowMatchesSystemDefaultItem(flow, item);
+      if (matchesLegacy) {
+        flowRepository.updateById(flow.id, {
+          librarySourceId: item.id,
+          displayLabel: flow.displayLabel?.trim() || item.title,
+        });
+        fixed += 1;
+      }
+    }
+  }
+  return fixed;
+};
+
+export const repairAllSubscriberDefaultsOnBoot = async (): Promise<{ tenants: number; linksFixed: number }> => {
+  const activeDefaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+  if (activeDefaults.length === 0) return { tenants: 0, linksFixed: 0 };
+
+  let linksFixed = 0;
+  let tenants = 0;
+  for (const tenant of tenantRepository.list()) {
+    if (!tenant.id || isMasterTenant(tenant.ownerEmail)) continue;
+    tenants += 1;
+    linksFixed += repairSubscriberDefaultLibrarySourceIds(tenant.id);
+    try {
+      await ensureSubscriberSavedFlowsFromDefaults(tenant.id, activeDefaults);
+    } catch {
+      // best-effort por tenant
+    }
+  }
+  return { tenants, linksFixed };
+};
 
 export const flowMatchesSystemDefaultItem = (
   flow: { librarySourceId?: string; url: string; displayLabel?: string; nickname: string },
@@ -31,6 +92,8 @@ export const ensureSubscriberSavedFlowsFromDefaults = async (
 ): Promise<void> => {
   const activeDefaults = defaults.filter((item) => item.isSystemDefault);
   if (activeDefaults.length === 0) return;
+
+  repairSubscriberDefaultLibrarySourceIds(tenantId);
 
   for (const item of activeDefaults) {
     const flows = flowService.listByTenant(tenantId);
@@ -86,19 +149,33 @@ export const propagateSystemDefaultFlowToAllTenants = (payload: {
   sourceFlowNickname: string;
   sourceFlowUrl: string;
 }): void => {
-  const MASTER_SOURCE_EMAIL = "walkup@walkuptec.com.br";
   const tenants = tenantRepository.list();
   for (const tenant of tenants) {
-    const ownerEmail = normalizeText(tenant.ownerEmail);
-    if (!tenant.id || ownerEmail === normalizeText(MASTER_SOURCE_EMAIL)) continue;
+    if (!tenant.id || isMasterTenant(tenant.ownerEmail)) continue;
+    repairSubscriberDefaultLibrarySourceIds(tenant.id);
     const existingFlows = flowService.listByTenant(tenant.id);
-    const hasAlready = existingFlows.some(
+    const existingMatch = existingFlows.find(
       (flow) =>
         normalizeText(flow.url) === normalizeText(payload.sourceFlowUrl) ||
         normalizeText(flow.librarySourceId) === normalizeText(payload.libraryItemId) ||
-        normalizeText(flow.librarySourceId) === normalizeText(payload.sourceFlowId),
+        normalizeText(flow.librarySourceId) === normalizeText(payload.sourceFlowId) ||
+        flowMatchesSystemDefaultItem(flow, {
+          id: payload.libraryItemId,
+          sourceFlowId: payload.sourceFlowId,
+          title: payload.title,
+          viewerUrl: payload.sourceFlowUrl,
+        }),
     );
-    if (hasAlready) continue;
+    if (existingMatch) {
+      const lib = normalizeText(existingMatch.librarySourceId);
+      if (lib !== normalizeText(payload.libraryItemId)) {
+        flowRepository.updateById(existingMatch.id, {
+          librarySourceId: payload.libraryItemId,
+          displayLabel: payload.title,
+        });
+      }
+      continue;
+    }
     try {
       flowService.create(tenant.id, {
         nickname: payload.sourceFlowNickname,
