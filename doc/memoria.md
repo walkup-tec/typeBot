@@ -1,4 +1,12 @@
-﻿## 2026-06-04 - Promote rápido + lista assinante Drax (v14)
+﻿## 2026-06-04 - Drax lista fluxos nunca vazia (v15)
+
+- **Marker:** `DEPLOY-2026-06-04-walkup-drax-fluxos-lista-nao-vazia`
+- **API:** filtro/prune com fallback; `listSubscriberTenantFlowsForMaster`
+- **Painel:** biblioteca + todos fluxos para assinante provisionado
+- **Log:** `doc/LOG-2026-06-04__walkup-drax-fluxos-lista-nao-vazia.md`
+- **Redeploy:** api + painel
+
+## 2026-06-04 - Promote rápido + lista assinante Drax (v14)
 
 - **Commit:** `DEPLOY-2026-06-04-walkup-fluxos-assinantes-promote-rapido`
 - **API:** promote não bloqueia; GET quick leve + sync=1 no Atualizar lista

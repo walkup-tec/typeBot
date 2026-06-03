@@ -475,28 +475,35 @@ const isLinkedToSystemMasterDefault = (flow: SavedFlow): boolean => {
   );
 };
 
+const shouldAlwaysShowInSubscriberFlowList = (flow: SavedFlow): boolean => {
+  if (isLinkedToSystemMasterDefault(flow)) return true;
+  if (String(flow.librarySourceId ?? "").trim()) return true;
+  if (String(flow.typebotRemoteId ?? "").trim()) return true;
+  if (flowPublicIdKey(flow)) return true;
+  return false;
+};
+
 /** Resposta da API: fluxos do workspace do assinante + padrões da Biblioteca Master vinculados. */
 export const filterTenantFlowsForWorkspace = async (
   tenantId: string,
   flows: SavedFlow[],
 ): Promise<SavedFlow[]> => {
+  if (flows.length === 0) return flows;
+
   const tenant = tenantRepository.getById(tenantId);
   const workspaceId = String(tenant?.typebotWorkspaceId ?? "").trim();
   if (!workspaceId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) return flows;
 
   const catalog = await resolveWorkspaceTypebotCatalog(workspaceId);
   if (!catalog.listOk) {
-    return flows.filter(
-      (flow) =>
-        isLinkedToSystemMasterDefault(flow) ||
-        Boolean(String(flow.typebotRemoteId ?? "").trim()) ||
-        Boolean(String(flow.librarySourceId ?? "").trim()),
-    );
+    return flows;
   }
 
-  return flows.filter(
-    (flow) => flowBelongsToWorkspaceCatalog(flow, catalog) || isLinkedToSystemMasterDefault(flow),
+  const filtered = flows.filter(
+    (flow) =>
+      shouldAlwaysShowInSubscriberFlowList(flow) || flowBelongsToWorkspaceCatalog(flow, catalog),
   );
+  return filtered.length > 0 ? filtered : flows;
 };
 
 /** Garante vínculo builder antes de filtrar/prunar (fluxos criados só com URL pública). */
@@ -657,6 +664,7 @@ const pruneTenantFlowsToMatchWorkspace = async (
 
   for (const flow of flows) {
     if (isLinkedToSystemMasterDefault(flow)) continue;
+    if (String(flow.librarySourceId ?? "").trim()) continue;
 
     const remoteId = String(flow.typebotRemoteId ?? "").trim();
     if (!remoteId || !remoteIds.has(remoteId)) {

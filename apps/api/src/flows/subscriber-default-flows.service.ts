@@ -1,9 +1,11 @@
 import { flowRepository, tenantRepository } from "../lib/repositories";
 import {
   ensureTenantFlowsLinkedToWorkspace,
+  filterTenantFlowsForWorkspace,
   importManualWorkspaceTypebotsIntoTenantFlows,
   refreshTenantFlowViewerUrls,
 } from "../typebot/typebot-flow-viewer-url-sync";
+import type { SavedFlow } from "./flow.repository";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 import { FlowService } from "./flow.service";
 import { listSystemMasterLibrary, type SystemMasterLibraryItem } from "./system-master-library.repository";
@@ -115,6 +117,61 @@ export const ensureSubscriberFlowsQuick = async (tenantId: string): Promise<void
   } catch {
     // best-effort
   }
+};
+
+/** Importa workspace + padrões da Biblioteca Master no saved-flows do assinante (etapa 6). */
+export const syncSubscriberFlowsForListing = async (tenantId: string): Promise<void> => {
+  const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+  if (defaults.length > 0) {
+    await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
+  }
+  try {
+    await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
+  } catch {
+    // best-effort
+  }
+  try {
+    await ensureTenantFlowsLinkedToWorkspace(tenantId);
+  } catch {
+    // best-effort
+  }
+  if (defaults.length === 0) return;
+  try {
+    await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
+  } catch {
+    // best-effort
+  }
+};
+
+/** Lista fluxos do assinante para a etapa 6 — nunca devolve [] se houver dados no disco após sync. */
+export const listSubscriberTenantFlowsForMaster = async (
+  tenantId: string,
+  options?: { forceSync?: boolean },
+): Promise<SavedFlow[]> => {
+  const tenant = tenantRepository.getById(tenantId);
+  const hasWorkspace = Boolean(String(tenant?.typebotWorkspaceId ?? "").trim());
+  const forceSync = Boolean(options?.forceSync);
+
+  try {
+    if (hasWorkspace) {
+      if (forceSync) {
+        await syncSubscriberFlowsForListing(tenantId);
+      } else {
+        await ensureSubscriberFlowsQuick(tenantId);
+      }
+    } else {
+      await ensureSubscriberFlowsQuick(tenantId);
+    }
+  } catch {
+    // best-effort
+  }
+
+  let flows = flowService.listByTenant(tenantId);
+  if (hasWorkspace) {
+    const filtered = await filterTenantFlowsForWorkspace(tenantId, flows);
+    flows = filtered.length > 0 ? filtered : flows;
+  }
+  return flows;
 };
 
 export const propagateDefaultsToSubscriberWorkspacesInBackground = (defaults: SystemMasterLibraryItem[]): void => {

@@ -26,16 +26,16 @@ import { attachFlowActiveStatus, invalidateWorkspaceListCache } from "../lib/typ
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
   ensureTenantFlowsLinkedToWorkspace,
-  filterTenantFlowsForWorkspace,
   importManualWorkspaceTypebotsIntoTenantFlows,
   refreshFlowViewerUrlFromTypebot,
   refreshTenantFlowViewerUrls,
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
 import {
-  ensureSubscriberFlowsQuick,
   ensureSubscriberSavedFlowsFromDefaults,
+  listSubscriberTenantFlowsForMaster,
   propagateDefaultsToSubscriberWorkspacesInBackground,
+  syncSubscriberFlowsForListing,
   propagateSystemDefaultFlowToAllTenants,
   repairAllSubscriberDefaultsOnBoot,
 } from "./subscriber-default-flows.service";
@@ -54,30 +54,6 @@ const MASTER_SOURCE_EMAIL = SYSTEM_MASTER_OWNER_EMAIL;
 const normalizeText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
 const isMasterSourceTenant = (ownerEmail: string | undefined): boolean =>
   normalizeText(ownerEmail) === normalizeText(MASTER_SOURCE_EMAIL);
-
-/** Importa workspace + padrões da Biblioteca Master no saved-flows do assinante (etapa 6). */
-const syncSubscriberFlowsForListing = async (tenantId: string): Promise<void> => {
-  const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
-  if (defaults.length > 0) {
-    await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
-  }
-  try {
-    await importManualWorkspaceTypebotsIntoTenantFlows(tenantId);
-  } catch {
-    // best-effort
-  }
-  try {
-    await ensureTenantFlowsLinkedToWorkspace(tenantId);
-  } catch {
-    // best-effort
-  }
-  if (defaults.length === 0) return;
-  try {
-    await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
-  } catch {
-    // best-effort
-  }
-};
 
 const slugifyFlowNickname = (value: string): string =>
   String(value ?? "")
@@ -450,16 +426,12 @@ export const registerFlowRoutes = (app: Express) => {
     let flows = flowService.listByTenant(tenantId);
     if (hasTypebotWorkspace && !isMasterSourceTenant(tenant?.ownerEmail)) {
       try {
-        if (forceSync || !quick) {
-          await syncSubscriberFlowsForListing(tenantId);
-        } else {
-          await ensureSubscriberFlowsQuick(tenantId);
-        }
+        flows = await listSubscriberTenantFlowsForMaster(tenantId, {
+          forceSync: forceSync || !quick,
+        });
       } catch {
-        // best-effort: não bloqueia listagem
+        flows = flowService.listByTenant(tenantId);
       }
-      flows = flowService.listByTenant(tenantId);
-      flows = await filterTenantFlowsForWorkspace(tenantId, flows);
     } else if (hasTypebotWorkspace) {
       try {
         await ensureTenantFlowsLinkedToWorkspace(tenantId);

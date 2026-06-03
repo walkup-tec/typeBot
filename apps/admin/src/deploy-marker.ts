@@ -1,2 +1,2 @@
 /** Altere a cada release do painel admin (Easypanel serviço painel). */
-export const ADMIN_BUILD_MARKER = "DEPLOY-2026-06-04-walkup-fluxos-assinantes-promote-rapido";
+export const ADMIN_BUILD_MARKER = "DEPLOY-2026-06-04-walkup-drax-fluxos-lista-nao-vazia";

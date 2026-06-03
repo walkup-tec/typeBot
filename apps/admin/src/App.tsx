@@ -709,15 +709,12 @@ export function App() {
     () => selectedTenantFlows.filter((flow) => !flow.librarySourceId),
     [selectedTenantFlows],
   );
-  /** Com Typebot provisionado (ou conta matriz), a etapa 6 lista todos os fluxos retornados pela API. */
+  /** Etapa 6: assinantes listam tudo que a API devolveu; matriz mantém só fluxos fora do catálogo. */
   const tenantWorkspaceFlowsForStep6 = useMemo(() => {
-    if (
-      selectedTenantObject &&
-      (isSystemMasterTenant(selectedTenantObject) || isTenantTypebotProvisioned(selectedTenantObject))
-    ) {
-      return selectedTenantFlows;
+    if (selectedTenantObject && isSystemMasterTenant(selectedTenantObject)) {
+      return workspaceOnlyFlows;
     }
-    return workspaceOnlyFlows;
+    return selectedTenantFlows;
   }, [selectedTenantFlows, selectedTenantObject, workspaceOnlyFlows]);
   const activeWorkspaceOnlyFlows = useMemo(
     () =>
@@ -3058,7 +3055,7 @@ export function App() {
                     </button>
                   </div>
                 ) : null}
-                {selectedTenantObject && isTenantTypebotProvisioned(selectedTenantObject) ? null : (
+                {selectedTenantObject && !isSystemMasterTenant(selectedTenantObject) ? (
                 <div className="tenant-profile-card">
                   <h4>Fluxos ativos na biblioteca</h4>
                   {visibleLibraryFlowRows.length === 0 ? (
@@ -3133,7 +3130,7 @@ export function App() {
                     </div>
                   )}
                 </div>
-                )}
+                ) : null}
                 <div className="tenant-profile-card">
                   <h4>Fluxos do workspace Typebot</h4>
                   <p className="muted muted-subtle">
