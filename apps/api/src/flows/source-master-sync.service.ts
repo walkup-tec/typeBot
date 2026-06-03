@@ -23,7 +23,13 @@ const TYPEBOT_SOURCE_VIEWER_BASE_URL = String(
   .trim()
   .replace(/\/$/, "");
 
-type SourceTypebotRow = { id?: string; name?: string | null; publicId?: string | null };
+type SourceTypebotRow = {
+  id?: string;
+  name?: string | null;
+  publicId?: string | null;
+  /** Typebot 3.x: indica versão publicada (Live) no workspace. */
+  publishedTypebotId?: string | null;
+};
 
 type SourceTypebotDetail = {
   publicId?: string | null;
@@ -250,6 +256,14 @@ export type MasterLibrarySyncResult = {
   created: number;
   pruned: number;
   skipReason?: "master_env_missing" | "builder_unreachable" | "workspace_empty";
+  /** Diagnóstico quando active=0 (sem segredos). */
+  debug?: {
+    matrixListed: number;
+    viewerBaseUsed: string;
+    skippedNoPublicId: number;
+    skippedNotPublished: number;
+    skippedViewerUrl: number;
+  };
 };
 
 const syncMasterLibraryFromTypebot = async (sourceTenantId: string): Promise<MasterLibrarySyncResult> => {
@@ -264,7 +278,8 @@ const syncMasterLibraryFromTypebot = async (sourceTenantId: string): Promise<Mas
   let pruned = pruneLegacySomaUrlsOnMasterTenant(savedFlows, protectedFlowIds);
   if (pruned > 0) savedFlows = flowService.listByTenant(sourceTenantId);
 
-  if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !TYPEBOT_SOURCE_VIEWER_BASE_URL) {
+  const viewerBase = resolveMatrixViewerBaseUrl();
+  if (!TYPEBOT_SOURCE_MASTER_WORKSPACE_ID || !viewerBase) {
     return {
       rows: [],
       active: 0,
@@ -288,22 +303,35 @@ const syncMasterLibraryFromTypebot = async (sourceTenantId: string): Promise<Mas
   const activeRemoteIds = new Set<string>();
   const rows: MasterLibrarySourceFlowRow[] = [];
   const owners = tenantOwnerLookup();
+  let skippedNoPublicId = 0;
+  let skippedNotPublished = 0;
+  let skippedViewerUrl = 0;
 
   for (const bot of matrixScan.typebots) {
     const typebotId = String(bot.id ?? "").trim();
     const name = String(bot.name ?? "").trim();
     if (!typebotId || !name) continue;
 
+    const publishedTypebotId = String(bot.publishedTypebotId ?? "").trim();
     const fromList = String(bot.publicId ?? "").trim();
     const detail = await fetchSourceTypebotDetail(typebotId);
-    const publicId = fromList || String(detail?.publicId ?? "").trim() || (await fetchSourcePublicIdByTypebotId(typebotId));
-    if (!publicId) continue;
+    const publicId = await resolveMatrixTypebotPublicId(typebotId, fromList, publishedTypebotId);
+    if (!publicId) {
+      skippedNoPublicId += 1;
+      continue;
+    }
 
-    const typebotPublished = isTypebotPublishedInBuilder(detail, publicId);
-    if (!typebotPublished) continue;
+    const typebotPublished = isTypebotPublishedInBuilder(detail, publicId, publishedTypebotId);
+    if (!typebotPublished) {
+      skippedNotPublished += 1;
+      continue;
+    }
 
-    const viewerUrl = `${TYPEBOT_SOURCE_VIEWER_BASE_URL}/${encodeURIComponent(publicId)}`;
-    if (!isWalkupMatrixViewerUrl(viewerUrl)) continue;
+    const viewerUrl = `${viewerBase}/${encodeURIComponent(publicId)}`;
+    if (!isWalkupMatrixViewerUrl(viewerUrl)) {
+      skippedViewerUrl += 1;
+      continue;
+    }
 
     let flow: SavedFlow;
     try {
@@ -342,12 +370,24 @@ const syncMasterLibraryFromTypebot = async (sourceTenantId: string): Promise<Mas
   const deduped = [...byKey.values()];
   const savedAfter = flowService.listByTenant(sourceTenantId).length;
 
+  const debug =
+    deduped.length === 0
+      ? {
+          matrixListed: matrixScan.typebots.length,
+          viewerBaseUsed: viewerBase,
+          skippedNoPublicId,
+          skippedNotPublished,
+          skippedViewerUrl,
+        }
+      : undefined;
+
   return {
     rows: deduped,
     active: deduped.length,
     created: Math.max(0, savedAfter - savedBefore),
     pruned,
     skipReason: deduped.length === 0 ? "workspace_empty" : undefined,
+    debug,
   };
 };
 
