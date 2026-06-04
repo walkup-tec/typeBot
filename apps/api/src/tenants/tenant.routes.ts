@@ -22,6 +22,7 @@ import { FlowService } from "../flows/flow.service";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
 import { ensureSubscriberSavedFlowsFromDefaults } from "../flows/subscriber-default-flows.service";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
+import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
 import {
   importManualWorkspaceTypebotsIntoTenantFlows,
   refreshTenantFlowViewerUrls,
@@ -267,6 +268,7 @@ export const registerTenantRoutes = (app: Express) => {
     const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
     try {
+      const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenant.id);
       const systemDefaultItems = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
       if (systemDefaultItems.length > 0) {
         await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: false });
@@ -291,6 +293,7 @@ export const registerTenantRoutes = (app: Express) => {
         typebotProvisionStatus: refreshed?.typebotProvisionStatus ?? null,
         flowCount: flows.length,
         hint,
+        recovery,
         ...importResult,
         workspaceId: refreshed?.typebotWorkspaceId ?? importResult.workspaceId ?? null,
         workspaceName: refreshed?.typebotWorkspaceName ?? importResult.workspaceName ?? null,
@@ -306,6 +309,21 @@ export const registerTenantRoutes = (app: Express) => {
 
   app.get("/api/master/tenants/:id/typebot/sync-workspace-flows", syncWorkspaceFlowsHandler);
   app.post("/api/master/tenants/:id/typebot/sync-workspace-flows", syncWorkspaceFlowsHandler);
+
+  app.post("/api/master/tenants/:id/typebot/recover-workspace-flows", async (req, res) => {
+    const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
+    if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+    try {
+      const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenant.id);
+      const flows = flowService.listByTenant(tenant.id);
+      return res.status(200).json({ status: "ok", flowCount: flows.length, recovery });
+    } catch (error) {
+      return res.status(500).json({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Falha na recuperação de fluxos Typebot.",
+      });
+    }
+  });
 
   app.post("/api/master/tenants/:id/typebot/sync-defaults", async (req, res) => {
     const tenant = tenantRepository.getById(req.params.id);

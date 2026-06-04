@@ -31,6 +31,7 @@ import {
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
 import { syncWorkspaceTypebotFlowsForTenant } from "./tenant-workspace-flows.service";
+import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
 import {
   ensureSubscriberSavedFlowsFromDefaults,
   listSubscriberTenantFlowsForMaster,
@@ -302,6 +303,7 @@ export const registerFlowRoutes = (app: Express) => {
       return res.status(400).json({ message: "tenantId obrigatório." });
     }
     try {
+      const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenantId);
       const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
       if (defaults.length > 0) {
         await syncSystemDefaultsToRealTypebotWorkspace(tenantId, defaults, { overwriteExisting: false });
@@ -311,7 +313,7 @@ export const registerFlowRoutes = (app: Express) => {
       const tenant = tenantRepository.getById(tenantId);
       invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
       const flowCount = flowService.listByTenant(tenantId).length;
-      return res.status(200).json({ ...(result ?? {}), flowCount });
+      return res.status(200).json({ ...(result ?? {}), flowCount, recovery });
     } catch (error) {
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",

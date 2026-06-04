@@ -1,4 +1,10 @@
-﻿## 2026-06-04 - Fix apagou typebots workspace Drax (v18)
+﻿## 2026-06-04 - Recuperação vestígios fluxos Drax (v19)
+
+- **Endpoint:** `POST .../typebot/recover-workspace-flows` + recover no Atualizar lista
+- **Marker:** `DEPLOY-2026-06-04-walkup-recupera-fluxos-drax-vestigios`
+- **Log:** `doc/LOG-2026-06-04__recuperacao-fluxos-drax-vestigios.md`
+
+## 2026-06-04 - Fix apagou typebots workspace Drax (v18)
 
 - **Causa:** `pruneNonDefaultTypebotsOnTarget` + `overwriteExisting` deletava bots não-padrão no Typebot (promote/sync).
 - **Fix:** prune remoto desativado; Atualizar lista reimporta padrões.
