@@ -113,8 +113,20 @@ export const collapseDuplicatedMinioPublicPath = (objectPath: string): string =>
   while (previous !== clean) {
     previous = clean;
     clean = clean.replace(/^typebot\/typebot\/public\//i, "typebot/public/");
-    clean = clean.replace(/^public\/typebot\/typebot\/public\//i, "public/typebot/");
+    clean = clean.replace(/^public\/typebot\/typebot\/public\//i, "typebot/public/");
+    clean = clean.replace(/^public\/typebot\/public\//i, "typebot/public/");
     clean = clean.replace(/\/typebot\/typebot\/public\//gi, "/typebot/public/");
+  }
+  return clean;
+};
+
+/** Remove prefixo `typebot/public/` quando a base pública já termina em `/typebot/public`. */
+const stripRedundantTypebotPublicPrefix = (pathAfterPublic: string, publicBase: string): string => {
+  let clean = collapseDuplicatedMinioPublicPath(pathAfterPublic);
+  const baseNorm = publicBase.replace(/\/$/, "").toLowerCase();
+  if (!baseNorm.endsWith("/typebot/public")) return clean;
+  if (clean.toLowerCase().startsWith("typebot/public/")) {
+    clean = clean.slice("typebot/public/".length);
   }
   return clean;
 };
@@ -159,7 +171,7 @@ export const normalizeTypebotMediaUrl = (raw: string): string => {
   const rewriteLocalOrRelative = (pathAfterPublic: string): string => {
     const publicBase = resolveS3PublicBaseUrl();
     if (!publicBase) return "";
-    const clean = collapseDuplicatedMinioPublicPath(pathAfterPublic);
+    const clean = stripRedundantTypebotPublicPrefix(pathAfterPublic, publicBase);
     return `${publicBase}/${clean}`;
   };
 

@@ -265,22 +265,67 @@ const isWrongHandoffRedirectUrl = (rawUrl: string): boolean => {
   if (/\{\{\s*urlflat\s*\}\}/i.test(url)) return false;
   if (/\{\{\s*url\s*\}\}/i.test(url)) return false;
   if (/typebot\/typebot\/public/i.test(url)) return true;
+  if (/public\/typebot\/typebot\/public/i.test(url)) return true;
+  if (/us-east-\w{12,}/i.test(url)) return true;
   if (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(url)) return true;
   if (/\/public\//i.test(url) && /minio|easypanel\.host/i.test(url)) return true;
   if (/\{\{/.test(url) && /image|icon|avatar|logo|favicon|metadata|ogimage|hostavatar/i.test(url)) return true;
   return false;
 };
 
-const patchHandoffRedirectBlock = (blockRecord: Record<string, unknown>): Record<string, unknown> => {
+const isHandoffRedirectUrl = (rawUrl: string): boolean => {
+  const lower = String(rawUrl ?? "").trim().toLowerCase();
+  if (!lower) return false;
+  return (
+    lower.includes("handoff-view") ||
+    lower.includes("/api/typebot/handoff") ||
+    /\{\{\s*url_direct\s*\}\}/.test(lower) ||
+    /\{\{\s*handoffurl\s*\}\}/.test(lower) ||
+    /\{\{\s*redirecttarget\s*\}\}/.test(lower)
+  );
+};
+
+const schemaUsesHandoffWebhook = (schema: Record<string, unknown>): boolean => {
+  const groupsRaw = schema.groups;
+  const groups = Array.isArray(groupsRaw) ? groupsRaw : [];
+  const handoffNeedle = (TYPEBOT_HANDOFF_WEBHOOK_URL || "api/typebot/handoff").trim().toLowerCase();
+  for (const group of groups) {
+    if (!group || typeof group !== "object") continue;
+    const blocksRaw = (group as Record<string, unknown>).blocks;
+    if (!Array.isArray(blocksRaw)) continue;
+    for (const block of blocksRaw) {
+      if (!block || typeof block !== "object") continue;
+      const type = String((block as Record<string, unknown>).type ?? "").trim();
+      if (!isWebhookLikeHttpBlock(type)) continue;
+      const options = (block as Record<string, unknown>).options;
+      if (!options || typeof options !== "object") continue;
+      const webhook = (options as Record<string, unknown>).webhook;
+      if (!webhook || typeof webhook !== "object") continue;
+      const webhookUrl = String((webhook as Record<string, unknown>).url ?? "").trim().toLowerCase();
+      if (webhookUrl.includes("typebot/handoff")) return true;
+      if (handoffNeedle && webhookUrl.includes(handoffNeedle.replace(/^https?:\/\//, ""))) return true;
+    }
+  }
+  return false;
+};
+
+const patchHandoffRedirectBlock = (
+  blockRecord: Record<string, unknown>,
+  patchOptions?: { forceHandoffVariable?: boolean },
+): Record<string, unknown> => {
   const type = String(blockRecord.type ?? "").trim();
   if (type !== "Redirect") return blockRecord;
   const optionsRaw = blockRecord.options;
   if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
-  const options = { ...(optionsRaw as Record<string, unknown>) };
-  const currentUrl = String(options.url ?? "").trim();
-  if (!isWrongHandoffRedirectUrl(currentUrl)) return blockRecord;
-  options.url = HANDOFF_REDIRECT_URL_VARIABLE;
-  return { ...blockRecord, options };
+  const blockOptions = { ...(optionsRaw as Record<string, unknown>) };
+  const currentUrl = String(blockOptions.url ?? "").trim();
+  const mustUseHandoffVar =
+    patchOptions?.forceHandoffVariable === true
+      ? !isHandoffRedirectUrl(currentUrl)
+      : isWrongHandoffRedirectUrl(currentUrl);
+  if (!mustUseHandoffVar) return blockRecord;
+  blockOptions.url = HANDOFF_REDIRECT_URL_VARIABLE;
+  return { ...blockRecord, options: blockOptions };
 };
 
 const patchHandoffWebhookAndRedirectConfig = (
@@ -288,6 +333,7 @@ const patchHandoffWebhookAndRedirectConfig = (
   tenant: Tenant,
   runtimeVars?: HandoffRuntimeVars,
 ): Record<string, unknown> => {
+  const forceHandoffRedirect = schemaUsesHandoffWebhook(schema);
   const groupsRaw = schema.groups;
   const groups = Array.isArray(groupsRaw) ? groupsRaw : [];
   const nextGroups = groups.map((group) => {
@@ -299,7 +345,9 @@ const patchHandoffWebhookAndRedirectConfig = (
       if (!block || typeof block !== "object") return block;
       const blockRecord = { ...(block as Record<string, unknown>) };
       const type = String(blockRecord.type ?? "").trim();
-      if (type === "Redirect") return patchHandoffRedirectBlock(blockRecord);
+      if (type === "Redirect") {
+        return patchHandoffRedirectBlock(blockRecord, { forceHandoffVariable: forceHandoffRedirect });
+      }
       if (!isWebhookLikeHttpBlock(type)) return blockRecord;
       const optionsRaw = blockRecord.options;
       if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
