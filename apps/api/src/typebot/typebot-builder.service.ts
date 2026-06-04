@@ -216,30 +216,64 @@ const mergeHandoffWebhookLeadFields = (rawBody: string, variableNames: string[])
   }
 };
 
-const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntimeVars): string => {
-  const body = String(rawBody ?? "").trim();
-  if (!body) return body;
+const buildDefaultHandoffWebhookBody = (runtimeVars: HandoffRuntimeVars): Record<string, unknown> => {
+  const payload: Record<string, unknown> = {
+    contactName: "{{Nome}}",
+    source: "typebot",
+    sourceFlowLabel: "{{sourceFlowLabel}}",
+    typebotViewerUrl: "{{typebotViewerUrl}}",
+    tenantId: "{{tenantId}}",
+  };
   const tenantId = String(runtimeVars.tenantId ?? "").trim();
   const sourceFlowLabel = String(runtimeVars.sourceFlowLabel ?? "").trim();
   const typebotViewerUrl = String(runtimeVars.typebotViewerUrl ?? "").trim();
+  if (tenantId) payload.tenantId = tenantId;
+  if (sourceFlowLabel) payload.sourceFlowLabel = sourceFlowLabel;
+  if (typebotViewerUrl) payload.typebotViewerUrl = typebotViewerUrl;
+  return payload;
+};
+
+const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntimeVars): string => {
+  const body = String(rawBody ?? "").trim();
+  const tenantId = String(runtimeVars.tenantId ?? "").trim();
+  const sourceFlowLabel = String(runtimeVars.sourceFlowLabel ?? "").trim();
+  const typebotViewerUrl = String(runtimeVars.typebotViewerUrl ?? "").trim();
+
+  if (!body) {
+    return JSON.stringify(buildDefaultHandoffWebhookBody(runtimeVars), null, 2);
+  }
+
   try {
     const parsed = JSON.parse(body) as Record<string, unknown>;
     if (parsed && typeof parsed === "object") {
       if (tenantId) parsed.tenantId = tenantId;
       if (sourceFlowLabel) parsed.sourceFlowLabel = sourceFlowLabel;
       if (typebotViewerUrl) parsed.typebotViewerUrl = typebotViewerUrl;
-      return JSON.stringify(parsed);
+      if (!parsed.contactName) parsed.contactName = "{{Nome}}";
+      if (!parsed.source) parsed.source = "typebot";
+      return JSON.stringify(parsed, null, 2);
     }
   } catch {
     // fallback regex abaixo
   }
   let nextBody = body;
-  if (tenantId) nextBody = nextBody.replace(/"tenantId"\s*:\s*"[^"]*"/, `"tenantId": "${tenantId}"`);
+  if (tenantId) {
+    nextBody = /"tenantId"\s*:/i.test(nextBody)
+      ? nextBody.replace(/"tenantId"\s*:\s*"[^"]*"/, `"tenantId": "${tenantId}"`)
+      : nextBody.replace(/\{\s*\}/, `{"tenantId": "${tenantId}"}`);
+  }
   if (sourceFlowLabel) {
-    nextBody = nextBody.replace(/"sourceFlowLabel"\s*:\s*"[^"]*"/, `"sourceFlowLabel": "${sourceFlowLabel}"`);
+    nextBody = /"sourceFlowLabel"\s*:/i.test(nextBody)
+      ? nextBody.replace(/"sourceFlowLabel"\s*:\s*"[^"]*"/, `"sourceFlowLabel": "${sourceFlowLabel}"`)
+      : nextBody.replace(/\{\s*\}/, `{"sourceFlowLabel": "${sourceFlowLabel}"}`);
   }
   if (typebotViewerUrl) {
-    nextBody = nextBody.replace(/"typebotViewerUrl"\s*:\s*"[^"]*"/, `"typebotViewerUrl": "${typebotViewerUrl}"`);
+    nextBody = /"typebotViewerUrl"\s*:/i.test(nextBody)
+      ? nextBody.replace(/"typebotViewerUrl"\s*:\s*"[^"]*"/, `"typebotViewerUrl": "${typebotViewerUrl}"`)
+      : nextBody.replace(/\{\s*\}/, `{"typebotViewerUrl": "${typebotViewerUrl}"}`);
+  }
+  if (!/"contactName"\s*:/i.test(nextBody)) {
+    nextBody = nextBody.replace(/\{\s*\}/, '{"contactName": "{{Nome}}"');
   }
   return nextBody;
 };
