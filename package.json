@@ -25,6 +25,7 @@
     "start:admin": "npm --workspace @typebot-saas/admin run start:static",
     "start:sales": "npm --workspace @typebot-saas/sales run start:static",
     "easypanel:deploy-empty": "node scripts/easypanel-deploy-empty.cjs",
+    "easypanel:commit": "node scripts/git-commit-easypanel.cjs",
     "backup:predeploy": "powershell -ExecutionPolicy Bypass -File ./scripts/predeploy-backup.ps1",
     "smoke:prod": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke-prod.ps1",
     "rollback:data": "powershell -ExecutionPolicy Bypass -File ./scripts/rollback.ps1"

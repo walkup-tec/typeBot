@@ -34,11 +34,25 @@ Isto faz:
 
 O próximo build no Easypanel passa a mostrar **essa** mensagem como identificador do deploy.
 
+## SHA no título (regra global Cursor)
+
+O Easypanel **não** mostra o hash Git à parte — só o **assunto do commit**. Se a mensagem for só `fix: texto…` (como em deploys automáticos sem SHA), o painel fica sem referência `ee2ce32`.
+
+**Commits com código** (recomendado):
+
+```bash
+npm run easypanel:commit -- "fix: hostAvatar soma-minio → typebot-minio"
+# Assunto final: [ee2ce32] fix: hostAvatar soma-minio → typebot-minio
+git push
+```
+
+Script: `scripts/git-commit-easypanel.cjs` (amend após commit para prefixar `[shortsha]`).
+
 ## Boas práticas
 
-- **Um commit real** por alteração (`feat:`, `fix:`, `chore:`) com mensagem curta e única — já melhora o histórico.
-- Para **só reenviar** o mesmo código ao FTP/Easypanel: usa o script acima em vez de repetir “redeploy” sem texto.
-- Evita depender de títulos genéricos gerados por ferramentas; o que importa para rastreio é o **teu** prefixo + serviço + descrição.
+- **Um commit real** por alteração com `[shortsha]` no assunto (via `easypanel:commit`).
+- Para **só reenviar** o mesmo código: `npm run easypanel:deploy-empty -- "api: motivo"`.
+- Evita `Co-authored-by:` no assunto — ocupa o título do deploy no Easypanel.
 
 ## NPM
 
