@@ -3961,5 +3961,6 @@
 - Causa provável: SMTP no serviço **Typebot** (SMTP_USERNAME) mas não no serviço **api** (SMTP_USER/SMTP_PASS).
 - API retorna `emailDelivery.status=skipped` quando SMTP ausente; admin antes não mostrava isso.
 - Código: `/health.smtpConfigured`, `POST .../resend-welcome`, feedback no `createTenant` do admin.
-- Marker: `DEPLOY-2026-06-04-smtp-health-resend-welcome`.
+- Marker: `DEPLOY-2026-06-04-smtp-health-resend-welcome` → `DEPLOY-2026-06-04-resend-welcome-ui`.
 - Log: `doc/LOG-2026-06-04__173000__diagnostico-email-somaconecta-smtp-api.md`.
+- **Admin Assinantes:** botão "Reenviar e-mail" + modal senha; API reenvio sincroniza senha do master. Log: `doc/LOG-2026-06-04__181500__botao-reenviar-boas-vindas-assinantes.md`.

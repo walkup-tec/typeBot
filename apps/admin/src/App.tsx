@@ -569,6 +569,10 @@ export function App() {
   const [selectedLeadTenantId, setSelectedLeadTenantId] = useState("");
   const [isSavingSubscriber, setIsSavingSubscriber] = useState(false);
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
+  const [isResendWelcomeModalOpen, setIsResendWelcomeModalOpen] = useState(false);
+  const [resendWelcomeTenant, setResendWelcomeTenant] = useState<Tenant | null>(null);
+  const [resendWelcomePassword, setResendWelcomePassword] = useState("");
+  const [isResendingWelcome, setIsResendingWelcome] = useState(false);
   const [agentId, setAgentId] = useState("atendente-01");
   const [savedFlowsByTenant, setSavedFlowsByTenant] = useState<Record<string, SavedFlow[]>>({});
   const [flowStatuses, setFlowStatuses] = useState<Record<string, FlowStatus>>({});
@@ -1688,6 +1692,63 @@ export function App() {
       await loadTenants();
     } finally {
       setIsSavingSubscriber(false);
+    }
+  }
+
+  function openResendWelcomeModal(tenant: Tenant) {
+    setResendWelcomeTenant(tenant);
+    setResendWelcomePassword("");
+    setIsResendWelcomeModalOpen(true);
+  }
+
+  function closeResendWelcomeModal() {
+    setIsResendWelcomeModalOpen(false);
+    setResendWelcomeTenant(null);
+    setResendWelcomePassword("");
+  }
+
+  async function confirmResendWelcomeEmail() {
+    if (!resendWelcomeTenant) return;
+    if (resendWelcomePassword.trim().length < 4) {
+      setStatusMessage("Informe a senha (mín. 4 caracteres) que será enviada no e-mail de boas-vindas.");
+      return;
+    }
+
+    setIsResendingWelcome(true);
+    try {
+      const response = await fetch(
+        `${apiBase}/api/master/tenants/${encodeURIComponent(resendWelcomeTenant.id)}/resend-welcome`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ initialPassword: resendWelcomePassword.trim() }),
+        },
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        emailDelivery?: CreateAttendantResponse["emailDelivery"];
+      };
+      if (!response.ok) {
+        setStatusMessage(payload.message ?? "Falha ao reenviar e-mail de boas-vindas.");
+        return;
+      }
+
+      const delivery = payload.emailDelivery;
+      if (delivery?.status === "sent") {
+        setStatusMessage(`E-mail de boas-vindas reenviado para ${resendWelcomeTenant.ownerEmail}.`);
+      } else if (delivery?.status === "failed") {
+        setStatusMessage(delivery.message ?? "Falha ao reenviar e-mail de boas-vindas.");
+      } else if (delivery?.status === "skipped") {
+        setStatusMessage(
+          delivery.message ??
+            "E-mail não enviado. Configure SMTP no serviço API (SMTP_HOST, SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_MODE=smtp).",
+        );
+      } else {
+        setStatusMessage("Solicitação de reenvio concluída.");
+      }
+      closeResendWelcomeModal();
+    } finally {
+      setIsResendingWelcome(false);
     }
   }
 
@@ -3597,6 +3658,16 @@ export function App() {
                       <button className="ghost-btn" onClick={() => openEditSubscriberModal(tenant)}>
                         Editar
                       </button>
+                      {!isSystemMasterTenant(tenant) ? (
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          title="Reenviar e-mail de boas-vindas com senha de acesso"
+                          onClick={() => openResendWelcomeModal(tenant)}
+                        >
+                          Reenviar e-mail
+                        </button>
+                      ) : null}
                     </span>
                   </div>
                 ))}
@@ -3694,6 +3765,52 @@ export function App() {
                 </button>
                 <button onClick={saveTenantFlow}>Salvar fluxo</button>
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isResendWelcomeModalOpen && resendWelcomeTenant ? (
+          <div className="modal-overlay" onClick={() => !isResendingWelcome && closeResendWelcomeModal()}>
+            <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+              <h3>Reenviar boas-vindas</h3>
+              <p className="muted">
+                Será enviado um novo e-mail para <strong>{resendWelcomeTenant.ownerEmail}</strong> (
+                {resendWelcomeTenant.name}) com o link de acesso e a senha informada abaixo. A senha do master do
+                assinante será atualizada para coincidir com o e-mail.
+              </p>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (isResendingWelcome) return;
+                  confirmResendWelcomeEmail().catch(() => setStatusMessage("Falha ao reenviar e-mail de boas-vindas."));
+                }}
+              >
+                <div className="grid-form">
+                  <input
+                    type="password"
+                    placeholder="Senha de acesso no e-mail (mín. 4 caracteres)"
+                    value={resendWelcomePassword}
+                    onChange={(event) => setResendWelcomePassword(event.target.value)}
+                    disabled={isResendingWelcome}
+                    minLength={4}
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={closeResendWelcomeModal}
+                    disabled={isResendingWelcome}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={isResendingWelcome}>
+                    {isResendingWelcome ? "Enviando..." : "Enviar e-mail"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         ) : null}

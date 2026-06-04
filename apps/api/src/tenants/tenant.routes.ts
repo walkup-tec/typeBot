@@ -16,6 +16,7 @@ import {
   updateTenantStatusSchema,
   updateTenantChatThemeSchema,
 } from "./tenant.service";
+import { hashAttendantPassword } from "../attendants/attendant.service";
 import { deliverTenantWelcomeEmail } from "../mail/tenant-welcome-delivery";
 import { z } from "zod";
 import { FlowService } from "../flows/flow.service";
@@ -231,12 +232,25 @@ export const registerTenantRoutes = (app: Express) => {
       const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
       if (!tenant) return res.status(404).json({ message: "Assinante não encontrado." });
       const input = resendTenantWelcomeSchema.parse(req.body);
+      const masterAttendant = attendantRepository
+        .listByTenant(tenant.id)
+        .find((row) => row.role === "master");
+      if (masterAttendant) {
+        attendantRepository.updateById(masterAttendant.id, {
+          passwordHash: hashAttendantPassword(input.initialPassword),
+        });
+      }
       const emailDelivery = await deliverTenantWelcomeEmail({
         ownerEmail: tenant.ownerEmail,
         recipientName: tenant.name,
         initialPassword: input.initialPassword,
       });
-      return res.status(200).json({ ok: true, ownerEmail: tenant.ownerEmail, emailDelivery });
+      return res.status(200).json({
+        ok: true,
+        ownerEmail: tenant.ownerEmail,
+        passwordSynced: Boolean(masterAttendant),
+        emailDelivery,
+      });
     } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
     }

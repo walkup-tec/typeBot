@@ -656,7 +656,7 @@ button:disabled {
 .subscriber-actions {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
 }
 
