@@ -4,6 +4,16 @@ Atualizado em **2026-06-02** após migração do projeto `soma`.
 
 **Checklist completo (502 + login + upload):** [`doc/TYPEBOT-MIGRACAO-WALKUP-FIX-COMPLETO.md`](TYPEBOT-MIGRACAO-WALKUP-FIX-COMPLETO.md)
 
+### Upload de imagens (`generateUploadUrl` → `INTERNAL_SERVER_ERROR`)
+
+Correção já validada em produção (maio/2026): **env S3 no builder e no viewer** — não é fix na API SaaS.
+
+1. Copiar bloco: [`doc/EASYPANEL-TYPEBOT-S3-UPLOAD-CORRECAO.env`](EASYPANEL-TYPEBOT-S3-UPLOAD-CORRECAO.env)
+2. Easypanel → `typebot-walkup-builder` e `typebot-walkup-viewer` → remover `S3_PUBLIC_CUSTOM_DOMAIN` e `S3_ACCESS_KEY` com `@`
+3. `S3_SECRET_KEY` = secret da access key **typebotstorage** (console MinIO, não o e-mail root)
+4. Redeploy **builder**, depois **viewer**
+5. VPS (opcional): `bash scripts/fix-typebot-s3-upload-vps.sh`
+
 ## URLs públicas
 
 - Builder: `https://typebot-typebot-walkup-builder.achpyp.easypanel.host`
@@ -77,6 +87,9 @@ HOSTNAME=0.0.0.0
 ```env
 TYPEBOT_BUILDER_API_BASE_URL=https://typebot-typebot-walkup-builder.achpyp.easypanel.host/api
 TYPEBOT_TARGET_VIEWER_BASE_URL=https://typebot-typebot-walkup-viewer.achpyp.easypanel.host
+# Avatar/ícone do bot no Typebot (logo público + reescrita URLs MinIO antigas)
+TYPEBOT_AVATAR_PUBLIC_BASE_URL=https://app.chattypebot.com
+TYPEBOT_S3_PUBLIC_BASE_URL=https://typebot-minio.achpyp.easypanel.host/typebot/public
 ```
 
 ## Painel (serviço `painel` — build)
@@ -95,5 +108,6 @@ VITE_SYSTEM_MASTER_TYPEBOT_BUILDER_URL=https://typebot-typebot-walkup-builder.ac
 | WRONGPASS Redis | `REDIS_URL` com host `typebot_typebot-walkup-redis` e senha atual |
 | Login sem e-mail | SMTP Gmail (não cPanel) para Workspace |
 | invalid hostname upload | S3 access key **sem @**; `S3_ENDPOINT` = domínio HTTPS MinIO |
+| Imagens no fluxo OK, avatar/ícone quebrado | API com `TYPEBOT_S3_PUBLIC_BASE_URL` + `repair-media`; logo em `profileImageUrl` (data URI ou URL) |
 
 Ver também: `doc/LOG-2026-05-18__205226__snapshot-encerramento-typebot-easypanel.md`

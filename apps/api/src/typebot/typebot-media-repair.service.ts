@@ -7,6 +7,7 @@ import { ensureTypebotShareMetadataPublished } from "./typebot-share-metadata.se
 import {
   buildTenantPublicLogoUrl,
   diagnoseTypebotStorageEnv,
+  isBrokenTypebotMediaUrl,
   sanitizeTypebotSchemaMedia,
 } from "./typebot-media-sanitize.service";
 
@@ -22,7 +23,11 @@ const buildTargetHeaders = (): Record<string, string> => ({
   Authorization: `Bearer ${TYPEBOT_TARGET_BUILDER_API_TOKEN}`,
 });
 
-const sanitizeWorkspaceIconOnTarget = async (workspaceId: string, fallbackName: string): Promise<boolean> => {
+const sanitizeWorkspaceIconOnTarget = async (
+  workspaceId: string,
+  fallbackName: string,
+  tenant: Tenant,
+): Promise<boolean> => {
   if (!TYPEBOT_TARGET_BUILDER_API_BASE_URL || !TYPEBOT_TARGET_BUILDER_API_TOKEN) return false;
   const normalizedWorkspaceId = String(workspaceId ?? "").trim();
   if (!normalizedWorkspaceId) return false;
@@ -42,15 +47,17 @@ const sanitizeWorkspaceIconOnTarget = async (workspaceId: string, fallbackName: 
   if (!workspace) return false;
 
   const icon = String(workspace.icon ?? "").trim();
-  if (!/^data:image\//i.test(icon)) return false;
+  const needsFix = /^data:image\//i.test(icon) || isBrokenTypebotMediaUrl(icon);
+  if (!needsFix) return false;
 
   const safeName = String(workspace.name ?? fallbackName ?? "Workspace").trim() || "Workspace";
+  const replacementIcon = buildTenantPublicLogoUrl(tenant) || "";
   const patch = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/workspaces/${encodeURIComponent(normalizedWorkspaceId)}`,
     {
       method: "PATCH",
       headers: buildTargetHeaders(),
-      body: JSON.stringify({ name: safeName, icon: "" }),
+      body: JSON.stringify({ name: safeName, icon: replacementIcon }),
     },
   );
   return patch.ok;
@@ -118,33 +125,6 @@ const repairSingleTypebotOnTarget = async (
   }
 
   const sanitized = sanitizeTypebotSchemaMedia(payload.typebot, tenant);
-  const publicLogo = buildTenantPublicLogoUrl(tenant);
-  if (publicLogo && !String(sanitized.icon ?? "").trim()) {
-    sanitized.icon = publicLogo;
-  }
-
-  const themeRaw = sanitized.theme;
-  const theme =
-    themeRaw && typeof themeRaw === "object"
-      ? ({ ...(themeRaw as Record<string, unknown>) } as Record<string, unknown>)
-      : {};
-  const chatRaw = theme.chat;
-  const chat =
-    chatRaw && typeof chatRaw === "object"
-      ? ({ ...(chatRaw as Record<string, unknown>) } as Record<string, unknown>)
-      : {};
-  const hostAvatarRaw = chat.hostAvatar;
-  const hostAvatar =
-    hostAvatarRaw && typeof hostAvatarRaw === "object"
-      ? ({ ...(hostAvatarRaw as Record<string, unknown>) } as Record<string, unknown>)
-      : {};
-  if (publicLogo) {
-    hostAvatar.isEnabled = true;
-    hostAvatar.url = publicLogo;
-    chat.hostAvatar = hostAvatar;
-    theme.chat = chat;
-    sanitized.theme = theme;
-  }
 
   const patchResponse = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`,
@@ -217,6 +197,7 @@ export const repairTenantTypebotMediaOnTarget = async (tenantId: string): Promis
   const workspaceIconCleared = await sanitizeWorkspaceIconOnTarget(
     workspaceId,
     String(tenant.typebotWorkspaceName ?? tenant.name ?? "Workspace"),
+    tenant,
   );
 
   const bots = await listWorkspaceTypebotIds(workspaceId);

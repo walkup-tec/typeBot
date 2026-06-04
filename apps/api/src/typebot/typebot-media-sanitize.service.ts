@@ -8,6 +8,19 @@ const DEFAULT_SAAS_PUBLIC_API_BASE = "https://app.chattypebot.com";
 
 const isDataImageValue = (value: string): boolean => /^data:image\//i.test(String(value ?? "").trim());
 
+/** URL inutilizável no builder remoto (localhost, vazia ou path MinIO sem base pública na API). */
+export const isBrokenTypebotMediaUrl = (raw: string): boolean => {
+  const value = String(raw ?? "").trim();
+  if (!value) return true;
+  if (isDataImageValue(value)) return false;
+  if (/localhost|127\.0\.0\.1/i.test(value)) return true;
+  if (/^https?:\/\//i.test(value)) {
+    const rewritten = normalizeTypebotMediaUrl(value);
+    return !rewritten;
+  }
+  return !normalizeTypebotMediaUrl(value);
+};
+
 export const resolveS3PublicBaseUrl = (): string => {
   const explicit = String(process.env.TYPEBOT_S3_PUBLIC_BASE_URL ?? "").trim();
   if (explicit) return explicit.replace(/\/$/, "");
@@ -137,6 +150,76 @@ const walkAndSanitizeMedia = (node: unknown, parentKey: string, depth: number): 
   return record;
 };
 
+const resolveTenantIconAndAvatarUrls = (
+  tenant: Tenant,
+): { iconUrl: string; avatarUrl: string } => {
+  const iconRaw = String(tenant.profileImageUrl ?? "").trim();
+  const tenantPublicLogoUrl = buildTenantPublicLogoUrl(tenant);
+  const iconHttpUrl =
+    /^https?:\/\//i.test(iconRaw) && !/localhost|127\.0\.0\.1/i.test(iconRaw) ? iconRaw : "";
+  const iconUrl = tenantPublicLogoUrl || iconHttpUrl;
+  const avatarUrl = iconUrl || (isDataImageValue(iconRaw) ? iconRaw : "");
+  return { iconUrl, avatarUrl };
+};
+
+/** Reaplica logo do tenant em icon, hostAvatar e favIconUrl quando URL está quebrada ou vazia. */
+export const applyTenantBrandMediaToTypebotSchema = (
+  schema: Record<string, unknown>,
+  tenant: Tenant,
+): Record<string, unknown> => {
+  const next = { ...schema };
+  const { iconUrl, avatarUrl } = resolveTenantIconAndAvatarUrls(tenant);
+  if (!iconUrl && !avatarUrl) return next;
+
+  const currentIcon = String(next.icon ?? "").trim();
+  if (iconUrl && (isBrokenTypebotMediaUrl(currentIcon) || isDataImageValue(currentIcon))) {
+    next.icon = iconUrl;
+  }
+
+  const settingsRaw = next.settings;
+  const settings =
+    settingsRaw && typeof settingsRaw === "object"
+      ? ({ ...(settingsRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const metadataRaw = settings.metadata;
+  const metadata =
+    metadataRaw && typeof metadataRaw === "object"
+      ? ({ ...(metadataRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const favRaw = String(metadata.favIconUrl ?? "").trim();
+  if (iconUrl && (isBrokenTypebotMediaUrl(favRaw) || isDataImageValue(favRaw) || !favRaw)) {
+    metadata.favIconUrl = iconUrl;
+  }
+  settings.metadata = metadata;
+  next.settings = settings;
+
+  const themeRaw = next.theme;
+  const theme =
+    themeRaw && typeof themeRaw === "object"
+      ? ({ ...(themeRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const chatRaw = theme.chat;
+  const chat =
+    chatRaw && typeof chatRaw === "object"
+      ? ({ ...(chatRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const hostAvatarRaw = chat.hostAvatar;
+  const hostAvatar =
+    hostAvatarRaw && typeof hostAvatarRaw === "object"
+      ? ({ ...(hostAvatarRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const hostUrl = String(hostAvatar.url ?? "").trim();
+  if (avatarUrl && (isBrokenTypebotMediaUrl(hostUrl) || !hostUrl)) {
+    hostAvatar.isEnabled = true;
+    hostAvatar.url = avatarUrl.startsWith("http") ? avatarUrl : iconUrl || avatarUrl;
+  }
+  chat.hostAvatar = hostAvatar;
+  theme.chat = chat;
+  next.theme = theme;
+
+  return next;
+};
+
 /** Remove data:image de icon/top-level e reescreve URLs localhost em groups/theme/settings. */
 export const sanitizeTypebotSchemaMedia = (
   schema: Record<string, unknown>,
@@ -166,6 +249,10 @@ export const sanitizeTypebotSchemaMedia = (
 
   const descriptionRaw = String(next.description ?? "").trim();
   if (isDataImageValue(descriptionRaw)) next.description = "";
+
+  if (tenant) {
+    next = applyTenantBrandMediaToTypebotSchema(next, tenant);
+  }
 
   return next;
 };

@@ -8,6 +8,7 @@ import { importManualWorkspaceTypebotsIntoTenantFlows, refreshTenantFlowViewerUr
 import {
   buildTenantPublicLogoUrl,
   buildTenantPublicShareImageUrl,
+  isBrokenTypebotMediaUrl,
   sanitizeTypebotSchemaMedia,
 } from "./typebot-media-sanitize.service";
 
@@ -500,7 +501,11 @@ const createWorkspace = async (tenant: Tenant): Promise<{ id: string; name: stri
   return { id: workspaceId, name: workspaceName };
 };
 
-const sanitizeWorkspaceIconOnTarget = async (workspaceId: string, fallbackName: string): Promise<void> => {
+const sanitizeWorkspaceIconOnTarget = async (
+  workspaceId: string,
+  fallbackName: string,
+  tenant: Tenant,
+): Promise<void> => {
   ensureTargetConfigured();
   const normalizedWorkspaceId = String(workspaceId ?? "").trim();
   if (!normalizedWorkspaceId) return;
@@ -517,17 +522,19 @@ const sanitizeWorkspaceIconOnTarget = async (workspaceId: string, fallbackName: 
   );
   if (!workspace) return;
   const icon = String(workspace.icon ?? "").trim();
-  if (!/^data:image\//i.test(icon)) return;
+  const needsFix = /^data:image\//i.test(icon) || isBrokenTypebotMediaUrl(icon);
+  if (!needsFix) return;
   const safeName = sanitizeTypebotText(
     String(workspace.name ?? "").trim(),
     sanitizeTypebotText(String(fallbackName ?? "").trim(), "Workspace"),
   );
+  const replacementIcon = buildTenantPublicLogoUrl(tenant) || "";
   await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/workspaces/${encodeURIComponent(normalizedWorkspaceId)}`, {
     method: "PATCH",
     headers: buildTargetHeaders(),
     body: JSON.stringify({
       name: safeName,
-      icon: "",
+      icon: replacementIcon,
     }),
   });
 };
@@ -1180,7 +1187,7 @@ export const syncSystemDefaultsToRealTypebotWorkspace = async (
     workspaceId = created.id;
     workspaceName = created.name;
   }
-  await sanitizeWorkspaceIconOnTarget(workspaceId, workspaceName || tenant.name);
+  await sanitizeWorkspaceIconOnTarget(workspaceId, workspaceName || tenant.name, tenant);
 
   const allowedDefaultNames = new Set<string>(
     defaults.map((item) => normalizeText(item.title)).filter((name) => Boolean(name)),
