@@ -106,6 +106,19 @@ const isLegacyMinioPublicHost = (hostname: string): boolean => {
   return extra.some((legacy) => host === legacy || host.endsWith(`.${legacy}`) || host.includes(legacy));
 };
 
+/** Corrige chaves MinIO com `typebot/typebot/public/` repetido (NoSuchKey no viewer/handoff). */
+export const collapseDuplicatedMinioPublicPath = (objectPath: string): string => {
+  let clean = String(objectPath ?? "").replace(/^\/+/, "");
+  let previous = "";
+  while (previous !== clean) {
+    previous = clean;
+    clean = clean.replace(/^typebot\/typebot\/public\//i, "typebot/public/");
+    clean = clean.replace(/^public\/typebot\/typebot\/public\//i, "public/typebot/");
+    clean = clean.replace(/\/typebot\/typebot\/public\//gi, "/typebot/public/");
+  }
+  return clean;
+};
+
 const rewriteMinioPublicUrlToCurrentBase = (absoluteUrl: string): string => {
   const publicBase = resolveS3PublicBaseUrl();
   if (!publicBase) return "";
@@ -114,12 +127,28 @@ const rewriteMinioPublicUrlToCurrentBase = (absoluteUrl: string): string => {
     const path = parsed.pathname.replace(/^\/+/, "");
     const idx = path.indexOf("public/");
     if (idx < 0) return "";
-    const afterPublic = path.slice(idx + "public/".length);
+    const afterPublic = collapseDuplicatedMinioPublicPath(path.slice(idx + "public/".length));
     const suffix = parsed.search || "";
     return `${publicBase}/${afterPublic}${suffix}`;
   } catch {
     return "";
   }
+};
+
+/** Avatar/logo seguro na tela de handoff do lead (prioriza marca do tenant). */
+export const resolveHandoffProfileImageUrl = (
+  tenant: Tenant | null | undefined,
+  candidate?: string,
+): string => {
+  if (tenant) {
+    const brandIcon = resolveTenantBrandIconUrl(tenant);
+    if (brandIcon && !isBrokenTypebotMediaUrl(brandIcon)) return brandIcon;
+    const apiLogo = buildTenantPublicLogoUrl(tenant);
+    if (apiLogo) return apiLogo;
+  }
+  const normalized = normalizeTypebotMediaUrl(String(candidate ?? "").trim());
+  if (normalized && !isBrokenTypebotMediaUrl(normalized)) return normalized;
+  return "";
 };
 
 export const normalizeTypebotMediaUrl = (raw: string): string => {
@@ -130,7 +159,7 @@ export const normalizeTypebotMediaUrl = (raw: string): string => {
   const rewriteLocalOrRelative = (pathAfterPublic: string): string => {
     const publicBase = resolveS3PublicBaseUrl();
     if (!publicBase) return "";
-    const clean = pathAfterPublic.replace(/^\/+/, "");
+    const clean = collapseDuplicatedMinioPublicPath(pathAfterPublic);
     return `${publicBase}/${clean}`;
   };
 
@@ -138,11 +167,17 @@ export const normalizeTypebotMediaUrl = (raw: string): string => {
     if (!/localhost|127\.0\.0\.1/i.test(value)) {
       try {
         const parsed = new URL(value);
+        const path = parsed.pathname.replace(/^\/+/, "");
+        const idx = path.indexOf("public/");
+        if (idx >= 0) {
+          const rewritten = rewriteLocalOrRelative(path.slice(idx + "public/".length));
+          if (rewritten) return rewritten;
+        }
         if (isLegacyMinioPublicHost(parsed.hostname)) {
-          return rewriteMinioPublicUrlToCurrentBase(value) || value;
+          return rewriteMinioPublicUrlToCurrentBase(value) || "";
         }
       } catch {
-        return value;
+        return "";
       }
       return value;
     }
@@ -166,8 +201,10 @@ export const normalizeTypebotMediaUrl = (raw: string): string => {
   if (!publicBase) return "";
 
   const path = value.replace(/^\/+/, "");
-  if (path.startsWith("public/")) return `${publicBase}/${path.slice("public/".length)}`;
-  return `${publicBase}/${path}`;
+  if (path.startsWith("public/")) {
+    return `${publicBase}/${collapseDuplicatedMinioPublicPath(path.slice("public/".length))}`;
+  }
+  return `${publicBase}/${collapseDuplicatedMinioPublicPath(path)}`;
 };
 
 const sanitizeMediaString = (key: string, raw: unknown, allowDataImageForAvatar: boolean): unknown => {

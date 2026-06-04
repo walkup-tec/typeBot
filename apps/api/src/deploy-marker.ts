@@ -2,4 +2,4 @@
 export const MASTER_LIBRARY_LOGIC_VERSION = "attendant-resend-welcome-v30";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-attendant-resend-route";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-handoff-minio-profile-fix";

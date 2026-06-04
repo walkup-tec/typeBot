@@ -33,6 +33,10 @@ import {
   sendLiveMessageSchema,
   updateQueueContactSchema,
 } from "./queue.service";
+import {
+  isBrokenTypebotMediaUrl,
+  resolveHandoffProfileImageUrl,
+} from "../typebot/typebot-media-sanitize.service";
 
 function normalizeHandoffMatchToken(value: string): string {
   return value.trim().toLowerCase();
@@ -159,8 +163,15 @@ const pickHexColors = (jsonText: string) => {
 
 const extractImageUrl = (jsonText: string) => {
   const urls = [...jsonText.matchAll(/https?:\/\/[^"'\s]+?\.(?:png|jpg|jpeg|webp|gif)(?:\?[^"'\s]*)?/gi)].map((m) => m[0]);
-  const preferred = urls.find((url) => url.includes("/typebot/public/") && !url.includes("ogImage"));
-  return preferred ?? urls[0];
+  const ordered = [
+    ...urls.filter((url) => url.includes("/public/") && !url.includes("ogImage")),
+    ...urls.filter((url) => !url.includes("ogImage")),
+  ];
+  for (const url of ordered) {
+    const resolved = resolveHandoffProfileImageUrl(null, url);
+    if (resolved) return resolved;
+  }
+  return undefined;
 };
 
 const extractViewerVisualConfig = async (viewerUrl: string): Promise<ViewerVisualConfig> => {
@@ -472,7 +483,8 @@ export const registerQueueRoutes = (app: Express) => {
     const trimmed = value.trim();
     if (!trimmed) return false;
     if (trimmed.startsWith("data:image/")) return true;
-    return isSafeHttpUrl(trimmed);
+    if (!isSafeHttpUrl(trimmed) || isBrokenTypebotMediaUrl(trimmed)) return false;
+    return Boolean(resolveHandoffProfileImageUrl(null, trimmed));
   };
 
   const pickThemeHex = (queryValue: string | undefined, tenantValue: string | undefined, fallback: string) => {
@@ -551,8 +563,10 @@ export const registerQueueRoutes = (app: Express) => {
       DEFAULT_VISUAL_CONFIG.userBubbleBg,
     );
     const themeBotBubbleBg = pickThemeHex(String(req.query.themeBotBubbleBg), tenantTheme?.botBubbleBg, DEFAULT_VISUAL_CONFIG.botBubbleBg);
-    const tenantProfileImageUrl = tenant?.profileImageUrl ?? "";
-    const profileImageUrl = String(req.query.profileImageUrl ?? "").trim() || tenantProfileImageUrl.trim();
+    const profileImageUrl = resolveHandoffProfileImageUrl(
+      tenant,
+      String(req.query.profileImageUrl ?? "").trim(),
+    );
     const agentId = String(req.query.agentId ?? "").trim();
     const agentName = String(req.query.agentName ?? (agentId || "atendente-01")).trim();
     const attendantForAgent = resolvedTenantIdForSession
@@ -3196,13 +3210,11 @@ export const registerQueueRoutes = (app: Express) => {
           visualConfigFromFlow?.userBubbleBg ?? tenantTheme?.userBubbleBg ?? visualConfigDetected.userBubbleBg,
         botBubbleBg:
           visualConfigFromFlow?.botBubbleBg ?? tenantTheme?.botBubbleBg ?? visualConfigDetected.botBubbleBg,
-        profileImageUrl: tenant?.profileImageUrl ?? visualConfigFromFlow?.profileImageUrl ?? visualConfigDetected.profileImageUrl,
+        profileImageUrl: resolveHandoffProfileImageUrl(
+          tenant,
+          visualConfigFromFlow?.profileImageUrl ?? visualConfigDetected.profileImageUrl,
+        ),
       };
-      const profileImageQuery =
-        visualConfig.profileImageUrl &&
-        !visualConfig.profileImageUrl.trim().startsWith("data:")
-          ? `&profileImageUrl=${encodeURIComponent(visualConfig.profileImageUrl)}`
-          : "";
       const typebotQuery =
         typebotViewerUrl && isSafeHttpUrl(typebotViewerUrl)
           ? `&typebotUrl=${encodeURIComponent(typebotViewerUrl)}`
@@ -3211,7 +3223,7 @@ export const registerQueueRoutes = (app: Express) => {
         visualConfig.chatBg,
       )}&themeUserBubbleBg=${encodeURIComponent(visualConfig.userBubbleBg)}&themeBotBubbleBg=${encodeURIComponent(
         visualConfig.botBubbleBg,
-      )}${profileImageQuery}`;
+      )}`;
       const leadContextQuery = storedLeadContext
         ? `&leadContext=${encodeURIComponent(JSON.stringify(storedLeadContext))}`
         : "";
@@ -3227,6 +3239,10 @@ export const registerQueueRoutes = (app: Express) => {
         url: handoffUrl,
         /** Alias para Redirect `{{url_direct}}` quando o mapeamento usa bodyPath `url_direct`. */
         url_direct: handoffUrl,
+        /** Use no bloco Redirect do Typebot (bodyPath ou variável). Não use URL de imagem do MinIO. */
+        redirectTarget: handoffUrl,
+        visitUrl: handoffUrl,
+        openUrl: handoffUrl,
         data: {
           handoffUrl,
           redirectUrl: handoffUrl,
@@ -3235,6 +3251,9 @@ export const registerQueueRoutes = (app: Express) => {
           redirectUrlFlat: handoffUrl,
           urlFlat: handoffUrl,
           url_direct: handoffUrl,
+          redirectTarget: handoffUrl,
+          visitUrl: handoffUrl,
+          openUrl: handoffUrl,
         },
         handoffUrlFlat: handoffUrl,
         redirectUrlFlat: handoffUrl,
