@@ -16,8 +16,8 @@ import {
   updateTenantStatusSchema,
   updateTenantChatThemeSchema,
 } from "./tenant.service";
-import { mailService } from "../mail/mail.service";
-import { buildTenantWelcomeTemplate } from "../mail/mail.templates";
+import { deliverTenantWelcomeEmail } from "../mail/tenant-welcome-delivery";
+import { z } from "zod";
 import { FlowService } from "../flows/flow.service";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
 import { ensureSubscriberSavedFlowsFromDefaults } from "../flows/subscriber-default-flows.service";
@@ -41,7 +41,10 @@ const tenantService = new TenantService(
   kanbanRepository,
 );
 const flowService = new FlowService(flowRepository);
-const SYSTEM_LOGIN_URL = String(process.env.SYSTEM_LOGIN_URL ?? "http://localhost:5173").trim();
+
+const resendTenantWelcomeSchema = z.object({
+  initialPassword: z.string().min(4).max(120),
+});
 
 export const registerTenantRoutes = (app: Express) => {
   app.get("/api/public/tenants/:id/logo", (req, res) => {
@@ -116,47 +119,11 @@ export const registerTenantRoutes = (app: Express) => {
           typebotLastSyncAt: new Date().toISOString(),
         });
       }
-      let emailDelivery: { status: "sent" | "failed" | "skipped"; message?: string } = {
-        status: "skipped",
-      };
-
-      if (mailService.isConfigured() && tenant.ownerEmail) {
-        const recipientName = String(tenant.name || tenant.ownerEmail).trim();
-        const mail = buildTenantWelcomeTemplate({
-          recipientName,
-          tenantName: tenant.name,
-          ownerEmail: tenant.ownerEmail,
-          initialPassword: input.initialPassword,
-          loginUrl: SYSTEM_LOGIN_URL,
-        });
-        try {
-          const delivery = await mailService.send({
-            to: tenant.ownerEmail,
-            subject: mail.subject,
-            html: mail.html,
-          });
-          const acceptedRecipients = delivery.accepted.map((item) => item.trim().toLowerCase());
-          const expectedRecipient = tenant.ownerEmail.trim().toLowerCase();
-          if (acceptedRecipients.includes(expectedRecipient)) {
-            emailDelivery = {
-              status: "sent",
-              message: `SMTP accepted. messageId=${delivery.messageId || "n/a"}`,
-            };
-          } else {
-            emailDelivery = {
-              status: "failed",
-              message: `SMTP não confirmou aceitação do destinatário. messageId=${delivery.messageId || "n/a"} response=${delivery.response || "n/a"}`,
-            };
-          }
-        } catch (emailError) {
-          const reason = emailError instanceof Error ? emailError.message : "Falha no envio SMTP.";
-          emailDelivery = { status: "failed", message: reason };
-          // eslint-disable-next-line no-console
-          console.error("Falha ao enviar e-mail de boas-vindas do assinante:", emailError);
-        }
-      } else if (!mailService.isConfigured()) {
-        emailDelivery = { status: "skipped", message: "SMTP não configurado." };
-      }
+      const emailDelivery = await deliverTenantWelcomeEmail({
+        ownerEmail: tenant.ownerEmail,
+        recipientName: tenant.name,
+        initialPassword: input.initialPassword,
+      });
 
       return res.status(201).json({
         ...tenant,
@@ -257,6 +224,22 @@ export const registerTenantRoutes = (app: Express) => {
     const tenant = tenantService.update(req.params.id, input);
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
     return res.status(200).json(tenant);
+  });
+
+  app.post("/api/master/tenants/:id/resend-welcome", async (req, res) => {
+    try {
+      const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
+      if (!tenant) return res.status(404).json({ message: "Assinante não encontrado." });
+      const input = resendTenantWelcomeSchema.parse(req.body);
+      const emailDelivery = await deliverTenantWelcomeEmail({
+        ownerEmail: tenant.ownerEmail,
+        recipientName: tenant.name,
+        initialPassword: input.initialPassword,
+      });
+      return res.status(200).json({ ok: true, ownerEmail: tenant.ownerEmail, emailDelivery });
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
   });
 
   app.delete("/api/master/tenants/:id", (req, res) => {

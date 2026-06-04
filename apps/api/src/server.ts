@@ -39,6 +39,7 @@ import {
 } from "./bootstrap/auth-data-bootstrap";
 import { isAuthPostgresEnabled } from "./lib/auth-postgres";
 import { API_DEPLOY_MARKER, MASTER_LIBRARY_LOGIC_VERSION } from "./deploy-marker";
+import { mailService } from "./mail/mail.service";
 import { logTypebotStorageEnvDiagnostics } from "./typebot/typebot-media-sanitize.service";
 
 const app = express();
@@ -254,6 +255,8 @@ app.get("/health", async (_req, res) => {
     typebotSourceMasterWorkspaceConfigured: Boolean(
       String(process.env.TYPEBOT_SOURCE_MASTER_WORKSPACE_ID ?? "").trim(),
     ),
+    smtpConfigured: mailService.isConfigured(),
+    mailMode: String(process.env.MAIL_MODE ?? "").trim() || null,
   });
 });
 
@@ -380,7 +383,7 @@ async function startApi(): Promise<void> {
   app.listen(port, host, () => {
     // eslint-disable-next-line no-console
     console.log(
-      `[saas-api] running deployMarker=${API_DEPLOY_MARKER} masterLibrary=${MASTER_LIBRARY_LOGIC_VERSION}`,
+      `[saas-api] running deployMarker=${API_DEPLOY_MARKER} masterLibrary=${MASTER_LIBRARY_LOGIC_VERSION} smtpConfigured=${mailService.isConfigured()}`,
     );
     // eslint-disable-next-line no-console
     console.log(`API running on http://${host}:${port}`);

@@ -3954,3 +3954,12 @@
 
 - `typebot-imagens-minio-repair`
 - `TYPEBOT_AVATAR_PUBLIC_BASE_URL-app-chattypebot`
+
+## 2026-06-04 - E-mail boas-vindas somaconecta (SMTP na API)
+
+- Assinante recriado: `1f992ff8-741b-451d-b3c8-bb08ec1ba92a`, `somaconecta@gmail.com`.
+- Causa provável: SMTP no serviço **Typebot** (SMTP_USERNAME) mas não no serviço **api** (SMTP_USER/SMTP_PASS).
+- API retorna `emailDelivery.status=skipped` quando SMTP ausente; admin antes não mostrava isso.
+- Código: `/health.smtpConfigured`, `POST .../resend-welcome`, feedback no `createTenant` do admin.
+- Marker: `DEPLOY-2026-06-04-smtp-health-resend-welcome`.
+- Log: `doc/LOG-2026-06-04__173000__diagnostico-email-somaconecta-smtp-api.md`.

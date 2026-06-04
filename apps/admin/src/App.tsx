@@ -1595,7 +1595,23 @@ export function App() {
       return false;
     }
 
-    setStatusMessage("Assinante criado. Defina a imagem da marca no Master Console (Perfil de atendimento).");
+    const payload = (await response.json().catch(() => ({}))) as CreateAttendantResponse;
+    const delivery = payload.emailDelivery;
+    if (delivery?.status === "sent") {
+      setStatusMessage("Assinante criado e e-mail de boas-vindas enviado.");
+    } else if (delivery?.status === "failed") {
+      setStatusMessage(
+        delivery.message ??
+          "Assinante criado, mas o e-mail de boas-vindas falhou. Configure SMTP no serviço API do Easypanel.",
+      );
+    } else if (delivery?.status === "skipped") {
+      setStatusMessage(
+        delivery.message ??
+          "Assinante criado sem envio de e-mail (SMTP não configurado na API). Defina SMTP_HOST, SMTP_USER, SMTP_PASS, MAIL_FROM e MAIL_MODE=smtp.",
+      );
+    } else {
+      setStatusMessage("Assinante criado. Defina a imagem da marca no Master Console (Perfil de atendimento).");
+    }
     resetSubscriberForm();
     await loadTenants();
     return true;
