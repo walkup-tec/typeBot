@@ -257,6 +257,8 @@ app.get("/health", async (_req, res) => {
     ),
     smtpConfigured: mailService.isConfigured(),
     mailMode: String(process.env.MAIL_MODE ?? "").trim() || null,
+    tenantResendWelcomeRoute: true,
+    attendantResendWelcomeRoute: true,
   });
 });
 

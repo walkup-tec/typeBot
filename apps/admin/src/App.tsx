@@ -1706,7 +1706,7 @@ export function App() {
         emailDelivery?: CreateAttendantResponse["emailDelivery"];
       };
       if (!response.ok) {
-        setStatusMessage(payload.message ?? "Falha ao reenviar e-mail de boas-vindas.");
+        setStatusMessage(resolveResendWelcomeErrorMessage(response.status, payload.message));
         return;
       }
 
@@ -1999,6 +1999,17 @@ export function App() {
     setMasterWizardStep(next);
   }
 
+  const resolveResendWelcomeErrorMessage = (status: number, payloadMessage?: string): string => {
+    if (payloadMessage?.trim()) return payloadMessage.trim();
+    if (status === 404) {
+      return "API desatualizada: implante o serviço api no Easypanel (marker DEPLOY-2026-06-04-resend-stored-welcome-password ou mais recente).";
+    }
+    if (status === 409) {
+      return "Senha original não registrada. Remova o usuário e cadastre de novo com a mesma senha desejada no e-mail.";
+    }
+    return "Falha ao reenviar e-mail de boas-vindas.";
+  };
+
   async function resendAttendantWelcomeEmail(row: AttendantRow) {
     if (!selectedTenant || resendingWelcomeAttendantId) return;
     setResendingWelcomeAttendantId(row.id);
@@ -2012,7 +2023,7 @@ export function App() {
         emailDelivery?: CreateAttendantResponse["emailDelivery"];
       };
       if (!response.ok) {
-        setStatusMessage(payload.message ?? "Falha ao reenviar e-mail de boas-vindas.");
+        setStatusMessage(resolveResendWelcomeErrorMessage(response.status, payload.message));
         return;
       }
 
