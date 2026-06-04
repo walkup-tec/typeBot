@@ -235,6 +235,7 @@ app.get("/health", async (_req, res) => {
     status: "ok",
     service: "typebot-saas-api",
     deployMarker: API_DEPLOY_MARKER,
+    gitSha: String(process.env.GIT_SHA ?? "").trim() || null,
     masterLibraryLogicVersion: MASTER_LIBRARY_LOGIC_VERSION,
     authTenantsAttendants: isAuthPostgresEnabled() ? "postgres" : "json",
     /** Postgres cobre só login/assinantes/atendentes. Fluxos, fila e bibliotecas continuam em JSON no disco. */
