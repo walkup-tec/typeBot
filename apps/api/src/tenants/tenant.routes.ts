@@ -278,6 +278,15 @@ export const registerTenantRoutes = (app: Express) => {
       await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaultItems);
       await refreshTenantWorkspaceFlowUrlsFromTypebot(tenant.id);
       await refreshTenantFlowViewerUrls(tenant.id);
+      let typebotMediaRepair: Awaited<ReturnType<typeof repairTenantTypebotMediaOnTarget>> | null = null;
+      try {
+        typebotMediaRepair = await repairTenantTypebotMediaOnTarget(tenant.id);
+      } catch (repairError) {
+        console.warn(
+          "[sync-workspace-flows] repair typebot media:",
+          repairError instanceof Error ? repairError.message : repairError,
+        );
+      }
       const refreshed = tenantRepository.getById(tenant.id);
       const flows = flowService.listByTenant(tenant.id);
       const hint =
@@ -295,6 +304,7 @@ export const registerTenantRoutes = (app: Express) => {
         flowCount: flows.length,
         hint,
         recovery,
+        typebotMediaRepair,
         ...importResult,
         workspaceId: refreshed?.typebotWorkspaceId ?? importResult.workspaceId ?? null,
         workspaceName: refreshed?.typebotWorkspaceName ?? importResult.workspaceName ?? null,

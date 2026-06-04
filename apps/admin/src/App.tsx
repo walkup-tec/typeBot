@@ -1246,6 +1246,9 @@ export function App() {
         metadataRepublished?: number;
         skipReason?: string;
         typebotsScanned?: number;
+        typebotMediaRepair?: {
+          typebots?: Array<{ name?: string; patched?: boolean; published?: boolean }>;
+        };
       };
       if (!syncResponse.ok) {
         setStatusMessage(syncPayload.message ?? "Falha ao sincronizar fluxos do Typebot.");
@@ -1256,6 +1259,10 @@ export function App() {
       if (syncPayload.pruned && syncPayload.pruned > 0) parts.push(`${syncPayload.pruned} removido(s)`);
       if (syncPayload.metadataRepublished && syncPayload.metadataRepublished > 0) {
         parts.push(`${syncPayload.metadataRepublished} republicado(s) para compartilhamento`);
+      }
+      const mediaPatched = (syncPayload.typebotMediaRepair?.typebots ?? []).filter((row) => row.patched).length;
+      if (mediaPatched > 0) {
+        parts.push(`${mediaPatched} fluxo(s) com avatar/ícone reparado(s) no Typebot`);
       }
       await loadFlows(tenantId, { skipCache: true, forceSync: true });
       const imported = Number(syncPayload.imported ?? 0);

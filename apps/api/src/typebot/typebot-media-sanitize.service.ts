@@ -311,7 +311,7 @@ export const applyTenantBrandMediaToTypebotSchema = (
   theme.chat = chat;
   next.theme = theme;
 
-  return next;
+  return alignHostAvatarFromBrandIcon(next);
 };
 
 /** Remove data:image de icon/top-level e reescreve URLs localhost em groups/theme/settings. */

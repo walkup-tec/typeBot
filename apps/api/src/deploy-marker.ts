@@ -1,5 +1,5 @@
 /** Versão da lógica da Biblioteca Master — validar em /health após redeploy do serviço `api`. */
-export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-hostavatar-metadata-align-v21";
+export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-hostavatar-sync-repair-v22";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-03-typebot-hostavatar-metadata-align";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-03-typebot-hostavatar-sync-repair";

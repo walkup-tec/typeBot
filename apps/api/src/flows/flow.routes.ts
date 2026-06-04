@@ -32,6 +32,7 @@ import {
 } from "../typebot/typebot-flow-viewer-url-sync";
 import { syncWorkspaceTypebotFlowsForTenant } from "./tenant-workspace-flows.service";
 import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
+import { repairTenantTypebotMediaOnTarget } from "../typebot/typebot-media-repair.service";
 import {
   ensureSubscriberSavedFlowsFromDefaults,
   listSubscriberTenantFlowsForMaster,
@@ -310,10 +311,19 @@ export const registerFlowRoutes = (app: Express) => {
         await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
       }
       const result = await syncWorkspaceTypebotFlowsForTenant(tenantId);
+      let typebotMediaRepair: Awaited<ReturnType<typeof repairTenantTypebotMediaOnTarget>> | null = null;
+      try {
+        typebotMediaRepair = await repairTenantTypebotMediaOnTarget(tenantId);
+      } catch (repairError) {
+        console.warn(
+          "[sync-workspace] repair typebot media:",
+          repairError instanceof Error ? repairError.message : repairError,
+        );
+      }
       const tenant = tenantRepository.getById(tenantId);
       invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
       const flowCount = flowService.listByTenant(tenantId).length;
-      return res.status(200).json({ ...(result ?? {}), flowCount, recovery });
+      return res.status(200).json({ ...(result ?? {}), flowCount, recovery, typebotMediaRepair });
     } catch (error) {
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",

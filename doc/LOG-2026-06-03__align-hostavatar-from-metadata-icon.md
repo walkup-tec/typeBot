@@ -22,11 +22,21 @@ No Typebot, **Metadados** (`icon`, `settings.metadata.favIconUrl`) e **Theme →
 
 - `npm run build:api` — OK
 
+## Git
+
+- Commit: `a3aace1` — push `master` OK
+
+## Atualização (sync-workspace repara avatar)
+
+- `POST .../flows/sync-workspace` e `.../typebot/sync-workspace-flows` chamam `repairTenantTypebotMediaOnTarget` após sync
+- Painel Etapa 6 «Atualizar lista» mostra quantos fluxos tiveram avatar reparado
+- Marker: `DEPLOY-2026-06-03-typebot-hostavatar-sync-repair` / v22
+
 ## Pendências
 
-1. Redeploy serviço **api** (commit ainda local até push/deploy do usuário)
-2. `POST /api/master/tenants/:id/typebot/repair-media` no tenant afetado
-3. Ou republicar fluxo após deploy; sync/import também passa por `sanitizeTypebotSchemaMedia`
+1. Redeploy **api** (+ painel se quiser toast de reparo) — validar `/health` com marker v22
+2. No assinante: Etapa 6 → **Atualizar lista** (repara hostAvatar a partir do ícone de Metadados)
+3. Easypanel API: `TYPEBOT_S3_PUBLIC_BASE_URL` alinhado ao MinIO (reescrita de URLs)
 
 ## Workaround manual (sem API)
 
