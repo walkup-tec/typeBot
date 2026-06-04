@@ -696,9 +696,23 @@ export function App() {
         viewerUrl: flow.url,
       }));
     const base = directLibrary.length > 0 ? directLibrary : fromSystemDefaults;
+    const defaultLibraryIds = new Set(
+      systemMasterLibrary.filter((entry) => entry.isSystemDefault).map((entry) => entry.id),
+    );
     const byId = new Map<string, FlowLibraryItem>();
     for (const item of [...base, ...fromActiveMatrix]) byId.set(item.id, item);
-    return [...byId.values()];
+    const merged = [...byId.values()];
+    const titleOccurrences = new Map<string, number>();
+    for (const item of merged) {
+      const titleKey = String(item.title ?? "").trim().toLowerCase();
+      if (!titleKey) continue;
+      titleOccurrences.set(titleKey, (titleOccurrences.get(titleKey) ?? 0) + 1);
+    }
+    return merged.filter((item) => {
+      const titleKey = String(item.title ?? "").trim().toLowerCase();
+      if (!titleKey || (titleOccurrences.get(titleKey) ?? 0) <= 1) return true;
+      return !defaultLibraryIds.has(item.id);
+    });
   }, [flowLibrary, systemMasterLibrary, sourceMasterFlows]);
   const libraryLinkedFlows = useMemo(
     () => selectedTenantFlows.filter((flow) => Boolean(flow.librarySourceId)),
