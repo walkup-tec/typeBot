@@ -50,6 +50,7 @@ import {
   syncSystemDefaultsToRealTypebotWorkspace,
 } from "../typebot/typebot-builder.service";
 import { SYSTEM_MASTER_OWNER_EMAIL } from "../auth/system-master-auth";
+import { purgeExtraSaasUsers } from "../master/purge-extra-users.service";
 
 const flowService = new FlowService(flowRepository);
 const MASTER_SOURCE_EMAIL = SYSTEM_MASTER_OWNER_EMAIL;
@@ -220,6 +221,18 @@ export const registerFlowRoutes = (app: Express) => {
 
   app.get("/api/master/system-library", (_req, res) => {
     return res.status(200).json(listSystemMasterLibrary());
+  });
+
+  app.post("/api/master/system/purge-extra-users", async (_req, res) => {
+    try {
+      const result = await purgeExtraSaasUsers();
+      return res.status(200).json({ status: "ok", ...result });
+    } catch (error) {
+      return res.status(500).json({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Falha ao purgar usuários extras.",
+      });
+    }
   });
 
   app.post("/api/master/system-library/repair-subscriber-defaults", async (_req, res) => {

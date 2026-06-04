@@ -1,14 +1,5 @@
 [
   {
-    "id": "a4fdfb14-ad49-4c25-9131-a50c084e90a3",
-    "tenantId": "8776c7b2-4b55-4348-b39a-ada02549fae1",
-    "createdAt": "2026-04-23T16:29:08.733Z",
-    "nickname": "CLT",
-    "displayLabel": "CLT",
-    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/clt-xop5yt8",
-    "librarySourceId": "b74ddb75-7358-442c-8767-ebf38914fd9a"
-  },
-  {
     "id": "dc5edbc4-e569-4bee-ae82-2f71147c694e",
     "tenantId": "c339e134-deea-4547-8db8-197037f85307",
     "createdAt": "2026-04-24T09:31:01.511Z",
@@ -79,24 +70,6 @@
     "nickname": "Antecipação do FGTS",
     "displayLabel": "Antecipação do FGTS",
     "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/fgts"
-  },
-  {
-    "id": "2180e24d-931e-497a-ab6e-2bceafa2af1e",
-    "tenantId": "ae2a4236-8ddf-4ae6-81d8-0ec88c9827bb",
-    "createdAt": "2026-04-27T17:09:59.587Z",
-    "nickname": "Empréstimo do Trabalhador CLT",
-    "displayLabel": "Empréstimo do Trabalhador CLT",
-    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/empr-stimo-do-trabalhador-clt-yzc9yip",
-    "librarySourceId": "75725ef8-bc8b-4071-9d3e-9bb62d30caff"
-  },
-  {
-    "id": "82bb3642-996d-4be3-96c7-6416dc3e74e3",
-    "tenantId": "17df12c7-3abb-4fd1-9177-6ff7dd9514ab",
-    "createdAt": "2026-04-28T22:34:48.151Z",
-    "nickname": "Empréstimo do Trabalhador CLT",
-    "displayLabel": "Empréstimo do Trabalhador CLT",
-    "url": "https://soma-typebot-walkup-viewer.achpyp.easypanel.host/empr-stimo-do-trabalhador-clt-38esudn",
-    "librarySourceId": "41256e9c-2f03-4446-ab48-55685b8e4a0e"
   },
   {
     "id": "e7a8d151-0541-455f-aab1-a8ad77540258",
