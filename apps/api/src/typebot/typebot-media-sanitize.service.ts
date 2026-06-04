@@ -158,6 +158,89 @@ const walkAndSanitizeMedia = (node: unknown, parentKey: string, depth: number): 
   return record;
 };
 
+const asWorkingTypebotMediaUrl = (raw: string): string => {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed || isDataImageValue(trimmed)) return "";
+  const normalized = normalizeTypebotMediaUrl(trimmed) || trimmed;
+  if (isBrokenTypebotMediaUrl(normalized)) return "";
+  return normalized;
+};
+
+/** Ícone/favicon já válidos no schema (upload do builder em Metadados). */
+export const extractWorkingBrandIconUrl = (schema: Record<string, unknown>): string => {
+  const icon = asWorkingTypebotMediaUrl(String(schema.icon ?? ""));
+  if (icon) return icon;
+
+  const settingsRaw = schema.settings;
+  const settings =
+    settingsRaw && typeof settingsRaw === "object"
+      ? (settingsRaw as Record<string, unknown>)
+      : null;
+  const metadataRaw = settings?.metadata;
+  const metadata =
+    metadataRaw && typeof metadataRaw === "object"
+      ? (metadataRaw as Record<string, unknown>)
+      : null;
+  const favIcon = asWorkingTypebotMediaUrl(String(metadata?.favIconUrl ?? ""));
+  if (favIcon) return favIcon;
+
+  return "";
+};
+
+/**
+ * Metadados (icon/favIcon) e preview do chat (hostAvatar) são campos distintos no Typebot.
+ * Quando o ícone já carrega no menu lateral mas a bolha quebra, copia a mesma URL para hostAvatar.
+ */
+export const alignHostAvatarFromBrandIcon = (
+  schema: Record<string, unknown>,
+  options?: { force?: boolean },
+): Record<string, unknown> => {
+  const brandIcon = extractWorkingBrandIconUrl(schema);
+  if (!brandIcon) return schema;
+
+  const force = options?.force === true;
+  const next = { ...schema };
+  const themeRaw = next.theme;
+  const theme =
+    themeRaw && typeof themeRaw === "object"
+      ? ({ ...(themeRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const chatRaw = theme.chat;
+  const chat =
+    chatRaw && typeof chatRaw === "object"
+      ? ({ ...(chatRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const hostAvatarRaw = chat.hostAvatar;
+  const hostAvatar =
+    hostAvatarRaw && typeof hostAvatarRaw === "object"
+      ? ({ ...(hostAvatarRaw as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+
+  const hostUrlRaw = String(hostAvatar.url ?? "").trim();
+  const hostUrl = asWorkingTypebotMediaUrl(hostUrlRaw);
+  const hostBroken = !hostUrlRaw || isBrokenTypebotMediaUrl(hostUrlRaw) || !hostUrl;
+
+  if (!force && !hostBroken && hostUrl === brandIcon) {
+    if (hostAvatar.isEnabled !== true) {
+      hostAvatar.isEnabled = true;
+      chat.hostAvatar = hostAvatar;
+      theme.chat = chat;
+      next.theme = theme;
+    }
+    return next;
+  }
+
+  if (force || hostBroken || hostUrl !== brandIcon) {
+    hostAvatar.isEnabled = true;
+    hostAvatar.url = brandIcon;
+    chat.hostAvatar = hostAvatar;
+    theme.chat = chat;
+    next.theme = theme;
+  }
+
+  return next;
+};
+
 const resolveTenantIconAndAvatarUrls = (
   tenant: Tenant,
   preferredIconUrl?: string,
@@ -265,7 +348,7 @@ export const sanitizeTypebotSchemaMedia = (
     next = applyTenantBrandMediaToTypebotSchema(next, tenant);
   }
 
-  return next;
+  return alignHostAvatarFromBrandIcon(next);
 };
 
 export type TypebotStorageEnvDiagnostic = {

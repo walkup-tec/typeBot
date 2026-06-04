@@ -6,6 +6,7 @@ import type { Tenant } from "../tenants/tenant.repository";
 import { ensureTypebotShareMetadataPublished } from "./typebot-share-metadata.service";
 import { ensureTenantBrandLogoOnMinio } from "./typebot-brand-logo-minio.service";
 import {
+  alignHostAvatarFromBrandIcon,
   applyTenantBrandMediaToTypebotSchema,
   buildTenantPublicLogoUrl,
   diagnoseTypebotStorageEnv,
@@ -145,6 +146,7 @@ const repairSingleTypebotOnTarget = async (
       force: true,
     });
   }
+  sanitized = alignHostAvatarFromBrandIcon(sanitized, { force: true });
 
   const patchResponse = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`,

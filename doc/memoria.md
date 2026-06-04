@@ -1,4 +1,31 @@
-﻿## 2026-06-04 - Typebot CLT 500 Postgres 10.0.4.69
+﻿## 2026-06-03 - Avatar bolha do chat vs Metadados (hostAvatar)
+
+- **Sintoma:** ícone OK em Configurações → Metadados; bolha do bot no preview com imagem quebrada.
+- **Causa:** `theme.chat.hostAvatar` é campo distinto de `icon` / `favIconUrl`.
+- **Fix código:** `alignHostAvatarFromBrandIcon` copia URL válida do ícone para `hostAvatar` (sanitize + repair-media).
+- **Log:** `doc/LOG-2026-06-03__align-hostavatar-from-metadata-icon.md`
+- **Próximo:** redeploy API + `repair-media` no tenant; build local OK.
+
+## 2026-06-04 - Deploy API falhou (Docker snapshot, não código)
+
+- **Commit:** `944abe4` mudança-icon-typebot-minio — `npm run build:api` OK no log Easypanel
+- **Erro:** `parent snapshot does not exist` na exportação da imagem Docker
+- **Fix ops:** `docker buildx prune -af` no VPS + redeploy api; doc `FIX-EASYPANEL-DOCKER-SNAPSHOT-BUILD.md`
+
+## 2026-06-04 - Typebot upload imagens (generateUploadUrl 500)
+
+- **Sintoma:** toast `generateUploadUrl` / `INTERNAL_SERVER_ERROR` ao subir imagem no builder
+- **Env builder/viewer:** OK (mesmo bloco de maio/2026, key `uW8cuKbPHx1LvDLCRed7`, bucket `typebot`)
+- **Causa atual (jun/2026 VPS):** MinIO em 2 redes — só responde em **easypanel** `10.11.227.127`; `easypanel-typebot` `10.0.4.72` não aceita :9000; DNS Swarm `typebot_minio` → VIP morto `10.11.72.233`
+- **Fix overlay isolada:** publicar MinIO `9000/9001` no host + Traefik `main.yaml` → `http://172.17.0.1:9000/`; script `scripts/fix-minio-traefik-host-port-vps.sh`
+- **Evidência Traefik:** `doc/traefik_memoria.txt` — PROBLEMA I/J + cronologia 2026-06-04 MinIO
+- **DNS morto:** `typebot_minio` → `10.11.72.233`; IP real task `10.11.227.127` (so funciona dentro do namespace MinIO)
+- **Fix código:** `scripts/traefik-permanent-vps.sh` — minio em `fix_service(..., "9000")`
+- **Fix VPS sem scp:** `scripts/fix-traefik-minio-port-now-vps.sh` (para timer nao reverter :3000)
+- **Segurança:** secret S3 exposto no chat → recriar access key no MinIO após MinIO voltar
+- **Log:** `doc/LOG-2026-06-04__typebot-upload-minio-502.md`
+
+## 2026-06-04 - Typebot CLT 500 Postgres 10.0.4.69
 
 - **Erro:** `startChatPreview` → Can't reach database at `10.0.4.69:5432`
 - **Fix ops:** `DATABASE_URL` com hostname `typebot_typebot-walkup-db` em builder+viewer; Postgres running
