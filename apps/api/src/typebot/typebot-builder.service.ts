@@ -5,10 +5,12 @@ import { listSystemMasterLibrary } from "../flows/system-master-library.reposito
 import { syncSourceWorkspaceFlowsToMasterTenant } from "../flows/source-master-sync.service";
 import { isFlowUrlActive } from "../lib/flow-url-health";
 import { importManualWorkspaceTypebotsIntoTenantFlows, refreshTenantFlowViewerUrls } from "./typebot-flow-viewer-url-sync";
+import { ensureTenantBrandLogoOnMinio } from "./typebot-brand-logo-minio.service";
 import {
   buildTenantPublicLogoUrl,
   buildTenantPublicShareImageUrl,
   isBrokenTypebotMediaUrl,
+  resolveTenantBrandIconUrl,
   sanitizeTypebotSchemaMedia,
 } from "./typebot-media-sanitize.service";
 
@@ -528,7 +530,7 @@ const sanitizeWorkspaceIconOnTarget = async (
     String(workspace.name ?? "").trim(),
     sanitizeTypebotText(String(fallbackName ?? "").trim(), "Workspace"),
   );
-  const replacementIcon = buildTenantPublicLogoUrl(tenant) || "";
+  const replacementIcon = resolveTenantBrandIconUrl(tenant) || buildTenantPublicLogoUrl(tenant) || "";
   await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/workspaces/${encodeURIComponent(normalizedWorkspaceId)}`, {
     method: "PATCH",
     headers: buildTargetHeaders(),
@@ -567,7 +569,7 @@ const applyTenantMetadataToTypebotSchema = (
   const title = sanitizeTypebotText(String(flowTitle ?? "").trim(), "Fluxo");
   const iconRaw = String(tenant.profileImageUrl ?? "").trim();
   const imageRaw = String(tenant.shareImageUrl ?? "").trim();
-  const tenantPublicLogoUrl = buildTenantPublicLogoUrl(tenant);
+  const tenantPublicLogoUrl = resolveTenantBrandIconUrl(tenant) || buildTenantPublicLogoUrl(tenant);
   const tenantPublicShareImageUrl = buildTenantPublicShareImageUrl(tenant);
   // Mantém upload local por data URI no cadastro do tenant, mas sempre envia ao Typebot apenas URL http(s).
   const iconHttpUrl = normalizeHttpUrl(iconRaw);
@@ -762,7 +764,7 @@ const applyTenantButtonThemeCssOnTarget = async (typebotId: string, tenant: Tena
 
 const resolveTenantAvatarValue = (tenant: Tenant): string => {
   const iconRaw = String(tenant.profileImageUrl ?? "").trim();
-  const tenantPublicLogoUrl = buildTenantPublicLogoUrl(tenant);
+  const tenantPublicLogoUrl = resolveTenantBrandIconUrl(tenant) || buildTenantPublicLogoUrl(tenant);
   const iconHttpUrl = normalizeHttpUrl(iconRaw);
   const iconDataImage = normalizeAvatarDataImage(iconRaw);
   return tenantPublicLogoUrl || iconHttpUrl || iconDataImage;
@@ -797,19 +799,38 @@ const applyTenantIconOnTarget = async (typebotId: string, tenant: Tenant): Promi
   ensureTargetConfigured();
   const rawIcon = String(tenant.profileImageUrl ?? "").trim();
   const iconHttpUrl = normalizeHttpUrl(rawIcon);
-  // Segurança de UI do Builder: nunca gravar data:image em `typebot.icon`.
-  const safeIcon = buildTenantPublicLogoUrl(tenant) || iconHttpUrl || "";
+  let safeIcon = "";
+  try {
+    safeIcon = (await ensureTenantBrandLogoOnMinio(tenant)) || resolveTenantBrandIconUrl(tenant);
+  } catch {
+    safeIcon = resolveTenantBrandIconUrl(tenant);
+  }
+  safeIcon = safeIcon || iconHttpUrl || "";
+  if (!safeIcon) return;
+
   const response = await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`, {
     method: "PATCH",
     headers: buildTargetHeaders(),
     body: JSON.stringify({
       typebot: {
         icon: safeIcon,
+        settings: {
+          metadata: {
+            favIconUrl: safeIcon,
+          },
+        },
+        theme: {
+          chat: {
+            hostAvatar: {
+              isEnabled: true,
+              url: safeIcon,
+            },
+          },
+        },
       },
     }),
   });
   if (response.ok) {
-    // Evita deixar alterações em draft após patch de ícone.
     await publishTypebotOnTarget(typebotId);
   }
 };

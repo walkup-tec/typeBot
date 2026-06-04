@@ -3,6 +3,7 @@
  * Corrige regressões documentadas: data:image no icon, localhost no MinIO, S3 mal configurado.
  */
 import type { Tenant } from "../tenants/tenant.repository";
+import { buildTenantBrandLogoMinioPublicUrl } from "./typebot-brand-logo-minio.service";
 
 const DEFAULT_SAAS_PUBLIC_API_BASE = "https://app.chattypebot.com";
 
@@ -58,6 +59,13 @@ export const buildTenantPublicLogoUrl = (tenant: Tenant): string => {
   const tenantId = String(tenant.id ?? "").trim();
   if (!tenantId) return "";
   return `${resolveAvatarPublicBaseUrl()}/api/public/tenants/${encodeURIComponent(tenantId)}/logo`;
+};
+
+/** Preferência: MinIO (mesmo host das imagens do fluxo), depois API /logo. */
+export const resolveTenantBrandIconUrl = (tenant: Tenant): string => {
+  const minioUrl = buildTenantBrandLogoMinioPublicUrl(tenant);
+  if (minioUrl) return minioUrl;
+  return buildTenantPublicLogoUrl(tenant);
 };
 
 export const buildTenantPublicShareImageUrl = (tenant: Tenant): string => {
@@ -152,27 +160,30 @@ const walkAndSanitizeMedia = (node: unknown, parentKey: string, depth: number): 
 
 const resolveTenantIconAndAvatarUrls = (
   tenant: Tenant,
+  preferredIconUrl?: string,
 ): { iconUrl: string; avatarUrl: string } => {
   const iconRaw = String(tenant.profileImageUrl ?? "").trim();
-  const tenantPublicLogoUrl = buildTenantPublicLogoUrl(tenant);
+  const brandUrl = String(preferredIconUrl ?? "").trim() || resolveTenantBrandIconUrl(tenant);
   const iconHttpUrl =
     /^https?:\/\//i.test(iconRaw) && !/localhost|127\.0\.0\.1/i.test(iconRaw) ? iconRaw : "";
-  const iconUrl = tenantPublicLogoUrl || iconHttpUrl;
+  const iconUrl = brandUrl || iconHttpUrl;
   const avatarUrl = iconUrl || (isDataImageValue(iconRaw) ? iconRaw : "");
   return { iconUrl, avatarUrl };
 };
 
-/** Reaplica logo do tenant em icon, hostAvatar e favIconUrl quando URL está quebrada ou vazia. */
+/** Reaplica logo do tenant em icon, hostAvatar e favIconUrl. */
 export const applyTenantBrandMediaToTypebotSchema = (
   schema: Record<string, unknown>,
   tenant: Tenant,
+  options?: { preferredIconUrl?: string; force?: boolean },
 ): Record<string, unknown> => {
   const next = { ...schema };
-  const { iconUrl, avatarUrl } = resolveTenantIconAndAvatarUrls(tenant);
+  const { iconUrl, avatarUrl } = resolveTenantIconAndAvatarUrls(tenant, options?.preferredIconUrl);
   if (!iconUrl && !avatarUrl) return next;
 
+  const force = options?.force === true;
   const currentIcon = String(next.icon ?? "").trim();
-  if (iconUrl && (isBrokenTypebotMediaUrl(currentIcon) || isDataImageValue(currentIcon))) {
+  if (iconUrl && (force || isBrokenTypebotMediaUrl(currentIcon) || isDataImageValue(currentIcon))) {
     next.icon = iconUrl;
   }
 
@@ -187,7 +198,7 @@ export const applyTenantBrandMediaToTypebotSchema = (
       ? ({ ...(metadataRaw as Record<string, unknown>) } as Record<string, unknown>)
       : {};
   const favRaw = String(metadata.favIconUrl ?? "").trim();
-  if (iconUrl && (isBrokenTypebotMediaUrl(favRaw) || isDataImageValue(favRaw) || !favRaw)) {
+  if (iconUrl && (force || isBrokenTypebotMediaUrl(favRaw) || isDataImageValue(favRaw) || !favRaw)) {
     metadata.favIconUrl = iconUrl;
   }
   settings.metadata = metadata;
@@ -209,7 +220,7 @@ export const applyTenantBrandMediaToTypebotSchema = (
       ? ({ ...(hostAvatarRaw as Record<string, unknown>) } as Record<string, unknown>)
       : {};
   const hostUrl = String(hostAvatar.url ?? "").trim();
-  if (avatarUrl && (isBrokenTypebotMediaUrl(hostUrl) || !hostUrl)) {
+  if (avatarUrl && (force || isBrokenTypebotMediaUrl(hostUrl) || !hostUrl)) {
     hostAvatar.isEnabled = true;
     hostAvatar.url = avatarUrl.startsWith("http") ? avatarUrl : iconUrl || avatarUrl;
   }

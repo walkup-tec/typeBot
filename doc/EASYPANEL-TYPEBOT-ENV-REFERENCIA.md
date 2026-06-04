@@ -90,6 +90,13 @@ TYPEBOT_TARGET_VIEWER_BASE_URL=https://typebot-typebot-walkup-viewer.achpyp.easy
 # Avatar/ícone do bot no Typebot (logo público + reescrita URLs MinIO antigas)
 TYPEBOT_AVATAR_PUBLIC_BASE_URL=https://app.chattypebot.com
 TYPEBOT_S3_PUBLIC_BASE_URL=https://typebot-minio.achpyp.easypanel.host/typebot/public
+# Mesmas credenciais do MinIO (upload logo → public/branding/{tenantId}/logo.png)
+S3_ENDPOINT=typebot-minio.achpyp.easypanel.host
+S3_PORT=443
+S3_SSL=true
+S3_ACCESS_KEY=<key-minio>
+S3_SECRET_KEY=<secret-minio>
+S3_BUCKET=typebot
 ```
 
 ## Painel (serviço `painel` — build)

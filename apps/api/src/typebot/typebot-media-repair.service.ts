@@ -4,10 +4,13 @@
 import { tenantRepository } from "../lib/repositories";
 import type { Tenant } from "../tenants/tenant.repository";
 import { ensureTypebotShareMetadataPublished } from "./typebot-share-metadata.service";
+import { ensureTenantBrandLogoOnMinio } from "./typebot-brand-logo-minio.service";
 import {
+  applyTenantBrandMediaToTypebotSchema,
   buildTenantPublicLogoUrl,
   diagnoseTypebotStorageEnv,
   isBrokenTypebotMediaUrl,
+  resolveTenantBrandIconUrl,
   sanitizeTypebotSchemaMedia,
 } from "./typebot-media-sanitize.service";
 
@@ -51,7 +54,7 @@ const sanitizeWorkspaceIconOnTarget = async (
   if (!needsFix) return false;
 
   const safeName = String(workspace.name ?? fallbackName ?? "Workspace").trim() || "Workspace";
-  const replacementIcon = buildTenantPublicLogoUrl(tenant) || "";
+  const replacementIcon = resolveTenantBrandIconUrl(tenant) || buildTenantPublicLogoUrl(tenant) || "";
   const patch = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/workspaces/${encodeURIComponent(normalizedWorkspaceId)}`,
     {
@@ -124,7 +127,24 @@ const repairSingleTypebotOnTarget = async (
     return { patched: false, published: false, shareMetadata: false };
   }
 
-  const sanitized = sanitizeTypebotSchemaMedia(payload.typebot, tenant);
+  let preferredIconUrl = "";
+  try {
+    preferredIconUrl = (await ensureTenantBrandLogoOnMinio(tenant)) || resolveTenantBrandIconUrl(tenant);
+  } catch (error) {
+    console.warn(
+      "[typebot-repair-media] upload logo MinIO falhou:",
+      error instanceof Error ? error.message : error,
+    );
+    preferredIconUrl = resolveTenantBrandIconUrl(tenant);
+  }
+
+  let sanitized = sanitizeTypebotSchemaMedia(payload.typebot, tenant);
+  if (preferredIconUrl) {
+    sanitized = applyTenantBrandMediaToTypebotSchema(sanitized, tenant, {
+      preferredIconUrl,
+      force: true,
+    });
+  }
 
   const patchResponse = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`,
