@@ -207,6 +207,7 @@ export class TenantService {
         email: ownerEmail,
         displayName: input.name.trim(),
         passwordHash: hashAttendantPassword(input.initialPassword),
+        welcomePassword: input.initialPassword,
         role: "master",
         createdAt: new Date().toISOString(),
       });

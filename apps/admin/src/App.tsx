@@ -569,14 +569,8 @@ export function App() {
   const [selectedLeadTenantId, setSelectedLeadTenantId] = useState("");
   const [isSavingSubscriber, setIsSavingSubscriber] = useState(false);
   const [editingTenantId, setEditingTenantId] = useState<string | null>(null);
-  const [isResendWelcomeModalOpen, setIsResendWelcomeModalOpen] = useState(false);
-  const [resendWelcomeTenant, setResendWelcomeTenant] = useState<Tenant | null>(null);
-  const [resendWelcomePassword, setResendWelcomePassword] = useState("");
-  const [isResendingWelcome, setIsResendingWelcome] = useState(false);
-  const [isResendAttendantWelcomeModalOpen, setIsResendAttendantWelcomeModalOpen] = useState(false);
-  const [resendAttendantWelcomeTarget, setResendAttendantWelcomeTarget] = useState<AttendantRow | null>(null);
-  const [resendAttendantWelcomePassword, setResendAttendantWelcomePassword] = useState("");
-  const [isResendingAttendantWelcome, setIsResendingAttendantWelcome] = useState(false);
+  const [resendingWelcomeTenantId, setResendingWelcomeTenantId] = useState<string | null>(null);
+  const [resendingWelcomeAttendantId, setResendingWelcomeAttendantId] = useState<string | null>(null);
   const [agentId, setAgentId] = useState("atendente-01");
   const [savedFlowsByTenant, setSavedFlowsByTenant] = useState<Record<string, SavedFlow[]>>({});
   const [flowStatuses, setFlowStatuses] = useState<Record<string, FlowStatus>>({});
@@ -1699,34 +1693,13 @@ export function App() {
     }
   }
 
-  function openResendWelcomeModal(tenant: Tenant) {
-    setResendWelcomeTenant(tenant);
-    setResendWelcomePassword("");
-    setIsResendWelcomeModalOpen(true);
-  }
-
-  function closeResendWelcomeModal() {
-    setIsResendWelcomeModalOpen(false);
-    setResendWelcomeTenant(null);
-    setResendWelcomePassword("");
-  }
-
-  async function confirmResendWelcomeEmail() {
-    if (!resendWelcomeTenant) return;
-    if (resendWelcomePassword.trim().length < 4) {
-      setStatusMessage("Informe a senha (mín. 4 caracteres) que será enviada no e-mail de boas-vindas.");
-      return;
-    }
-
-    setIsResendingWelcome(true);
+  async function resendTenantWelcomeEmail(tenant: Tenant) {
+    if (resendingWelcomeTenantId) return;
+    setResendingWelcomeTenantId(tenant.id);
     try {
       const response = await fetch(
-        `${apiBase}/api/master/tenants/${encodeURIComponent(resendWelcomeTenant.id)}/resend-welcome`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ initialPassword: resendWelcomePassword.trim() }),
-        },
+        `${apiBase}/api/master/tenants/${encodeURIComponent(tenant.id)}/resend-welcome`,
+        { method: "POST" },
       );
       const payload = (await response.json().catch(() => ({}))) as {
         message?: string;
@@ -1739,20 +1712,16 @@ export function App() {
 
       const delivery = payload.emailDelivery;
       if (delivery?.status === "sent") {
-        setStatusMessage(`E-mail de boas-vindas reenviado para ${resendWelcomeTenant.ownerEmail}.`);
+        setStatusMessage(`E-mail de boas-vindas reenviado para ${tenant.ownerEmail} (senha original do cadastro).`);
       } else if (delivery?.status === "failed") {
         setStatusMessage(delivery.message ?? "Falha ao reenviar e-mail de boas-vindas.");
       } else if (delivery?.status === "skipped") {
-        setStatusMessage(
-          delivery.message ??
-            "E-mail não enviado. Configure SMTP no serviço API (SMTP_HOST, SMTP_USER, SMTP_PASS, MAIL_FROM, MAIL_MODE=smtp).",
-        );
+        setStatusMessage(delivery.message ?? "E-mail não enviado.");
       } else {
         setStatusMessage("Solicitação de reenvio concluída.");
       }
-      closeResendWelcomeModal();
     } finally {
-      setIsResendingWelcome(false);
+      setResendingWelcomeTenantId(null);
     }
   }
 
@@ -2030,34 +1999,13 @@ export function App() {
     setMasterWizardStep(next);
   }
 
-  function openResendAttendantWelcomeModal(row: AttendantRow) {
-    setResendAttendantWelcomeTarget(row);
-    setResendAttendantWelcomePassword("");
-    setIsResendAttendantWelcomeModalOpen(true);
-  }
-
-  function closeResendAttendantWelcomeModal() {
-    setIsResendAttendantWelcomeModalOpen(false);
-    setResendAttendantWelcomeTarget(null);
-    setResendAttendantWelcomePassword("");
-  }
-
-  async function confirmResendAttendantWelcomeEmail() {
-    if (!selectedTenant || !resendAttendantWelcomeTarget) return;
-    if (resendAttendantWelcomePassword.trim().length < 4) {
-      setStatusMessage("Informe a senha (mín. 4 caracteres) para o e-mail de boas-vindas do atendente.");
-      return;
-    }
-
-    setIsResendingAttendantWelcome(true);
+  async function resendAttendantWelcomeEmail(row: AttendantRow) {
+    if (!selectedTenant || resendingWelcomeAttendantId) return;
+    setResendingWelcomeAttendantId(row.id);
     try {
       const response = await fetch(
-        `${apiBase}/api/master/tenants/${encodeURIComponent(selectedTenant)}/attendants/${encodeURIComponent(resendAttendantWelcomeTarget.id)}/resend-welcome`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ password: resendAttendantWelcomePassword.trim() }),
-        },
+        `${apiBase}/api/master/tenants/${encodeURIComponent(selectedTenant)}/attendants/${encodeURIComponent(row.id)}/resend-welcome`,
+        { method: "POST" },
       );
       const payload = (await response.json().catch(() => ({}))) as {
         message?: string;
@@ -2069,19 +2017,20 @@ export function App() {
       }
 
       const delivery = payload.emailDelivery;
-      const targetEmail = resendAttendantWelcomeTarget.email?.trim() || "destinatário";
+      const targetEmail = row.email?.trim() || "destinatário";
       if (delivery?.status === "sent") {
-        setStatusMessage(`E-mail de boas-vindas reenviado para ${targetEmail}. Login: usuário "${resendAttendantWelcomeTarget.username}".`);
+        setStatusMessage(
+          `E-mail reenviado para ${targetEmail} (senha original). Login: usuário "${row.username}".`,
+        );
       } else if (delivery?.status === "failed") {
         setStatusMessage(delivery.message ?? "Falha ao reenviar e-mail de boas-vindas.");
       } else if (delivery?.status === "skipped") {
-        setStatusMessage(delivery.message ?? "E-mail não enviado (SMTP não configurado na API).");
+        setStatusMessage(delivery.message ?? "E-mail não enviado.");
       } else {
         setStatusMessage("Solicitação de reenvio concluída.");
       }
-      closeResendAttendantWelcomeModal();
     } finally {
-      setIsResendingAttendantWelcome(false);
+      setResendingWelcomeAttendantId(null);
     }
   }
 
@@ -3152,10 +3101,11 @@ export function App() {
                             <button
                               type="button"
                               className="ghost-btn"
-                              title="Reenviar e-mail de boas-vindas"
-                              onClick={() => openResendAttendantWelcomeModal(row)}
+                              title="Reenviar e-mail de boas-vindas com a senha do cadastro"
+                              disabled={resendingWelcomeAttendantId === row.id}
+                              onClick={() => void resendAttendantWelcomeEmail(row)}
                             >
-                              Reenviar e-mail
+                              {resendingWelcomeAttendantId === row.id ? "Enviando..." : "Reenviar e-mail"}
                             </button>
                           ) : null}
                           <button type="button" className="ghost-btn danger-btn" onClick={() => void removeAttendant(row.id)}>
@@ -3738,10 +3688,11 @@ export function App() {
                         <button
                           type="button"
                           className="ghost-btn"
-                          title="Reenviar e-mail de boas-vindas com senha de acesso"
-                          onClick={() => openResendWelcomeModal(tenant)}
+                          title="Reenviar e-mail de boas-vindas com a senha do cadastro"
+                          disabled={resendingWelcomeTenantId === tenant.id}
+                          onClick={() => void resendTenantWelcomeEmail(tenant)}
                         >
-                          Reenviar e-mail
+                          {resendingWelcomeTenantId === tenant.id ? "Enviando..." : "Reenviar e-mail"}
                         </button>
                       ) : null}
                     </span>
@@ -3841,99 +3792,6 @@ export function App() {
                 </button>
                 <button onClick={saveTenantFlow}>Salvar fluxo</button>
               </div>
-            </div>
-          </div>
-        ) : null}
-
-        {isResendAttendantWelcomeModalOpen && resendAttendantWelcomeTarget ? (
-          <div className="modal-overlay" onClick={() => !isResendingAttendantWelcome && closeResendAttendantWelcomeModal()}>
-            <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-              <h3>Reenviar boas-vindas — atendente</h3>
-              <p className="muted">
-                E-mail: <strong>{resendAttendantWelcomeTarget.email}</strong> · Usuário de login:{" "}
-                <strong>{resendAttendantWelcomeTarget.username}</strong> (o e-mail mostra este usuário, não o e-mail).
-              </p>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (isResendingAttendantWelcome) return;
-                  confirmResendAttendantWelcomeEmail().catch(() =>
-                    setStatusMessage("Falha ao reenviar e-mail de boas-vindas."),
-                  );
-                }}
-              >
-                <div className="grid-form">
-                  <input
-                    type="password"
-                    placeholder="Senha de acesso no e-mail (mín. 4 caracteres)"
-                    value={resendAttendantWelcomePassword}
-                    onChange={(event) => setResendAttendantWelcomePassword(event.target.value)}
-                    disabled={isResendingAttendantWelcome}
-                    minLength={4}
-                    required
-                    autoComplete="new-password"
-                  />
-                </div>
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    onClick={closeResendAttendantWelcomeModal}
-                    disabled={isResendingAttendantWelcome}
-                  >
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={isResendingAttendantWelcome}>
-                    {isResendingAttendantWelcome ? "Enviando..." : "Enviar e-mail"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        ) : null}
-
-        {isResendWelcomeModalOpen && resendWelcomeTenant ? (
-          <div className="modal-overlay" onClick={() => !isResendingWelcome && closeResendWelcomeModal()}>
-            <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-              <h3>Reenviar boas-vindas</h3>
-              <p className="muted">
-                Será enviado um novo e-mail para <strong>{resendWelcomeTenant.ownerEmail}</strong> (
-                {resendWelcomeTenant.name}) com o link de acesso e a senha informada abaixo. A senha do master do
-                assinante será atualizada para coincidir com o e-mail.
-              </p>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (isResendingWelcome) return;
-                  confirmResendWelcomeEmail().catch(() => setStatusMessage("Falha ao reenviar e-mail de boas-vindas."));
-                }}
-              >
-                <div className="grid-form">
-                  <input
-                    type="password"
-                    placeholder="Senha de acesso no e-mail (mín. 4 caracteres)"
-                    value={resendWelcomePassword}
-                    onChange={(event) => setResendWelcomePassword(event.target.value)}
-                    disabled={isResendingWelcome}
-                    minLength={4}
-                    required
-                    autoComplete="new-password"
-                  />
-                </div>
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="ghost-btn"
-                    onClick={closeResendWelcomeModal}
-                    disabled={isResendingWelcome}
-                  >
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={isResendingWelcome}>
-                    {isResendingWelcome ? "Enviando..." : "Enviar e-mail"}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         ) : null}

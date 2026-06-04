@@ -217,6 +217,7 @@ export const registerAuthRoutes = (app: Express) => {
 
       const updated = attendantRepository.updateById(attendant.id, {
         passwordHash: hashAttendantPassword(input.newPassword),
+        welcomePassword: input.newPassword,
         email: providedEmail,
       });
       if (!updated) {

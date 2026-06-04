@@ -36,7 +36,7 @@ export const verifyAttendantPassword = (password: string, stored: string): boole
 export type AttendantPublic = Omit<Attendant, "passwordHash">;
 
 const toPublic = (row: Attendant): AttendantPublic => {
-  const { passwordHash: _p, ...rest } = row;
+  const { passwordHash: _p, welcomePassword: _w, ...rest } = row;
   return rest;
 };
 
@@ -59,6 +59,7 @@ export class AttendantService {
       email: input.email.trim().toLowerCase(),
       displayName: input.displayName.trim(),
       passwordHash: hashAttendantPassword(input.password),
+      welcomePassword: input.password,
       role: input.role as AttendantRole,
       createdAt: new Date().toISOString(),
     };

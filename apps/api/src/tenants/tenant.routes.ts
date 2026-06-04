@@ -16,7 +16,6 @@ import {
   updateTenantStatusSchema,
   updateTenantChatThemeSchema,
 } from "./tenant.service";
-import { hashAttendantPassword } from "../attendants/attendant.service";
 import { deliverTenantWelcomeEmail } from "../mail/tenant-welcome-delivery";
 import { z } from "zod";
 import { FlowService } from "../flows/flow.service";
@@ -42,10 +41,6 @@ const tenantService = new TenantService(
   kanbanRepository,
 );
 const flowService = new FlowService(flowRepository);
-
-const resendTenantWelcomeSchema = z.object({
-  initialPassword: z.string().min(4).max(120),
-});
 
 export const registerTenantRoutes = (app: Express) => {
   app.get("/api/public/tenants/:id/logo", (req, res) => {
@@ -231,24 +226,28 @@ export const registerTenantRoutes = (app: Express) => {
     try {
       const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
       if (!tenant) return res.status(404).json({ message: "Assinante não encontrado." });
-      const input = resendTenantWelcomeSchema.parse(req.body);
       const masterAttendant = attendantRepository
         .listByTenant(tenant.id)
         .find((row) => row.role === "master");
-      if (masterAttendant) {
-        attendantRepository.updateById(masterAttendant.id, {
-          passwordHash: hashAttendantPassword(input.initialPassword),
+      const storedPassword = String(masterAttendant?.welcomePassword ?? "").trim();
+      if (!storedPassword) {
+        return res.status(409).json({
+          message:
+            "Senha original não está registrada para este assinante. Cadastre novamente ou use redefinir senha no login.",
+          emailDelivery: {
+            status: "skipped",
+            message: "Senha original indisponível no cadastro.",
+          },
         });
       }
       const emailDelivery = await deliverTenantWelcomeEmail({
         ownerEmail: tenant.ownerEmail,
         recipientName: tenant.name,
-        initialPassword: input.initialPassword,
+        initialPassword: storedPassword,
       });
       return res.status(200).json({
         ok: true,
         ownerEmail: tenant.ownerEmail,
-        passwordSynced: Boolean(masterAttendant),
         emailDelivery,
       });
     } catch (error) {

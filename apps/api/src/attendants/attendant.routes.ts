@@ -1,14 +1,12 @@
 import type { Express } from "express";
-import { z } from "zod";
 import { attendantRepository, tenantRepository } from "../lib/repositories";
 import { deliverAttendantWelcomeEmail } from "../mail/attendant-welcome-delivery";
-import { AttendantService, createAttendantSchema, hashAttendantPassword } from "./attendant.service";
+import { AttendantService, createAttendantSchema } from "./attendant.service";
 
 const attendantService = new AttendantService(attendantRepository);
 
-const resendAttendantWelcomeSchema = z.object({
-  password: z.string().min(4).max(200),
-});
+const resolveStoredWelcomePassword = (welcomePassword: string | undefined): string =>
+  String(welcomePassword ?? "").trim();
 
 export const registerAttendantRoutes = (app: Express) => {
   app.get("/api/master/tenants/:tenantId/attendants", (req, res) => {
@@ -55,16 +53,23 @@ export const registerAttendantRoutes = (app: Express) => {
       const attendant = attendantRepository.listByTenant(tenantId).find((row) => row.id === attendantId);
       if (!attendant) return res.status(404).json({ message: "Atendente não encontrado." });
 
-      const input = resendAttendantWelcomeSchema.parse(req.body);
-      attendantRepository.updateById(attendant.id, {
-        passwordHash: hashAttendantPassword(input.password),
-      });
+      const storedPassword = resolveStoredWelcomePassword(attendant.welcomePassword);
+      if (!storedPassword) {
+        return res.status(409).json({
+          message:
+            "Senha original não está registrada para este usuário. Remova e cadastre novamente o atendente (ou use redefinir senha no login para gravar uma nova).",
+          emailDelivery: {
+            status: "skipped",
+            message: "Senha original indisponível no cadastro.",
+          },
+        });
+      }
 
       const emailDelivery = await deliverAttendantWelcomeEmail({
         toEmail: String(attendant.email ?? "").trim(),
         recipientName: String(attendant.displayName || attendant.username).trim(),
         userIdentifier: attendant.username,
-        password: input.password,
+        password: storedPassword,
         createdByLabel: tenant.name,
       });
 

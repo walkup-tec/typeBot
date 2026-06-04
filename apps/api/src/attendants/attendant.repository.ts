@@ -13,6 +13,8 @@ export interface Attendant {
   email?: string;
   displayName: string;
   passwordHash: string;
+  /** Senha inicial em texto (somente servidor) para reenvio de boas-vindas sem modal. */
+  welcomePassword?: string;
   role: AttendantRole;
   createdAt: string;
 }
@@ -184,6 +186,7 @@ export class AttendantRepository {
     patch: {
       passwordHash?: string;
       email?: string;
+      welcomePassword?: string;
     },
   ): Attendant | null {
     const index = this.rows.findIndex((row) => row.id === id);
