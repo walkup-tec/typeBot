@@ -2,4 +2,4 @@
 export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-live-only-v19-recover-workspace-vestiges";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-walkup-recupera-fluxos-drax-vestigios";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-walkup-biblioteca-fluxo-status-ativo";

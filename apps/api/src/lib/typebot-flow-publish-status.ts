@@ -114,7 +114,12 @@ export const fetchTypebotDetailById = async (typebotId: string): Promise<Typebot
   return null;
 };
 
-const normalizeFlowKey = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
+const normalizeFlowKey = (value: string | undefined): string =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 
 const buildWorkspaceLiveIndex = (rows: TypebotListRow[]): WorkspaceLiveIndex => {
   const byRemoteId = new Map<string, TypebotListRow>();
@@ -214,13 +219,21 @@ const resolveFlowActiveStatusFromIndex = (
   const libraryTitle = resolveLibraryTitleForFlow(flow);
   const label = libraryTitle || String(flow.displayLabel ?? flow.nickname ?? "").trim();
 
-  const row = index
-    ? pickWorkspaceRowForFlow(index, { remoteId, publicId, label })
-    : null;
+  let row = index ? pickWorkspaceRowForFlow(index, { remoteId, publicId, label }) : null;
+  if (!row && index && libraryTitle) {
+    row = pickWorkspaceRowForFlow(index, { remoteId: "", publicId: "", label: libraryTitle });
+  }
+
   const publishedTypebotId = String(row?.publishedTypebotId ?? "").trim();
-  let typebotPublished = isTypebotPublishedInBuilder(null, publicId, publishedTypebotId);
+  const rowPublicId = normalizeFlowKey(String(row?.publicId ?? ""));
+  const effectivePublicId = rowPublicId || publicId;
+  let typebotPublished = isTypebotPublishedInBuilder(null, effectivePublicId, publishedTypebotId);
+
+  if (!typebotPublished && row && String(flow.librarySourceId ?? "").trim()) {
+    typebotPublished = Boolean(publishedTypebotId || remoteId || libraryTitle);
+  }
   if (!typebotPublished && row) {
-    typebotPublished = Boolean(remoteId || libraryTitle || String(flow.librarySourceId ?? "").trim());
+    typebotPublished = Boolean(remoteId || libraryTitle);
   }
 
   return {
@@ -237,6 +250,7 @@ export const resolveFlowActiveStatus = async (flow: {
   typebotWorkspaceId?: string;
   displayLabel?: string;
   nickname?: string;
+  librarySourceId?: string;
 }): Promise<FlowActiveStatus> => {
   const workspaceId = String(flow.typebotWorkspaceId ?? "").trim();
   if (workspaceId) {
@@ -249,6 +263,7 @@ export const resolveFlowActiveStatus = async (flow: {
   const url = String(flow.url ?? "").trim();
   let remoteId = String(flow.typebotRemoteId ?? "").trim();
   let publicId = String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(url);
+  const libraryTitle = resolveLibraryTitleForFlow(flow);
 
   let detail: TypebotDetail | null = null;
   let publishedTypebotId = "";
@@ -268,7 +283,7 @@ export const resolveFlowActiveStatus = async (flow: {
     const row = pickWorkspaceRowForFlow(index, {
       remoteId,
       publicId,
-      label: String(flow.displayLabel ?? flow.nickname ?? "").trim(),
+      label: libraryTitle || String(flow.displayLabel ?? flow.nickname ?? "").trim(),
     });
     if (row) {
       remoteId = String(row.id ?? "").trim();

@@ -755,13 +755,26 @@ export function App() {
           return byLibraryId || byLabel || byMasterViewer;
         });
         const linkedFlow =
-          matchingFlows.find((flow) => flow.url.trim() !== item.viewerUrl.trim()) ??
           matchingFlows.find((flow) => flow.librarySourceId === item.id) ??
+          matchingFlows.find((flow) => flow.url.trim() !== item.viewerUrl.trim()) ??
+          matchingFlows.find(
+            (flow) =>
+              normalizedTitle &&
+              normalizeFlowText(flow.displayLabel ?? flow.nickname) === normalizedTitle,
+          ) ??
           matchingFlows.find((flow) => flow.url.trim() === item.viewerUrl.trim()) ??
           null;
-        const healthStatus = linkedFlow
-          ? flowStatuses[linkedFlow.id] ??
-            (linkedFlow.viewerUrlActive !== false ? "active" : "inactive")
+        const linkedFromApi =
+          linkedFlow?.typebotPublished === true ||
+          linkedFlow?.viewerUrlActive === true ||
+          Boolean(linkedFlow?.typebotRemoteId?.trim());
+        const probedStatus = linkedFlow ? flowStatuses[linkedFlow.id] : undefined;
+        const healthStatus: FlowStatus = linkedFlow
+          ? probedStatus === "active" || probedStatus === "checking"
+            ? probedStatus
+            : linkedFromApi
+              ? "active"
+              : probedStatus ?? (linkedFlow.viewerUrlActive !== false ? "active" : "inactive")
           : "inactive";
         const status: FlowStatus =
           healthStatus === "active" || healthStatus === "checking" ? "active" : "inactive";
@@ -1027,6 +1040,12 @@ export function App() {
           const publicId = flow.typebotPublicId?.trim();
           if (remoteId) params.set("typebotRemoteId", remoteId);
           if (publicId) params.set("typebotPublicId", publicId);
+          const workspaceId = selectedTenantObject?.typebotWorkspaceId?.trim();
+          if (workspaceId) params.set("typebotWorkspaceId", workspaceId);
+          const libId = flow.librarySourceId?.trim();
+          if (libId) params.set("librarySourceId", libId);
+          const label = flow.displayLabel?.trim() || flow.nickname?.trim();
+          if (label) params.set("displayLabel", label);
           const response = await fetch(`${apiBase}/api/typebot/flow-status?${params.toString()}`);
           const data = (await response.json()) as { status: "active" | "inactive" };
           return { flowId: flow.id, status: data.status as FlowStatus };

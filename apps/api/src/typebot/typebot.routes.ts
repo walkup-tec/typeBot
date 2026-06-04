@@ -8,6 +8,10 @@ const flowStatusSchema = z.object({
   url: z.string().url(),
   typebotRemoteId: z.string().max(120).optional(),
   typebotPublicId: z.string().max(200).optional(),
+  typebotWorkspaceId: z.string().max(120).optional(),
+  librarySourceId: z.string().max(120).optional(),
+  displayLabel: z.string().max(200).optional(),
+  nickname: z.string().max(200).optional(),
 });
 
 export const registerTypebotRoutes = (app: Express) => {
@@ -32,12 +36,17 @@ export const registerTypebotRoutes = (app: Express) => {
 
   app.get("/api/typebot/flow-status", async (req, res) => {
     try {
-      const { url, typebotRemoteId, typebotPublicId } = flowStatusSchema.parse(req.query);
+      const { url, typebotRemoteId, typebotPublicId, typebotWorkspaceId, librarySourceId, displayLabel, nickname } =
+        flowStatusSchema.parse(req.query);
       const probe = await probeFlowUrlStatus(url);
       const activeStatus = await resolveFlowActiveStatus({
         url,
         typebotRemoteId,
         typebotPublicId,
+        typebotWorkspaceId,
+        librarySourceId,
+        displayLabel,
+        nickname,
       });
       const typebotPublished = activeStatus.typebotPublished;
       const status = typebotPublished || probe.status === "active" ? "active" : "inactive";
