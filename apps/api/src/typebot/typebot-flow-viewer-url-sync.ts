@@ -630,15 +630,45 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
   const np = normalizeText(publicId);
   for (const f of flows) {
     if (String(f.typebotRemoteId ?? "").trim() === typebotId) return true;
-    if (!String(f.typebotRemoteId ?? "").trim() && String(f.librarySourceId ?? "").trim()) {
-      continue;
-    }
     if (nu && normalizeText(f.url) === nu) return true;
     const pid = typebotPublicIdFromViewerUrl(f.url);
     if (np && pid && normalizeText(pid) === np) return true;
     if (np && f.typebotPublicId && normalizeText(f.typebotPublicId) === np) return true;
   }
   return false;
+};
+
+/** Remove cópias extras do mesmo bot (mesmo remoteId, publicId ou URL) no tenant. */
+const dedupeTenantWorkspaceExclusiveFlows = (tenantId: string): number => {
+  const flows = flowRepository.listByTenant(tenantId).filter((flow) => !String(flow.librarySourceId ?? "").trim());
+  const groups = new Map<string, SavedFlow[]>();
+
+  for (const flow of flows) {
+    const key =
+      normalizeText(String(flow.typebotRemoteId ?? "").trim()) ||
+      flowPublicIdKey(flow) ||
+      normalizeText(flow.url);
+    if (!key) continue;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(flow);
+    groups.set(key, bucket);
+  }
+
+  const scoreKeeper = (flow: SavedFlow): number =>
+    (String(flow.typebotRemoteId ?? "").trim() ? 8 : 0) +
+    (String(flow.typebotPublicId ?? "").trim() ? 4 : 0) +
+    (String(flow.displayLabel ?? "").trim() ? 2 : 0);
+
+  let removed = 0;
+  for (const bucket of groups.values()) {
+    if (bucket.length <= 1) continue;
+    const sorted = [...bucket].sort((a, b) => scoreKeeper(b) - scoreKeeper(a));
+    for (const flow of sorted.slice(1)) {
+      flowRepository.removeById(flow.id);
+      removed += 1;
+    }
+  }
+  return removed;
 };
 
 export type TenantWorkspaceFlowImportResult = {
@@ -676,6 +706,8 @@ const pruneTenantFlowsToMatchWorkspace = async (
 
   const flows = flowRepository.listByTenant(tenantId);
   const keptRemoteIds = new Set<string>();
+  const keptPublicIds = new Set<string>();
+  const keptViewerUrls = new Set<string>();
   const toRemove: string[] = [];
 
   for (const flow of flows) {
@@ -696,6 +728,7 @@ const pruneTenantFlowsToMatchWorkspace = async (
     }
 
     const publicId = flowPublicIdKey(flow);
+    const viewerUrlKey = normalizeText(flow.url);
     let keepByPublicId = false;
     if (publicId) {
       for (const row of rows) {
@@ -707,7 +740,19 @@ const pruneTenantFlowsToMatchWorkspace = async (
         }
       }
     }
-    if (keepByPublicId) continue;
+    if (keepByPublicId) {
+      if (publicId && keptPublicIds.has(publicId)) {
+        toRemove.push(flow.id);
+        continue;
+      }
+      if (viewerUrlKey && keptViewerUrls.has(viewerUrlKey)) {
+        toRemove.push(flow.id);
+        continue;
+      }
+      if (publicId) keptPublicIds.add(publicId);
+      if (viewerUrlKey) keptViewerUrls.add(viewerUrlKey);
+      continue;
+    }
     toRemove.push(flow.id);
   }
 
@@ -887,7 +932,9 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   }
 
   pruned += await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
+  pruned += dedupeTenantWorkspaceExclusiveFlows(tenantId);
   await alignTenantFlowsWithWorkspaceRows(tenantId, rows, viewerBase);
+  pruned += dedupeTenantWorkspaceExclusiveFlows(tenantId);
 
   let metadataRepublished = 0;
   for (const row of rows) {
