@@ -1,0 +1,65 @@
+---
+description: Commits de deploy com [shortsha] no assunto para o Easypanel/Maker
+alwaysApply: true
+---
+
+# Deploy — commit visível no Easypanel (obrigatório)
+
+## Como o Easypanel mostra o deploy
+
+Com **fonte Git**, o título é `Deploy service: ` + **assunto do último commit**. Não há campo SHA separado. Se o assunto for texto longo ou `Co-authored-by: Cursor`, o painel fica ilegível e **sem** `[abc1234]`.
+
+## Formato obrigatório (assunto do commit)
+
+```text
+[ee2ce32] fix: resumo curto em uma linha
+```
+
+Alternativa:
+
+```text
+deploy[api]: resumo | 2026-06-03T12:00:00.000Z | ee2ce32
+```
+
+**Proibido** para deploy:
+
+- `git commit -m "fix: parágrafo longo..."` sem `[shortsha]`
+- Corpo/commit com `Co-authored-by:` (vai poluir o título no Easypanel)
+- Só `fix: …` sem hash — o Maker não mostra referência Git
+
+## Como commitar neste repo (typebot-Saas)
+
+1. **Com alterações em stage:**
+
+   ```bash
+   npm run easypanel:commit -- "fix: resumo curto"
+   git push origin master
+   ```
+
+   Usa `scripts/git-commit-easypanel.cjs` → amend com `[shortsha]` no início.
+
+2. **Só redeploy (mesmo código, novo título no painel):**
+
+   ```bash
+   npm run easypanel:deploy-empty -- "api: motivo em uma linha"
+   ```
+
+3. **API em produção:** ao mudar lógica da API, atualizar `apps/api/src/deploy-marker.ts` (`API_DEPLOY_MARKER`) no **mesmo** commit. Validar depois: `GET /health` → `deployMarker`.
+
+4. **Painel admin:** atualizar `apps/admin/src/deploy-marker.ts` (`ADMIN_BUILD_MARKER`) quando mudar o bundle do painel.
+
+## Comportamento da IA
+
+- **Nunca** fazer `git commit` manual para mudanças que vão ao Easypanel; usar **`npm run easypanel:commit -- "…"`**.
+- Assunto: **uma linha**, ≤ ~90 caracteres; incluir `DEPLOY-YYYY-MM-DD-slug` no texto quando relevante para bater com `deployMarker`.
+- Não adicionar `Co-authored-by` no commit de deploy.
+- Ao orientar o usuário, citar o SHA do **assunto** (`[abc1234]`) ou do `git log -1 --oneline`, não inventar hash.
+
+## Fonte da verdade
+
+| Onde | O quê |
+|------|--------|
+| Easypanel | Assunto do último commit (`[sha] …`) |
+| `/health` | `deployMarker` (validação pós-build API) |
+
+Doc: `doc/EASYPANEL-deploy-mensagens-unicas.md`

@@ -1,4 +1,11 @@
-﻿## 2026-06-04 - API nova no ar (scale 0→1)
+﻿## 2026-06-04 - Regra deploy Easypanel no repo + script commit
+
+- **Rule:** `.cursor/rules/deploy-commit-fonte-maker.mdc` (espelha regra global Cursor).
+- **Commits:** usar `npm run easypanel:commit -- "fix: …"` — nunca assunto longo sem `[shortsha]`; sem `Co-authored-by` no título.
+- **Script:** `git-commit-easypanel.cjs` strip Co-authored + 1 linha.
+- **Doc:** `doc/EASYPANEL-deploy-mensagens-unicas.md`
+
+## 2026-06-04 - API nova no ar (scale 0→1)
 
 - `/health`: `DEPLOY-2026-06-04-purge-extra-users`, `purgeExtraUsersRoute: true`, `tenantsCount: 2`
 - Próximo: `POST /api/master/system/purge-extra-users`; avatar CLT → Etapa 6 → Atualizar lista
