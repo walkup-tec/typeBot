@@ -54,6 +54,7 @@ deploy[api]: resumo | 2026-06-03T12:00:00.000Z | ee2ce32
 - Assunto: **uma linha**, ≤ ~90 caracteres; incluir `DEPLOY-YYYY-MM-DD-slug` no texto quando relevante para bater com `deployMarker`.
 - Não adicionar `Co-authored-by` no commit de deploy.
 - Ao orientar o usuário, citar o SHA do **assunto** (`[abc1234]`) ou do `git log -1 --oneline`, não inventar hash.
+- O prefixo `[abc1234]` no assunto pode ser **1 hash atrás** do `git log -1` (efeito do amend). O Easypanel mostra o assunto; o hash exato do deploy é `git rev-parse --short HEAD` após o push.
 
 ## Fonte da verdade
 
