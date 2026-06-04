@@ -35,23 +35,21 @@ function main() {
     return;
   }
 
-  let shortSha = "";
+  const buildSubject = () => {
+    const shortSha = sh("git rev-parse --short HEAD");
+    return `[${shortSha}] ${body}`;
+  };
+
   try {
-    shortSha = sh("git rev-parse --short HEAD");
+    execSync(`git commit --amend -m ${JSON.stringify(buildSubject())}`, { stdio: "inherit" });
+    // amend altera o SHA — segundo amend para o prefixo bater com o commit final
+    execSync(`git commit --amend -m ${JSON.stringify(buildSubject())}`, { stdio: "inherit" });
   } catch {
     process.exitCode = 1;
     return;
   }
 
-  const subject = `[${shortSha}] ${body}`;
-  try {
-    execSync(`git commit --amend -m ${JSON.stringify(subject)}`, { stdio: "inherit" });
-  } catch {
-    process.exitCode = 1;
-    return;
-  }
-
-  console.log(`Commit pronto para deploy Easypanel: ${subject}`);
+  console.log(`Commit pronto para deploy Easypanel: ${buildSubject()}`);
 }
 
 main();
