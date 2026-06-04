@@ -3,6 +3,7 @@
  * use URLs públicas HTTPS e que a versão publicada no viewer reflita o builder.
  */
 import { tenantRepository } from "../lib/repositories";
+import { normalizeTypebotMediaUrl } from "./typebot-media-sanitize.service";
 
 const TYPEBOT_BUILDER_API_BASE_URL = String(process.env.TYPEBOT_BUILDER_API_BASE_URL ?? "").trim();
 const TYPEBOT_TARGET_BUILDER_API_BASE_URL = String(
@@ -31,44 +32,7 @@ const builderApiRoots = (): string[] => {
   return [...roots];
 };
 
-const resolveS3PublicBaseUrl = (): string => {
-  const explicit = String(process.env.TYPEBOT_S3_PUBLIC_BASE_URL ?? "").trim();
-  if (explicit) return explicit.replace(/\/$/, "");
-  const endpoint = String(process.env.S3_ENDPOINT ?? process.env.TYPEBOT_S3_ENDPOINT ?? "").trim();
-  const bucket = String(process.env.S3_BUCKET ?? "typebot").trim() || "typebot";
-  if (!endpoint) return "";
-  const host = endpoint.replace(/^https?:\/\//i, "").replace(/\/$/, "");
-  return `https://${host}/${bucket}/public`;
-};
-
-const normalizeShareAssetUrl = (raw: string): string => {
-  const value = String(raw ?? "").trim();
-  if (!value) return "";
-  if (/^data:image\//i.test(value)) return "";
-  if (/^https?:\/\//i.test(value)) {
-    if (/localhost|127\.0\.0\.1/i.test(value)) {
-      const publicBase = resolveS3PublicBaseUrl();
-      if (!publicBase) return "";
-      try {
-        const parsed = new URL(value);
-        const path = parsed.pathname.replace(/^\/+/, "");
-        const idx = path.indexOf("public/");
-        if (idx >= 0) return `${publicBase}/${path.slice(idx + "public/".length)}`;
-      } catch {
-        return "";
-      }
-    }
-    return value;
-  }
-  if (value.startsWith("//")) return `https:${value}`;
-  const publicBase = resolveS3PublicBaseUrl();
-  if (value.startsWith("/") && publicBase) {
-    const path = value.replace(/^\/+/, "");
-    if (path.startsWith("public/")) return `${publicBase}/${path.slice("public/".length)}`;
-    return `${publicBase}/${path}`;
-  }
-  return "";
-};
+const normalizeShareAssetUrl = (raw: string): string => normalizeTypebotMediaUrl(raw);
 
 const publishTypebotOnTarget = async (typebotId: string): Promise<void> => {
   const normalizedId = String(typebotId ?? "").trim();

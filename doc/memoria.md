@@ -1,4 +1,15 @@
-﻿## 2026-06-04 - Recuperação vestígios fluxos Drax (v19)
+﻿## 2026-06-04 - Typebot CLT 500 Postgres 10.0.4.69
+
+- **Erro:** `startChatPreview` → Can't reach database at `10.0.4.69:5432`
+- **Fix ops:** `DATABASE_URL` com hostname `typebot_typebot-walkup-db` em builder+viewer; Postgres running
+- **Log:** `doc/LOG-2026-06-04__fix-typebot-clt-500-postgres-unreachable.md`
+
+## 2026-06-04 - Dedupe biblioteca etapa 6 (CLT duplicado)
+
+- **Fix:** mesmo título no catálogo → oculta linha só «Copiar link» (padrão); mantém linha com Incluir+Copiar
+- **Painel:** `DEPLOY-2026-06-04-walkup-dedupe-biblioteca-fluxos` commit `7b2d7d7`
+
+## 2026-06-04 - Recuperação vestígios fluxos Drax (v19)
 
 - **Endpoint:** `POST .../typebot/recover-workspace-flows` + recover no Atualizar lista
 - **Marker:** `DEPLOY-2026-06-04-walkup-recupera-fluxos-drax-vestigios`
@@ -3855,3 +3866,16 @@
 
 - `landing-drax-logo-admin-parity`
 - `serve-production-public-png`
+
+## 2026-06-03 - Typebot imagens (MinIO + data:image + repair)
+
+- Reaplicada correção documentada em `LOG-2026-05-19__minio-typebot-upload-resolvido.md` e `TYPEBOT-MIGRACAO-WALKUP-FIX-COMPLETO.md` no código da API.
+- `typebot-media-sanitize.service.ts`: fallback `TYPEBOT_AVATAR_PUBLIC_BASE_URL` → `https://app.chattypebot.com`; sanitização de `icon`/blocos; reescrita URLs MinIO.
+- `typebot-media-repair.service.ts` + `POST /api/master/tenants/:id/typebot/repair-media`.
+- `applyTenantIconOnTarget` usa URL pública `/api/public/tenants/:id/logo` em vez de só HTTP direto.
+- Infra ainda necessária: S3 builder/viewer sem `@` na key, sem `S3_PUBLIC_CUSTOM_DOMAIN`, policy `public/` no bucket MinIO.
+
+### Palavras-chave
+
+- `typebot-imagens-minio-repair`
+- `TYPEBOT_AVATAR_PUBLIC_BASE_URL-app-chattypebot`

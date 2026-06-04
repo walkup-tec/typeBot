@@ -5,6 +5,11 @@ import { listSystemMasterLibrary } from "../flows/system-master-library.reposito
 import { syncSourceWorkspaceFlowsToMasterTenant } from "../flows/source-master-sync.service";
 import { isFlowUrlActive } from "../lib/flow-url-health";
 import { importManualWorkspaceTypebotsIntoTenantFlows, refreshTenantFlowViewerUrls } from "./typebot-flow-viewer-url-sync";
+import {
+  buildTenantPublicLogoUrl,
+  buildTenantPublicShareImageUrl,
+  sanitizeTypebotSchemaMedia,
+} from "./typebot-media-sanitize.service";
 
 type ImportMapEntry = {
   matchViewerUrl?: string;
@@ -126,38 +131,6 @@ const resolvePublicBaseForTarget = (): string => {
 };
 
 const TYPEBOT_PUBLIC_BASE_URL = resolvePublicBaseForTarget();
-const TYPEBOT_AVATAR_PUBLIC_BASE_URL = String(process.env.TYPEBOT_AVATAR_PUBLIC_BASE_URL ?? "")
-  .trim()
-  .replace(/\/$/, "");
-
-const resolveAvatarPublicBaseUrl = (): string => {
-  if (/^https?:\/\//i.test(TYPEBOT_AVATAR_PUBLIC_BASE_URL)) return TYPEBOT_AVATAR_PUBLIC_BASE_URL;
-  return "";
-};
-
-const buildTenantPublicLogoUrl = (tenant: Tenant): string => {
-  const logo = String(tenant.profileImageUrl ?? "").trim();
-  if (!logo) return "";
-  const httpLogo = normalizeHttpUrl(logo);
-  if (httpLogo) return httpLogo;
-  if (!isDataImageValue(logo)) return "";
-  const avatarBase = resolveAvatarPublicBaseUrl();
-  const tenantId = String(tenant.id ?? "").trim();
-  if (!avatarBase || !tenantId) return "";
-  return `${avatarBase}/api/public/tenants/${encodeURIComponent(tenantId)}/logo`;
-};
-
-const buildTenantPublicShareImageUrl = (tenant: Tenant): string => {
-  const shareImage = String(tenant.shareImageUrl ?? "").trim();
-  if (!shareImage) return "";
-  const httpShareImage = normalizeHttpUrl(shareImage);
-  if (httpShareImage) return httpShareImage;
-  if (!isDataImageValue(shareImage)) return "";
-  const avatarBase = resolveAvatarPublicBaseUrl();
-  const tenantId = String(tenant.id ?? "").trim();
-  if (!avatarBase || !tenantId) return "";
-  return `${avatarBase}/api/public/tenants/${encodeURIComponent(tenantId)}/share-image`;
-};
 
 const normalizeHttpUrl = (raw: string): string => {
   const value = String(raw ?? "").trim();
@@ -665,7 +638,7 @@ const applyTenantMetadataToTypebotSchema = (
   }
   next.theme = theme;
 
-  return next;
+  return sanitizeTypebotSchemaMedia(next, tenant);
 };
 
 const publishTypebotOnTarget = async (typebotId: string): Promise<void> => {
@@ -818,7 +791,7 @@ const applyTenantIconOnTarget = async (typebotId: string, tenant: Tenant): Promi
   const rawIcon = String(tenant.profileImageUrl ?? "").trim();
   const iconHttpUrl = normalizeHttpUrl(rawIcon);
   // Segurança de UI do Builder: nunca gravar data:image em `typebot.icon`.
-  const safeIcon = iconHttpUrl || "";
+  const safeIcon = buildTenantPublicLogoUrl(tenant) || iconHttpUrl || "";
   const response = await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`, {
     method: "PATCH",
     headers: buildTargetHeaders(),

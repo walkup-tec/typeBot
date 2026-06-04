@@ -39,6 +39,7 @@ import {
 } from "./bootstrap/auth-data-bootstrap";
 import { isAuthPostgresEnabled } from "./lib/auth-postgres";
 import { API_DEPLOY_MARKER, MASTER_LIBRARY_LOGIC_VERSION } from "./deploy-marker";
+import { logTypebotStorageEnvDiagnostics } from "./typebot/typebot-media-sanitize.service";
 
 const app = express();
 /** Traefik/Easypanel enviam `X-Forwarded-Proto`; necessário para `req.secure` e cabeçalhos HTTPS. */
@@ -379,6 +380,7 @@ async function startApi(): Promise<void> {
     );
     // eslint-disable-next-line no-console
     console.log(`API running on http://${host}:${port}`);
+    logTypebotStorageEnvDiagnostics();
 
     if (TYPEBOT_AUTO_SYNC_ACTIVE_MASTER_FLOWS) {
       // Primeiro ciclo pouco após subir a API; depois segue intervalo contínuo.

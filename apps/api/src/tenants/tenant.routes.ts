@@ -23,6 +23,7 @@ import { listSystemMasterLibrary } from "../flows/system-master-library.reposito
 import { ensureSubscriberSavedFlowsFromDefaults } from "../flows/subscriber-default-flows.service";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
+import { repairTenantTypebotMediaOnTarget } from "../typebot/typebot-media-repair.service";
 import {
   importManualWorkspaceTypebotsIntoTenantFlows,
   refreshTenantFlowViewerUrls,
@@ -321,6 +322,20 @@ export const registerTenantRoutes = (app: Express) => {
       return res.status(500).json({
         status: "failed",
         message: error instanceof Error ? error.message : "Falha na recuperação de fluxos Typebot.",
+      });
+    }
+  });
+
+  app.post("/api/master/tenants/:id/typebot/repair-media", async (req, res) => {
+    const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
+    if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+    try {
+      const result = await repairTenantTypebotMediaOnTarget(tenant.id);
+      return res.status(200).json({ status: "ok", ...result });
+    } catch (error) {
+      return res.status(500).json({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Falha ao reparar mídia Typebot.",
       });
     }
   });
