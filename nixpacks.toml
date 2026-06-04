@@ -9,7 +9,7 @@ cmds = ["npm ci"]
 cmds = [
   "npm run build:api",
   "test -f apps/api/dist/deploy-marker.js || (echo 'ERRO: build sem deploy-marker — git desatualizado' && exit 1)",
-  "grep -q api-typebot-health apps/api/dist/deploy-marker.js || (echo 'ERRO: deploy-marker antigo — faça pull master e rebuild' && exit 1)",
+  "grep -q API_DEPLOY_MARKER apps/api/dist/deploy-marker.js || (echo 'ERRO: deploy-marker invalido no dist' && exit 1)",
 ]
 
 [start]
