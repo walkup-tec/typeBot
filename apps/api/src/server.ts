@@ -251,6 +251,9 @@ app.get("/health", async (_req, res) => {
     typebotBuilderHttpStatus: typebotBuilder.httpStatus,
     typebotBuilderReachable: typebotBuilder.ok,
     purgeExtraUsersRoute: true,
+    typebotSourceMasterWorkspaceConfigured: Boolean(
+      String(process.env.TYPEBOT_SOURCE_MASTER_WORKSPACE_ID ?? "").trim(),
+    ),
   });
 });
 

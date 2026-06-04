@@ -1,5 +1,5 @@
 /** Versão da lógica da Biblioteca Master — validar em /health após redeploy do serviço `api`. */
-export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-icon-patch-no-settings-wipe-v27";
+export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-hostavatar-repair-v28";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-icon-patch-without-settings-wipe";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-walkup-hostavatar-repair";

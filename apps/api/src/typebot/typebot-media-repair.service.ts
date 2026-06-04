@@ -15,6 +15,7 @@ import {
   applyTenantBrandMediaToTypebotSchema,
   buildTenantPublicLogoUrl,
   diagnoseTypebotStorageEnv,
+  extractWorkingBrandIconUrl,
   isBrokenTypebotMediaUrl,
   resolveTenantBrandIconUrl,
   sanitizeTypebotSchemaMedia,
@@ -156,6 +157,7 @@ const repairSingleTypebotOnTarget = async (
   }
 
   const shareMetadataBeforeRepair = readShareMetadataSnapshot(payload.typebot);
+  const iconAlreadyWorkingInBuilder = extractWorkingBrandIconUrl(payload.typebot);
 
   let preferredIconUrl = "";
   try {
@@ -168,17 +170,24 @@ const repairSingleTypebotOnTarget = async (
   }
   if (!preferredIconUrl || isBrokenTypebotMediaUrl(preferredIconUrl)) {
     preferredIconUrl =
-      buildTenantPublicLogoUrl(tenant) || resolveTenantBrandIconUrl(tenant) || preferredIconUrl;
+      iconAlreadyWorkingInBuilder ||
+      buildTenantPublicLogoUrl(tenant) ||
+      resolveTenantBrandIconUrl(tenant) ||
+      preferredIconUrl;
+  }
+  if (preferredIconUrl && isBrokenTypebotMediaUrl(preferredIconUrl)) {
+    preferredIconUrl = iconAlreadyWorkingInBuilder || buildTenantPublicLogoUrl(tenant) || "";
   }
 
   let sanitized = sanitizeTypebotSchemaMedia(payload.typebot, tenant);
+  sanitized = alignHostAvatarFromBrandIcon(sanitized, { force: true });
   if (preferredIconUrl) {
     sanitized = applyTenantBrandMediaToTypebotSchema(sanitized, tenant, {
       preferredIconUrl,
       force: true,
     });
+    sanitized = alignHostAvatarFromBrandIcon(sanitized, { force: true });
   }
-  sanitized = alignHostAvatarFromBrandIcon(sanitized, { force: true });
   sanitized = restoreShareMetadataExceptIcon(sanitized, shareMetadataBeforeRepair);
 
   const patchResponse = await fetch(

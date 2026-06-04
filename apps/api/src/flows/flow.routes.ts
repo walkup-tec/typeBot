@@ -49,7 +49,7 @@ import {
   removeSystemDefaultFromSubscriberWorkspaces,
   syncSystemDefaultsToRealTypebotWorkspace,
 } from "../typebot/typebot-builder.service";
-import { SYSTEM_MASTER_OWNER_EMAIL } from "../auth/system-master-auth";
+import { findSystemMasterTenant, SYSTEM_MASTER_OWNER_EMAIL } from "../auth/system-master-auth";
 import { purgeExtraSaasUsers } from "../master/purge-extra-users.service";
 
 const flowService = new FlowService(flowRepository);
@@ -231,6 +231,38 @@ export const registerFlowRoutes = (app: Express) => {
       return res.status(500).json({
         status: "failed",
         message: error instanceof Error ? error.message : "Falha ao purgar usuários extras.",
+      });
+    }
+  });
+
+  app.post("/api/master/system/repair-walkup-master-media", async (_req, res) => {
+    const masterTenant = findSystemMasterTenant();
+    if (!masterTenant?.id) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Assinante matriz Walkup (walkup@walkuptec.com.br) não encontrado.",
+      });
+    }
+    const masterWorkspaceId = String(process.env.TYPEBOT_SOURCE_MASTER_WORKSPACE_ID ?? "").trim();
+    if (!masterWorkspaceId) {
+      return res.status(400).json({
+        status: "failed",
+        message:
+          "Defina TYPEBOT_SOURCE_MASTER_WORKSPACE_ID na API (Easypanel) com o ID do workspace Walkup no builder.",
+      });
+    }
+    try {
+      const result = await repairTenantTypebotMediaOnTarget(masterTenant.id);
+      return res.status(200).json({
+        status: "ok",
+        ownerEmail: masterTenant.ownerEmail,
+        masterWorkspaceId,
+        ...result,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Falha ao reparar mídia do workspace matriz Walkup.",
       });
     }
   });
