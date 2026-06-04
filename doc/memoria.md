@@ -3867,6 +3867,17 @@
 - `landing-drax-logo-admin-parity`
 - `serve-production-public-png`
 
+## 2026-06-03 - Etapa 6 assinante: status Inativo vs master Ativo (CLT)
+
+- Causa: `attachFlowActiveStatus` (fast) não casava fluxo padrão com bot no workspace (URL da matriz / publicId diferente) → `viewerUrlActive: false`; UI etapa 6 marcava Inativo sem olhar matriz Walkup.
+- API: `enrichFlowActiveStatusAfterIndex` — re-match por título no workspace + probe URL para fluxos com `librarySourceId` / padrão sistema.
+- Admin: `libraryFlowRows` usa `selectedTenantFlows`, prioriza flags da API e fallback ativo pela matriz (`sourceMasterFlows`) para itens padrão.
+
+### Palavras-chave
+
+- `etapa6-status-inativo-assinante-clt`
+- `enrich-flow-active-status-library-default`
+
 ## 2026-06-03 - Typebot imagens (MinIO + data:image + repair)
 
 - Reaplicada correção documentada em `LOG-2026-05-19__minio-typebot-upload-resolvido.md` e `TYPEBOT-MIGRACAO-WALKUP-FIX-COMPLETO.md` no código da API.

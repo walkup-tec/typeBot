@@ -739,21 +739,27 @@ export function App() {
     [workspaceOnlyFlows, flowStatuses],
   );
   const normalizeFlowText = (value: string | undefined): string => String(value ?? "").trim().toLowerCase();
+  const flowMatchesLibraryCatalogItem = (flow: SavedFlow, item: FlowLibraryItem): boolean => {
+    const flowLabel = normalizeFlowText(flow.displayLabel ?? flow.nickname);
+    const flowNickname = normalizeFlowText(flow.nickname);
+    const normalizedTitle = normalizeFlowText(item.title);
+    const normalizedSuggestedNickname = normalizeFlowText(item.suggestedNickname);
+    return (
+      flow.librarySourceId === item.id ||
+      (normalizedTitle && flowLabel === normalizedTitle) ||
+      (normalizedSuggestedNickname && flowNickname === normalizedSuggestedNickname) ||
+      flow.url.trim() === item.viewerUrl.trim()
+    );
+  };
   const libraryFlowRows = useMemo(
     () =>
       selectableFlowLibrary.map((item) => {
         const normalizedTitle = normalizeFlowText(item.title);
         const normalizedSuggestedNickname = normalizeFlowText(item.suggestedNickname);
-        const matchingFlows = libraryLinkedFlows.filter((flow) => {
-          const flowLabel = normalizeFlowText(flow.displayLabel ?? flow.nickname);
-          const flowNickname = normalizeFlowText(flow.nickname);
-          const byLibraryId = flow.librarySourceId === item.id;
-          const byLabel =
-            (normalizedTitle && flowLabel === normalizedTitle) ||
-            (normalizedSuggestedNickname && flowNickname === normalizedSuggestedNickname);
-          const byMasterViewer = flow.url.trim() === item.viewerUrl.trim();
-          return byLibraryId || byLabel || byMasterViewer;
-        });
+        const isSystemDefaultItem = systemMasterLibrary.some(
+          (entry) => entry.isSystemDefault && entry.id === item.id,
+        );
+        const matchingFlows = selectedTenantFlows.filter((flow) => flowMatchesLibraryCatalogItem(flow, item));
         const linkedFlow =
           matchingFlows.find((flow) => flow.librarySourceId === item.id) ??
           matchingFlows.find((flow) => flow.url.trim() !== item.viewerUrl.trim()) ??
@@ -764,18 +770,28 @@ export function App() {
           ) ??
           matchingFlows.find((flow) => flow.url.trim() === item.viewerUrl.trim()) ??
           null;
+        const matrixSourceMatch = sourceMasterFlows.find(
+          (flow) =>
+            (normalizedTitle &&
+              normalizeFlowText(flow.displayLabel ?? flow.nickname) === normalizedTitle) ||
+            flow.url.trim() === item.viewerUrl.trim(),
+        );
+        const matrixActive =
+          matrixSourceMatch?.typebotPublished === true || matrixSourceMatch?.viewerUrlActive !== false;
         const linkedFromApi =
           linkedFlow?.typebotPublished === true ||
-          linkedFlow?.viewerUrlActive === true ||
+          linkedFlow?.viewerUrlActive !== false ||
           Boolean(linkedFlow?.typebotRemoteId?.trim());
         const probedStatus = linkedFlow ? flowStatuses[linkedFlow.id] : undefined;
         const healthStatus: FlowStatus = linkedFlow
-          ? probedStatus === "active" || probedStatus === "checking"
-            ? probedStatus
-            : linkedFromApi
-              ? "active"
+          ? linkedFromApi
+            ? "active"
+            : probedStatus === "active" || probedStatus === "checking"
+              ? probedStatus
               : probedStatus ?? (linkedFlow.viewerUrlActive !== false ? "active" : "inactive")
-          : "inactive";
+          : isSystemDefaultItem && matrixActive
+            ? "active"
+            : "inactive";
         const status: FlowStatus =
           healthStatus === "active" || healthStatus === "checking" ? "active" : "inactive";
         return {
@@ -786,7 +802,7 @@ export function App() {
           isIncluded: Boolean(linkedFlow),
         };
       }),
-    [selectableFlowLibrary, libraryLinkedFlows, flowStatuses],
+    [selectableFlowLibrary, selectedTenantFlows, systemMasterLibrary, sourceMasterFlows, flowStatuses],
   );
   /** Fluxos ativos no catálogo (etapa 6). Se vazio, a UI mostra o catálogo completo como fallback. */
   const activeLibraryFlowRows = useMemo(

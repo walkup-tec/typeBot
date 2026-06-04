@@ -243,6 +243,59 @@ const resolveFlowActiveStatusFromIndex = (
   };
 };
 
+const isSystemDefaultLibraryFlow = (flow: { librarySourceId?: string }): boolean => {
+  const libId = String(flow.librarySourceId ?? "").trim();
+  if (!libId) return false;
+  return listSystemMasterLibrary().some(
+    (item) => item.isSystemDefault && (item.id === libId || item.sourceFlowId === libId),
+  );
+};
+
+/** Quando o índice do workspace não casa (URL da matriz, publicId diferente), revalida padrões e URL. */
+const enrichFlowActiveStatusAfterIndex = async (
+  flow: {
+    url: string;
+    typebotRemoteId?: string;
+    typebotPublicId?: string;
+    displayLabel?: string;
+    nickname?: string;
+    librarySourceId?: string;
+  },
+  index: WorkspaceLiveIndex | null,
+  base: FlowActiveStatus,
+): Promise<FlowActiveStatus> => {
+  if (base.typebotPublished) return base;
+
+  const libraryTitle = resolveLibraryTitleForFlow(flow);
+  const label = libraryTitle || String(flow.displayLabel ?? flow.nickname ?? "").trim();
+
+  if (index && label) {
+    const row = pickWorkspaceRowForFlow(index, { remoteId: "", publicId: "", label });
+    if (row) {
+      const publishedTypebotId = String(row.publishedTypebotId ?? "").trim();
+      const rowPublicId = normalizeFlowKey(String(row.publicId ?? ""));
+      const publicId =
+        rowPublicId ||
+        String(flow.typebotPublicId ?? "").trim() ||
+        typebotPublicIdFromViewerUrl(String(flow.url ?? ""));
+      const published = isTypebotPublishedInBuilder(null, publicId, publishedTypebotId);
+      if (published || publishedTypebotId || String(flow.librarySourceId ?? "").trim()) {
+        return { typebotPublished: true, viewerReachable: base.viewerReachable, viewerUrlActive: true };
+      }
+    }
+  }
+
+  const url = String(flow.url ?? "").trim();
+  if (url && (isSystemDefaultLibraryFlow(flow) || String(flow.librarySourceId ?? "").trim())) {
+    const viewerReachable = await isFlowUrlActive(url);
+    if (viewerReachable) {
+      return { typebotPublished: true, viewerReachable: true, viewerUrlActive: true };
+    }
+  }
+
+  return base;
+};
+
 export const resolveFlowActiveStatus = async (flow: {
   url: string;
   typebotRemoteId?: string;
@@ -320,10 +373,13 @@ export const attachFlowActiveStatus = async <T extends {
   if (useFast && workspaceId && flows.length > 0) {
     const rows = await getCachedWorkspaceTypebotRows(workspaceId);
     const index = buildWorkspaceLiveIndex(rows);
-    return flows.map((flow) => ({
-      ...flow,
-      ...resolveFlowActiveStatusFromIndex(flow, index),
-    }));
+    return Promise.all(
+      flows.map(async (flow) => {
+        const base = resolveFlowActiveStatusFromIndex(flow, index);
+        const status = await enrichFlowActiveStatusAfterIndex(flow, index, base);
+        return { ...flow, ...status };
+      }),
+    );
   }
 
   return Promise.all(
