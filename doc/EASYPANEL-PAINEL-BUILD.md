@@ -37,6 +37,10 @@ npm run start:admin
 
 **Porta:** `3000`
 
+**Health check (Easypanel):** `GET /health` na porta 3000 (retorna `{"ok":true}`).
+
+**Redeploy sem 502:** não publicar porta no host (`3002:3000` quebra Swarm). Ver **`doc/DEPLOY-SEM-502-PAINEL.md`** e instalar `/root/traefik-permanent-vps.sh install` no VPS.
+
 **Env no BUILD** (não só runtime): ver `doc/EASYPANEL-PAINEL-VITE-build.env.example`
 
 ## Validar após deploy

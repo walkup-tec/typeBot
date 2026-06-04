@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "node ../../scripts/check-admin-source-imports.mjs && vite build",
     "preview": "vite preview",
-    "start:static": "serve -s dist --listen tcp://0.0.0.0:3000"
+    "start:static": "node scripts/serve-production.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

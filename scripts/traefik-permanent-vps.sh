@@ -6,19 +6,48 @@
 #   chmod +x /root/traefik-permanent-vps.sh
 #   /root/traefik-permanent-vps.sh install
 #
-# O cron roda a cada 1 min e corrige IPs sem derrubar o site (sem restart Traefik na rotina).
+# Após `install` (uma vez no VPS): correção 100% automática — sem comando manual por deploy.
+# - systemd watch: docker events (start/die/destroy/service update)
+# - systemd timer: patch a cada 20s (backup)
+# - cron: backup minuto a minuto
 set -euo pipefail
 
 INSTALL_PATH="/root/traefik-permanent-vps.sh"
 CRON_FILE="/etc/cron.d/traefik-permanent-fix"
 LOG="/var/log/traefik-permanent-fix.log"
+LOCK_FILE="/var/run/traefik-permanent-fix.lock"
 CFG=/etc/easypanel/traefik/config/main.yaml
 NET=easypanel-typebot
+WATCH_SERVICE="traefik-permanent-watch.service"
+TIMER_SERVICE="traefik-permanent-fix.timer"
+WATCH_UNIT_PATH="/etc/systemd/system/${WATCH_SERVICE}"
+TIMER_UNIT_PATH="/etc/systemd/system/${TIMER_SERVICE}"
+TIMER_SERVICE_UNIT="/etc/systemd/system/traefik-permanent-fix.service"
+
+script_path() {
+  if [[ -n "${1:-}" && -x "${1}" ]]; then
+    echo "${1}"
+    return
+  fi
+  if [[ -x "${INSTALL_PATH}" ]]; then
+    echo "${INSTALL_PATH}"
+    return
+  fi
+  readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}"
+}
 
 container_ip() {
   local filter="$1"
   local cid
-  cid=$(docker ps -q -f "name=${filter}" -f status=running | head -1)
+  # Após redeploy o IP muda: usar o container mais recente (evita Traefik apontar para task morta).
+  cid=$(
+    docker ps -q -f "name=${filter}" -f status=running \
+      | xargs -r docker inspect --format '{{.Created}} {{.Id}}' 2>/dev/null \
+      | sort -r \
+      | head -1 \
+      | awk '{print $2}'
+  )
+  [[ -z "$cid" ]] && cid=$(docker ps -q -f "name=${filter}" -f status=running | head -1)
   [[ -z "$cid" ]] && return 1
   docker inspect "$cid" --format "{{index .NetworkSettings.Networks \"${NET}\" \"IPAddress\"}}"
 }
@@ -243,7 +272,7 @@ PY
     traefik=$(traefik_container)
     if [[ -n "$traefik" ]]; then
       docker kill -s HUP "$traefik" 2>/dev/null || docker restart "$traefik" >/dev/null
-      sleep 8
+      sleep 2
       ensure_traefik_on_overlay
     fi
   fi
@@ -326,6 +355,108 @@ run_fix() {
   [[ "$lp" == "200" || "$lp" == "307" ]] && [[ "$painel" == "200" || "$painel" == "307" ]]
 }
 
+should_patch_for_name() {
+  local name="$1"
+  case "$name" in
+    *painel*|*paginadevendas*|*typebot_api*|*api-typebot*|*typebot_api-*|*easypanel*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+run_fix_locked() {
+  local runner
+  runner=$(script_path)
+  mkdir -p "$(dirname "$LOCK_FILE")"
+  if command -v flock >/dev/null 2>&1; then
+    flock -n "$LOCK_FILE" -c "\"${runner}\" run >> \"${LOG}\" 2>&1" || true
+  else
+    "${runner}" run >> "${LOG}" 2>&1 || true
+  fi
+}
+
+schedule_patch() {
+  local delay="${1:-2}"
+  (
+    sleep "$delay"
+    run_fix_locked
+  ) &
+}
+
+watch_deploy_events() {
+  local runner
+  runner=$(script_path)
+  echo "=== traefik-permanent watch (automático) runner=${runner} ==="
+  echo "Eventos: container start|die|destroy + service update. Timer 20s em paralelo."
+
+  docker events --format '{{.Type}} {{.Action}} {{.Actor.Attributes.name}}' | while read -r typ action name; do
+    [[ -z "$name" ]] && continue
+    local key="${typ}:${action}"
+    case "$key" in
+      container:start|container:die|container:kill|container:destroy)
+        should_patch_for_name "$name" || continue
+        schedule_patch 2
+        ;;
+      service:update)
+        should_patch_for_name "$name" || continue
+        schedule_patch 4
+        ;;
+    esac
+    if [[ "$typ" == "container" && "$action" == health_status:* ]]; then
+      should_patch_for_name "$name" && schedule_patch 2
+    fi
+  done
+}
+
+install_watch_service() {
+  cat > "$WATCH_UNIT_PATH" <<EOF
+[Unit]
+Description=Traefik Easypanel — patch automático em redeploy (docker events)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=${INSTALL_PATH} watch
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now "$WATCH_SERVICE"
+  echo "Systemd: ${WATCH_SERVICE} ativo"
+}
+
+install_timer_service() {
+  cat > "$TIMER_SERVICE_UNIT" <<EOF
+[Unit]
+Description=Traefik Easypanel — patch periódico (backup automático)
+
+[Service]
+Type=oneshot
+ExecStart=${INSTALL_PATH} run
+EOF
+
+  cat > "$TIMER_UNIT_PATH" <<EOF
+[Unit]
+Description=Traefik Easypanel — timer 20s (sem intervenção manual)
+
+[Timer]
+OnBootSec=20
+OnUnitActiveSec=20
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now "$TIMER_SERVICE"
+  echo "Systemd: ${TIMER_SERVICE} ativo (patch a cada 20s)"
+}
+
 install_permanent() {
   local src dest
   src=$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")
@@ -338,27 +469,65 @@ install_permanent() {
   echo "Instalando fix permanente em ${dest}"
 
   cat > "$CRON_FILE" <<EOF
-# Traefik Easypanel — corrige upstreams a cada 1 min (Swarm IP drift)
-*/1 * * * * root ${dest} run >> ${LOG} 2>&1
+# Traefik Easypanel — backup se o watcher falhar (Swarm IP drift)
+* * * * * root ${dest} run >> ${LOG} 2>&1
 EOF
   chmod 644 "$CRON_FILE"
+
+  if command -v systemctl >/dev/null 2>&1; then
+    install_watch_service || echo "AVISO: systemd watch falhou"
+    install_timer_service || echo "AVISO: systemd timer falhou"
+  else
+    echo "AVISO: sem systemd — instale systemd ou use cron apenas (até 60s de 502)"
+  fi
 
   run_fix || true
 
   echo ""
-  echo "Instalado:"
-  echo "  Script: ${dest}"
-  echo "  Cron:   ${CRON_FILE} (a cada 1 min)"
-  echo "  Log:    ${LOG}"
+  echo "=== Instalação concluída (automático; não rode comandos após cada deploy) ==="
+  echo "  Script:   ${dest}"
+  echo "  Watcher:  ${WATCH_UNIT_PATH}"
+  echo "  Timer:    ${TIMER_UNIT_PATH} (20s)"
+  echo "  Cron:     ${CRON_FILE} (backup)"
+  echo "  Log:      ${LOG}"
   echo ""
-  echo "Teste manual: ${dest} run"
+  echo "Status:"
+  systemctl is-active "${WATCH_SERVICE}" 2>/dev/null && echo "  watch: OK" || echo "  watch: verificar"
+  systemctl is-active "${TIMER_SERVICE}" 2>/dev/null && echo "  timer: OK" || echo "  timer: verificar"
+  echo ""
+  echo "Diagnóstico opcional: ${dest} run"
+}
+
+show_status() {
+  echo "=== traefik-permanent status ==="
+  for unit in "$WATCH_SERVICE" "$TIMER_SERVICE"; do
+    if systemctl list-unit-files "$unit" &>/dev/null; then
+      echo -n "  ${unit}: "
+      systemctl is-active "$unit" 2>/dev/null || echo "inactive"
+      systemctl is-enabled "$unit" 2>/dev/null | sed 's/^/    enabled: /'
+    else
+      echo "  ${unit}: (não instalado — rode: $(script_path) install)"
+    fi
+  done
+  if [[ -f "$CRON_FILE" ]]; then
+    echo "  cron: ${CRON_FILE} (presente)"
+  else
+    echo "  cron: ausente"
+  fi
+  if [[ -x "$INSTALL_PATH" ]]; then
+    echo "  script: ${INSTALL_PATH}"
+  else
+    echo "  script: ${INSTALL_PATH} (ausente)"
+  fi
 }
 
 case "${1:-run}" in
   install) install_permanent ;;
   run) run_fix ;;
+  watch) watch_deploy_events ;;
+  status) show_status ;;
   *)
-    echo "Uso: $0 install | run"
+    echo "Uso: $0 install | run | watch | status"
     exit 1
     ;;
 esac

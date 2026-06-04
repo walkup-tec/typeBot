@@ -3867,6 +3867,12 @@
 - `landing-drax-logo-admin-parity`
 - `serve-production-public-png`
 
+## 2026-06-03 - Deploy painel: 502 automático (sem SSH por deploy)
+
+- `traefik-permanent-vps.sh install` (uma vez): watch docker events + timer systemd 20s + cron.
+- Não exige `/root/traefik-permanent-vps.sh run` após cada redeploy Easypanel.
+- Guia: `doc/DEPLOY-SEM-502-PAINEL.md`.
+
 ## 2026-06-03 - Etapa 6 assinante: status Inativo vs master Ativo (CLT)
 
 - Causa: `attachFlowActiveStatus` (fast) não casava fluxo padrão com bot no workspace (URL da matriz / publicId diferente) → `viewerUrlActive: false`; UI etapa 6 marcava Inativo sem olhar matriz Walkup.
