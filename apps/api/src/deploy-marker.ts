@@ -1,5 +1,5 @@
 /** Versão da lógica da Biblioteca Master — validar em /health após redeploy do serviço `api`. */
-export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-live-only-v19-recover-workspace-vestiges";
+export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-etapa6-status-imagens-v20";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-walkup-biblioteca-fluxo-status-ativo";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-typebot-imagens-etapa6-status-ativo";
