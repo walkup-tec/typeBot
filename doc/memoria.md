@@ -1,4 +1,21 @@
-﻿## 2026-06-04 - Redeploy API OK; purge ainda 404
+﻿## 2026-06-04 - API nova no ar (scale 0→1)
+
+- `/health`: `DEPLOY-2026-06-04-purge-extra-users`, `purgeExtraUsersRoute: true`, `tenantsCount: 2`
+- Próximo: `POST /api/master/system/purge-extra-users`; avatar CLT → Etapa 6 → Atualizar lista
+
+## 2026-06-04 - Build Easypanel OK, Swarm preso na API antiga
+
+- Deploy `[e3cf306]` Success 14:08 GMT; `/health` ainda `DEPLOY-2026-06-03-typebot-legacy-minio-hostavatar`
+- **Causa:** task Swarm antiga na porta host **3333** (ver `LOG-2026-06-03__api-swarm-3333-host-port-pending.md`)
+- **Fix:** VPS `docker service scale typebot_api=0` → aguardar → `=1` → validar marker `DEPLOY-2026-06-04-purge-extra-users`
+
+## 2026-06-04 - Git push purge marker (aguardando deploy)
+
+- **Push:** `origin/master` → `2a34b8b` `[e3cf306] deploy[api]: purge-extra-users marker health v24`
+- **Inclui:** marker `DEPLOY-2026-06-04-purge-extra-users`, rota purge (`b44b97a` já estava no histórico)
+- **Validar pós-deploy:** `/health` → `deployMarker` novo + `purgeExtraUsersRoute: true`
+
+## 2026-06-04 - Redeploy API OK; purge ainda 404
 
 - **Health prod:** `deployMarker` = `DEPLOY-2026-06-03-typebot-legacy-minio-hostavatar`, `tenantsCount: 2`, `authTenantsAttendants: postgres`
 - **Purge:** `POST /api/master/system/purge-extra-users` → 404 (imagem no ar ≈ commit avatar, **sem** `b44b97a`)

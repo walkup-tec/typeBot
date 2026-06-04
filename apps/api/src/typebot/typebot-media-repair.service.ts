@@ -1,6 +1,7 @@
 /**
  * Reparo em lote de mídia corrompida nos typebots do workspace do assinante.
  */
+import { isSystemMasterEmail } from "../auth/system-master-auth";
 import { tenantRepository } from "../lib/repositories";
 import type { Tenant } from "../tenants/tenant.repository";
 import { ensureTypebotShareMetadataPublished } from "./typebot-share-metadata.service";
@@ -20,6 +21,9 @@ const TYPEBOT_TARGET_BUILDER_API_BASE_URL = String(
 ).trim();
 const TYPEBOT_TARGET_BUILDER_API_TOKEN = String(
   process.env.TYPEBOT_TARGET_BUILDER_API_TOKEN ?? process.env.TYPEBOT_BUILDER_API_TOKEN ?? "",
+).trim();
+const TYPEBOT_SOURCE_MASTER_WORKSPACE_ID = String(
+  process.env.TYPEBOT_SOURCE_MASTER_WORKSPACE_ID ?? "",
 ).trim();
 
 const buildTargetHeaders = (): Record<string, string> => ({
@@ -51,11 +55,30 @@ const sanitizeWorkspaceIconOnTarget = async (
   if (!workspace) return false;
 
   const icon = String(workspace.icon ?? "").trim();
-  const needsFix = /^data:image\//i.test(icon) || isBrokenTypebotMediaUrl(icon);
+  const safeName = String(workspace.name ?? fallbackName ?? "Workspace").trim() || "Workspace";
+
+  let replacementIcon = "";
+  try {
+    replacementIcon = (await ensureTenantBrandLogoOnMinio(tenant)) || "";
+  } catch (error) {
+    console.warn(
+      "[typebot-repair-media] upload logo MinIO (workspace):",
+      error instanceof Error ? error.message : error,
+    );
+  }
+  if (!replacementIcon || isBrokenTypebotMediaUrl(replacementIcon)) {
+    replacementIcon =
+      buildTenantPublicLogoUrl(tenant) || resolveTenantBrandIconUrl(tenant) || replacementIcon;
+  }
+  if (!replacementIcon) return false;
+
+  const needsFix =
+    !icon ||
+    /^data:image\//i.test(icon) ||
+    isBrokenTypebotMediaUrl(icon) ||
+    icon !== replacementIcon;
   if (!needsFix) return false;
 
-  const safeName = String(workspace.name ?? fallbackName ?? "Workspace").trim() || "Workspace";
-  const replacementIcon = resolveTenantBrandIconUrl(tenant) || buildTenantPublicLogoUrl(tenant) || "";
   const patch = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/workspaces/${encodeURIComponent(normalizedWorkspaceId)}`,
     {
@@ -130,13 +153,16 @@ const repairSingleTypebotOnTarget = async (
 
   let preferredIconUrl = "";
   try {
-    preferredIconUrl = (await ensureTenantBrandLogoOnMinio(tenant)) || resolveTenantBrandIconUrl(tenant);
+    preferredIconUrl = (await ensureTenantBrandLogoOnMinio(tenant)) || "";
   } catch (error) {
     console.warn(
       "[typebot-repair-media] upload logo MinIO falhou:",
       error instanceof Error ? error.message : error,
     );
-    preferredIconUrl = resolveTenantBrandIconUrl(tenant);
+  }
+  if (!preferredIconUrl || isBrokenTypebotMediaUrl(preferredIconUrl)) {
+    preferredIconUrl =
+      buildTenantPublicLogoUrl(tenant) || resolveTenantBrandIconUrl(tenant) || preferredIconUrl;
   }
 
   let sanitized = sanitizeTypebotSchemaMedia(payload.typebot, tenant);
@@ -189,9 +215,28 @@ const repairSingleTypebotOnTarget = async (
 export type RepairTenantTypebotMediaResult = {
   tenantId: string;
   workspaceId: string | null;
+  /** Workspaces reparados (tenant + matriz Walkup quando aplicável). */
+  repairedWorkspaceIds: string[];
   workspaceIconCleared: boolean;
-  typebots: Array<{ id: string; name: string; patched: boolean; published: boolean; shareMetadata: boolean }>;
+  typebots: Array<{
+    id: string;
+    name: string;
+    workspaceId: string;
+    patched: boolean;
+    published: boolean;
+    shareMetadata: boolean;
+  }>;
   diagnostics: ReturnType<typeof diagnoseTypebotStorageEnv>;
+};
+
+const resolveWorkspaceIdsForRepair = (tenant: Tenant): string[] => {
+  const ids = new Set<string>();
+  const tenantWorkspaceId = String(tenant.typebotWorkspaceId ?? "").trim();
+  if (tenantWorkspaceId) ids.add(tenantWorkspaceId);
+  if (isSystemMasterEmail(tenant.ownerEmail) && TYPEBOT_SOURCE_MASTER_WORKSPACE_ID) {
+    ids.add(TYPEBOT_SOURCE_MASTER_WORKSPACE_ID);
+  }
+  return [...ids];
 };
 
 export const repairTenantTypebotMediaOnTarget = async (tenantId: string): Promise<RepairTenantTypebotMediaResult> => {
@@ -203,36 +248,43 @@ export const repairTenantTypebotMediaOnTarget = async (tenantId: string): Promis
     throw new Error("TYPEBOT_TARGET_BUILDER_API_BASE_URL e token não configurados.");
   }
 
-  const workspaceId = String(tenant.typebotWorkspaceId ?? "").trim();
+  const workspaceIds = resolveWorkspaceIdsForRepair(tenant);
+  const primaryWorkspaceId = String(tenant.typebotWorkspaceId ?? "").trim() || workspaceIds[0] || null;
   const diagnostics = diagnoseTypebotStorageEnv();
 
-  if (!workspaceId) {
+  if (workspaceIds.length === 0) {
     return {
       tenantId: tenant.id,
       workspaceId: null,
+      repairedWorkspaceIds: [],
       workspaceIconCleared: false,
       typebots: [],
       diagnostics,
     };
   }
 
-  const workspaceIconCleared = await sanitizeWorkspaceIconOnTarget(
-    workspaceId,
-    String(tenant.typebotWorkspaceName ?? tenant.name ?? "Workspace"),
-    tenant,
-  );
-
-  const bots = await listWorkspaceTypebotIds(workspaceId);
+  let workspaceIconCleared = false;
   const typebots: RepairTenantTypebotMediaResult["typebots"] = [];
 
-  for (const bot of bots) {
-    const result = await repairSingleTypebotOnTarget(bot.id, tenant);
-    typebots.push({ id: bot.id, name: bot.name, ...result });
+  for (const workspaceId of workspaceIds) {
+    const iconFixed = await sanitizeWorkspaceIconOnTarget(
+      workspaceId,
+      String(tenant.typebotWorkspaceName ?? tenant.name ?? "Workspace"),
+      tenant,
+    );
+    workspaceIconCleared = workspaceIconCleared || iconFixed;
+
+    const bots = await listWorkspaceTypebotIds(workspaceId);
+    for (const bot of bots) {
+      const result = await repairSingleTypebotOnTarget(bot.id, tenant);
+      typebots.push({ id: bot.id, name: bot.name, workspaceId, ...result });
+    }
   }
 
   return {
     tenantId: tenant.id,
-    workspaceId,
+    workspaceId: primaryWorkspaceId,
+    repairedWorkspaceIds: workspaceIds,
     workspaceIconCleared,
     typebots,
     diagnostics,
