@@ -1,4 +1,11 @@
-﻿## 2026-06-04 - Dedupe fluxos tenant (biblioteca + workspace)
+﻿## 2026-06-04 - Fix build + handoff patch no Atualizar lista (Soma)
+
+- **Deploy falhou:** TS `SavedFlow` sem `updatedAt` em `flowKeeperScore` — corrigido (`createdAt`).
+- **Soma handoff auto:** `reapplyHandoffPatchesForTenantWorkspace` roda após import no **Atualizar lista** (tenantId/sourceFlowLabel/viewer_url + webhook + Redirect).
+- **Marker:** `DEPLOY-2026-06-04-handoff-patch-on-tenant-sync` / `tenant-handoff-patch-on-sync-v38`.
+- **Pós-deploy:** Soma → Etapa 6 → **Atualizar lista** (sem editar Set variable manual).
+
+## 2026-06-04 - Dedupe fluxos tenant (biblioteca + workspace)
 
 - **Problema (Soma Etapa 6):** 1 bot no Typebot, painel com 2 linhas iguais em “Fluxos do workspace” + 1 na biblioteca; URL `empr-stimo-do-trabalhador-clt-bxn7orp` ≠ slug matriz `emprestimo-clt`.
 - **Causa:** stub biblioteca (URL matriz) + import criava cópias workspace quando `publicId`/URL não batiam; dedupe antigo só em fluxos sem `librarySourceId`.

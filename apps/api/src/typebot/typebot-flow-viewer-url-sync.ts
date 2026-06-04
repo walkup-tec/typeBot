@@ -650,8 +650,7 @@ const flowKeeperScore = (flow: SavedFlow): number => {
   if (String(flow.typebotRemoteId ?? "").trim()) score += 16;
   if (String(flow.typebotPublicId ?? "").trim()) score += 8;
   if (String(flow.displayLabel ?? "").trim()) score += 4;
-  const stamp = String(flow.updatedAt ?? flow.createdAt ?? "").trim();
-  if (stamp) score += 1;
+  if (String(flow.createdAt ?? "").trim()) score += 1;
   return score;
 };
 
@@ -705,6 +704,9 @@ export type TenantWorkspaceFlowImportResult = {
   workspaceName?: string;
   workspaceCandidates: number;
   typebotsScanned: number;
+  /** Bots do workspace com patch handoff (Set variable + webhook + Redirect) reaplicado. */
+  handoffPatched?: number;
+  handoffScanned?: number;
   skipReason?: string;
   builderApiBaseUrl?: string;
   workspaceListHttpStatus?: number;

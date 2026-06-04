@@ -1586,3 +1586,27 @@ export const removeSystemDefaultFromSubscriberWorkspaces = async (item: SystemMa
     }
   }
 };
+
+/** Reaplica tenantId, sourceFlowLabel, viewer_url, webhook e Redirect em todos os bots do workspace do assinante. */
+export const reapplyHandoffPatchesForTenantWorkspace = async (
+  tenantId: string,
+): Promise<{ patched: number; scanned: number }> => {
+  const tenant = tenantRepository.getById(String(tenantId ?? "").trim());
+  if (!tenant) return { patched: 0, scanned: 0 };
+
+  const workspaceId = String(tenant.typebotWorkspaceId ?? "").trim();
+  if (!workspaceId || !TYPEBOT_TARGET_BUILDER_API_TOKEN) {
+    return { patched: 0, scanned: 0 };
+  }
+
+  const rows = await listWorkspaceTypebotsOnTarget(workspaceId);
+  let patched = 0;
+  for (const row of rows) {
+    const typebotId = String(row.id ?? "").trim();
+    if (!typebotId) continue;
+    if (await patchHandoffWebhookOnTarget(typebotId, tenant)) {
+      patched += 1;
+    }
+  }
+  return { patched, scanned: rows.length };
+};

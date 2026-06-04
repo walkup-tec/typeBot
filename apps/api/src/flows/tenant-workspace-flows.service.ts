@@ -1,4 +1,5 @@
 import { tenantRepository } from "../lib/repositories";
+import { reapplyHandoffPatchesForTenantWorkspace } from "../typebot/typebot-builder.service";
 import {
   ensureTenantFlowsLinkedToWorkspace,
   filterTenantFlowsForWorkspace,
@@ -62,13 +63,22 @@ export const syncWorkspaceTypebotFlowsForTenant = async (
   if (!workspaceId) return null;
 
   const result = await importManualWorkspaceTypebotsIntoTenantFlows(id);
+  let handoffPatched = 0;
+  let handoffScanned = 0;
+  try {
+    const handoff = await reapplyHandoffPatchesForTenantWorkspace(id);
+    handoffPatched = handoff.patched;
+    handoffScanned = handoff.scanned;
+  } catch {
+    // best-effort
+  }
   try {
     await ensureTenantFlowsLinkedToWorkspace(id);
     await refreshTenantFlowViewerUrls(id);
   } catch {
     // best-effort
   }
-  return result;
+  return { ...result, handoffPatched, handoffScanned };
 };
 
 /** Lista fluxos visíveis do tenant após sync opcional e filtro por workspace do próprio tenant. */
