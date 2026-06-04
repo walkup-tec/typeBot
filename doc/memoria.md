@@ -1,4 +1,18 @@
-﻿## 2026-06-03 - Avatar bolha do chat vs Metadados (hostAvatar)
+﻿## 2026-06-04 - Redeploy API OK; purge ainda 404
+
+- **Health prod:** `deployMarker` = `DEPLOY-2026-06-03-typebot-legacy-minio-hostavatar`, `tenantsCount: 2`, `authTenantsAttendants: postgres`
+- **Purge:** `POST /api/master/system/purge-extra-users` → 404 (imagem no ar ≈ commit avatar, **sem** `b44b97a`)
+- **Git remoto:** `origin/master` = `b44b97a` (purge no código)
+- **PowerShell:** usar `Invoke-RestMethod` ou `curl.exe`, não `curl` (alias `Invoke-WebRequest`)
+- **Próximo:** redeploy API com commit `b44b97a` no título Easypanel; depois POST purge; avatar CLT → Etapa 6 → Atualizar lista
+
+## 2026-06-03 - Rule global Cursor (commit = spec Maker)
+
+- **Arquivo:** `C:\Users\Usuario\.cursor\rules\deploy-commit-fonte-maker.mdc` (`alwaysApply: true`)
+- **User Rules (colar):** `C:\Users\Usuario\.cursor\user-rules-templates\deploy-commit-fonte-maker.txt`
+- **Regra:** commit de deploy sempre da especificação no Maker (Easypanel); IA não inventa hash local.
+
+## 2026-06-03 - Avatar bolha do chat vs Metadados (hostAvatar)
 
 - **Sintoma:** ícone OK em Configurações → Metadados; bolha do bot no preview com imagem quebrada.
 - **Causa:** `theme.chat.hostAvatar` é campo distinto de `icon` / `favIconUrl`.

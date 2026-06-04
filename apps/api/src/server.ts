@@ -250,6 +250,7 @@ app.get("/health", async (_req, res) => {
     typebotBuilderSigninUrl: typebotBuilder.url || null,
     typebotBuilderHttpStatus: typebotBuilder.httpStatus,
     typebotBuilderReachable: typebotBuilder.ok,
+    purgeExtraUsersRoute: true,
   });
 });
 

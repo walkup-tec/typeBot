@@ -1,5 +1,5 @@
 /** Versão da lógica da Biblioteca Master — validar em /health após redeploy do serviço `api`. */
-export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-legacy-minio-hostavatar-v23";
+export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-purge-extra-users-v24";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-03-typebot-legacy-minio-hostavatar";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-purge-extra-users";
