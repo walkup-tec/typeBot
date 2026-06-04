@@ -20,7 +20,11 @@ import { deliverTenantWelcomeEmail } from "../mail/tenant-welcome-delivery";
 import { z } from "zod";
 import { FlowService } from "../flows/flow.service";
 import { listSystemMasterLibrary } from "../flows/system-master-library.repository";
-import { ensureSubscriberSavedFlowsFromDefaults } from "../flows/subscriber-default-flows.service";
+import {
+  ensureSubscriberSavedFlowsFromDefaults,
+  repairSubscriberTenantFlowsOnDisk,
+  syncSubscriberFlowsForListing,
+} from "../flows/subscriber-default-flows.service";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
 import { repairTenantTypebotMediaOnTarget } from "../typebot/typebot-media-repair.service";
@@ -271,14 +275,8 @@ export const registerTenantRoutes = (app: Express) => {
     try {
       clearTenantWorkspaceClearedFlag(tenant.id);
       const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenant.id);
-      const systemDefaultItems = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
-      if (systemDefaultItems.length > 0) {
-        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: false });
-      }
-      const importResult = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
-      await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaultItems);
-      await refreshTenantWorkspaceFlowUrlsFromTypebot(tenant.id);
-      await refreshTenantFlowViewerUrls(tenant.id);
+      await syncSubscriberFlowsForListing(tenant.id);
+      const dedupe = await repairSubscriberTenantFlowsOnDisk(tenant.id);
       let typebotMediaRepair: Awaited<ReturnType<typeof repairTenantTypebotMediaOnTarget>> | null = null;
       try {
         typebotMediaRepair = await repairTenantTypebotMediaOnTarget(tenant.id);
@@ -290,25 +288,16 @@ export const registerTenantRoutes = (app: Express) => {
       }
       const refreshed = tenantRepository.getById(tenant.id);
       const flows = flowService.listByTenant(tenant.id);
-      const hint =
-        importResult.skipReason === "workspaces_list_empty"
-          ? "A Builder API nao retornou workspaces. Confira TYPEBOT_BUILDER_API_BASE_URL (com /api), TYPEBOT_BUILDER_API_TOKEN e acesso ao workspace do assinante."
-          : importResult.skipReason === "workspace_not_matched"
-            ? "Workspaces listados, mas nenhum casou com o nome/e-mail do assinante."
-            : importResult.skipReason === "viewer_base_url_missing"
-              ? "Defina TYPEBOT_TARGET_VIEWER_BASE_URL (ou TYPEBOT_SOURCE_VIEWER_BASE_URL)."
-              : undefined;
       return res.status(200).json({
-        status: importResult.skipReason && importResult.imported === 0 ? "partial" : "ok",
+        status: "ok",
         tenantId: tenant.id,
         typebotProvisionStatus: refreshed?.typebotProvisionStatus ?? null,
         flowCount: flows.length,
-        hint,
+        dedupe,
         recovery,
         typebotMediaRepair,
-        ...importResult,
-        workspaceId: refreshed?.typebotWorkspaceId ?? importResult.workspaceId ?? null,
-        workspaceName: refreshed?.typebotWorkspaceName ?? importResult.workspaceName ?? null,
+        workspaceId: refreshed?.typebotWorkspaceId ?? null,
+        workspaceName: refreshed?.typebotWorkspaceName ?? null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao sincronizar fluxos do workspace Typebot.";

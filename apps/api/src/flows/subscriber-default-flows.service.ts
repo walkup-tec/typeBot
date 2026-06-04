@@ -1,5 +1,6 @@
 import { flowRepository, tenantRepository } from "../lib/repositories";
 import {
+  dedupeTenantFlowsCompletely,
   ensureTenantFlowsLinkedToWorkspace,
   refreshTenantFlowViewerUrls,
 } from "../typebot/typebot-flow-viewer-url-sync";
@@ -8,7 +9,10 @@ import {
   syncWorkspaceTypebotFlowsForTenant,
 } from "./tenant-workspace-flows.service";
 import type { SavedFlow } from "./flow.repository";
-import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
+import {
+  reapplyHandoffPatchesForTenantWorkspace,
+  syncSystemDefaultsToRealTypebotWorkspace,
+} from "../typebot/typebot-builder.service";
 import { isTenantWorkspaceClearedForSync } from "../typebot/typebot-purge-tenant-workspace.service";
 import { FlowService } from "./flow.service";
 import { listSystemMasterLibrary, type SystemMasterLibraryItem } from "./system-master-library.repository";
@@ -101,6 +105,21 @@ export const ensureSubscriberFlowsQuick = async (tenantId: string): Promise<void
   for (const item of activeDefaults) {
     const flows = flowService.listByTenant(tenantId);
     if (flows.some((flow) => flowMatchesSystemDefaultItem(flow, item))) continue;
+
+    const normTitle = normalizeText(item.title);
+    const workspaceMatch = flows.find(
+      (flow) =>
+        normalizeText(String(flow.displayLabel ?? flow.nickname ?? "").trim()) === normTitle &&
+        String(flow.typebotRemoteId ?? "").trim(),
+    );
+    if (workspaceMatch) {
+      flowRepository.updateById(workspaceMatch.id, {
+        librarySourceId: item.id,
+        displayLabel: item.title.trim(),
+      });
+      continue;
+    }
+
     try {
       flowService.create(tenantId, {
         nickname: item.suggestedNickname.trim() || item.title.trim(),
@@ -118,33 +137,48 @@ export const ensureSubscriberFlowsQuick = async (tenantId: string): Promise<void
       }
     }
   }
+};
+
+/** Repara saved-flows: vínculo workspace, dedupe (identidade + título), URLs. */
+export const repairSubscriberTenantFlowsOnDisk = async (
+  tenantId: string,
+): Promise<{ byIdentity: number; byTitle: number }> => {
+  repairSubscriberDefaultLibrarySourceIds(tenantId);
+  try {
+    await ensureTenantFlowsLinkedToWorkspace(tenantId);
+  } catch {
+    // best-effort
+  }
+  return dedupeTenantFlowsCompletely(tenantId);
+};
+
+/** Importa workspace + padrões + handoff do assinante (Etapa 6 — Atualizar lista). */
+export const syncSubscriberFlowsForListing = async (tenantId: string): Promise<void> => {
+  const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+
+  if (defaults.length > 0) {
+    await syncSystemDefaultsToRealTypebotWorkspace(tenantId, defaults, { overwriteExisting: true });
+  }
+
   try {
     await syncWorkspaceTypebotFlowsForTenant(tenantId);
   } catch {
     // best-effort
   }
-};
 
-/** Importa workspace + padrões da Biblioteca Master no saved-flows do assinante (etapa 6). */
-export const syncSubscriberFlowsForListing = async (tenantId: string): Promise<void> => {
-  const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+  try {
+    await reapplyHandoffPatchesForTenantWorkspace(tenantId);
+  } catch {
+    // best-effort
+  }
+
   if (defaults.length > 0) {
     await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
   }
+
+  await repairSubscriberTenantFlowsOnDisk(tenantId);
+
   try {
-    await syncWorkspaceTypebotFlowsForTenant(tenantId);
-  } catch {
-    // best-effort
-  }
-  try {
-    await ensureTenantFlowsLinkedToWorkspace(tenantId);
-    await refreshTenantFlowViewerUrls(tenantId);
-  } catch {
-    // best-effort
-  }
-  if (defaults.length === 0) return;
-  try {
-    await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
     await refreshTenantFlowViewerUrls(tenantId);
   } catch {
     // best-effort

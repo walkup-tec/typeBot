@@ -667,7 +667,7 @@ const flowIdentityKey = (flow: SavedFlow): string => {
 };
 
 /** Remove cópias extras do mesmo bot (biblioteca + workspace) no tenant. */
-const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => {
+export const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => {
   const flows = flowRepository.listByTenant(tenantId);
   const groups = new Map<string, SavedFlow[]>();
 
@@ -690,6 +690,38 @@ const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => {
     }
   }
   return removed;
+};
+
+/** Funde registros com o mesmo nome exibido (ex.: biblioteca com URL matriz + cópias workspace). */
+export const dedupeTenantFlowsByDisplayTitle = (tenantId: string): number => {
+  const flows = flowRepository.listByTenant(tenantId);
+  const groups = new Map<string, SavedFlow[]>();
+
+  for (const flow of flows) {
+    if (isLinkedToSystemMasterDefault(flow)) continue;
+    const title = normalizeText(String(flow.displayLabel ?? flow.nickname ?? "").trim());
+    if (!title) continue;
+    const bucket = groups.get(title) ?? [];
+    bucket.push(flow);
+    groups.set(title, bucket);
+  }
+
+  let removed = 0;
+  for (const bucket of groups.values()) {
+    if (bucket.length <= 1) continue;
+    const sorted = [...bucket].sort((a, b) => flowKeeperScore(b) - flowKeeperScore(a));
+    for (const flow of sorted.slice(1)) {
+      flowRepository.removeById(flow.id);
+      removed += 1;
+    }
+  }
+  return removed;
+};
+
+export const dedupeTenantFlowsCompletely = (tenantId: string): { byIdentity: number; byTitle: number } => {
+  const byIdentity = dedupeTenantFlowsByTypebotIdentity(tenantId);
+  const byTitle = dedupeTenantFlowsByDisplayTitle(tenantId);
+  return { byIdentity, byTitle };
 };
 
 /** @deprecated Prefer `dedupeTenantFlowsByTypebotIdentity` — mantido para chamadas legadas. */
@@ -983,9 +1015,9 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   }
 
   pruned += await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
-  pruned += dedupeTenantFlowsByTypebotIdentity(tenantId);
   await alignTenantFlowsWithWorkspaceRows(tenantId, rows, viewerBase);
-  pruned += dedupeTenantFlowsByTypebotIdentity(tenantId);
+  const deduped = dedupeTenantFlowsCompletely(tenantId);
+  pruned += deduped.byIdentity + deduped.byTitle;
 
   let metadataRepublished = 0;
   for (const row of rows) {

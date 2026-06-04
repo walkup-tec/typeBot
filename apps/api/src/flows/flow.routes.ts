@@ -30,13 +30,12 @@ import {
   refreshTenantFlowViewerUrls,
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
-import { syncWorkspaceTypebotFlowsForTenant } from "./tenant-workspace-flows.service";
 import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
 import { repairTenantTypebotMediaOnTarget } from "../typebot/typebot-media-repair.service";
 import {
-  ensureSubscriberSavedFlowsFromDefaults,
   listSubscriberTenantFlowsForMaster,
   propagateDefaultsToSubscriberWorkspacesInBackground,
+  repairSubscriberTenantFlowsOnDisk,
   syncSubscriberFlowsForListing,
   propagateSystemDefaultFlowToAllTenants,
   repairAllSubscriberDefaultsOnBoot,
@@ -364,12 +363,8 @@ export const registerFlowRoutes = (app: Express) => {
     }
     try {
       const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenantId);
-      const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
-      if (defaults.length > 0) {
-        await syncSystemDefaultsToRealTypebotWorkspace(tenantId, defaults, { overwriteExisting: false });
-        await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
-      }
-      const result = await syncWorkspaceTypebotFlowsForTenant(tenantId);
+      await syncSubscriberFlowsForListing(tenantId);
+      const dedupe = await repairSubscriberTenantFlowsOnDisk(tenantId);
       let typebotMediaRepair: Awaited<ReturnType<typeof repairTenantTypebotMediaOnTarget>> | null = null;
       try {
         typebotMediaRepair = await repairTenantTypebotMediaOnTarget(tenantId);
@@ -382,7 +377,7 @@ export const registerFlowRoutes = (app: Express) => {
       const tenant = tenantRepository.getById(tenantId);
       invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
       const flowCount = flowService.listByTenant(tenantId).length;
-      return res.status(200).json({ ...(result ?? {}), flowCount, recovery, typebotMediaRepair });
+      return res.status(200).json({ status: "ok", flowCount, dedupe, recovery, typebotMediaRepair });
     } catch (error) {
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Falha ao sincronizar workspace Typebot.",
