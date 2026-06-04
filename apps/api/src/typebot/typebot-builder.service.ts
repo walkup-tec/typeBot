@@ -249,6 +249,40 @@ const isWebhookLikeHttpBlock = (blockType: string): boolean => {
   return n === "webhook" || n === "http request";
 };
 
+/** Redirect do Typebot deve usar variável do webhook handoff, nunca URL de imagem MinIO. */
+const HANDOFF_REDIRECT_URL_VARIABLE = "{{url_direct}}";
+
+const isWrongHandoffRedirectUrl = (rawUrl: string): boolean => {
+  const url = String(rawUrl ?? "").trim();
+  if (!url) return true;
+  const lower = url.toLowerCase();
+  if (lower.includes("handoff-view")) return false;
+  if (lower.includes("/api/typebot/handoff")) return false;
+  if (/\{\{\s*url_direct\s*\}\}/i.test(url)) return false;
+  if (/\{\{\s*handoffurl\s*\}\}/i.test(url)) return false;
+  if (/\{\{\s*redirecttarget\s*\}\}/i.test(url)) return false;
+  if (/\{\{\s*redirecturl\s*\}\}/i.test(url)) return false;
+  if (/\{\{\s*urlflat\s*\}\}/i.test(url)) return false;
+  if (/\{\{\s*url\s*\}\}/i.test(url)) return false;
+  if (/typebot\/typebot\/public/i.test(url)) return true;
+  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(url)) return true;
+  if (/\/public\//i.test(url) && /minio|easypanel\.host/i.test(url)) return true;
+  if (/\{\{/.test(url) && /image|icon|avatar|logo|favicon|metadata|ogimage|hostavatar/i.test(url)) return true;
+  return false;
+};
+
+const patchHandoffRedirectBlock = (blockRecord: Record<string, unknown>): Record<string, unknown> => {
+  const type = String(blockRecord.type ?? "").trim();
+  if (type !== "Redirect") return blockRecord;
+  const optionsRaw = blockRecord.options;
+  if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
+  const options = { ...(optionsRaw as Record<string, unknown>) };
+  const currentUrl = String(options.url ?? "").trim();
+  if (!isWrongHandoffRedirectUrl(currentUrl)) return blockRecord;
+  options.url = HANDOFF_REDIRECT_URL_VARIABLE;
+  return { ...blockRecord, options };
+};
+
 const patchHandoffWebhookAndRedirectConfig = (
   schema: Record<string, unknown>,
   tenant: Tenant,
@@ -265,6 +299,7 @@ const patchHandoffWebhookAndRedirectConfig = (
       if (!block || typeof block !== "object") return block;
       const blockRecord = { ...(block as Record<string, unknown>) };
       const type = String(blockRecord.type ?? "").trim();
+      if (type === "Redirect") return patchHandoffRedirectBlock(blockRecord);
       if (!isWebhookLikeHttpBlock(type)) return blockRecord;
       const optionsRaw = blockRecord.options;
       if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
@@ -1165,6 +1200,13 @@ const listSourceWorkspaceTypebots = async (sourceWorkspaceId: string): Promise<S
   }
   return out;
 };
+
+/** Aplica correções de webhook + Redirect handoff no schema (sync/repair). */
+export const applyHandoffPatchesToTypebotSchema = (
+  schema: Record<string, unknown>,
+  tenant: Tenant,
+  runtimeVars?: HandoffRuntimeVars,
+): Record<string, unknown> => patchHandoffWebhookAndRedirectConfig(schema, tenant, runtimeVars);
 
 export const syncSystemDefaultsToRealTypebotWorkspace = async (
   tenantId: string,

@@ -10,6 +10,7 @@ import {
   restoreShareMetadataExceptIcon,
 } from "./typebot-share-metadata.service";
 import { ensureTenantBrandLogoOnMinio } from "./typebot-brand-logo-minio.service";
+import { applyHandoffPatchesToTypebotSchema } from "./typebot-builder.service";
 import {
   alignHostAvatarFromBrandIcon,
   applyTenantBrandMediaToTypebotSchema,
@@ -20,6 +21,17 @@ import {
   resolveTenantBrandIconUrl,
   sanitizeTypebotSchemaMedia,
 } from "./typebot-media-sanitize.service";
+
+const TYPEBOT_TARGET_VIEWER_BASE_URL = String(
+  process.env.TYPEBOT_TARGET_VIEWER_BASE_URL ?? process.env.TYPEBOT_VIEWER_BASE_URL ?? "",
+).trim();
+
+const buildViewerUrlForRepair = (publicId: string): string => {
+  const base = TYPEBOT_TARGET_VIEWER_BASE_URL.replace(/\/$/, "");
+  const pid = String(publicId ?? "").trim();
+  if (!base || !pid) return "";
+  return `${base}/${pid}`;
+};
 
 const TYPEBOT_TARGET_BUILDER_API_BASE_URL = String(
   process.env.TYPEBOT_TARGET_BUILDER_API_BASE_URL ?? process.env.TYPEBOT_BUILDER_API_BASE_URL ?? "",
@@ -179,7 +191,14 @@ const repairSingleTypebotOnTarget = async (
     preferredIconUrl = iconAlreadyWorkingInBuilder || buildTenantPublicLogoUrl(tenant) || "";
   }
 
-  let sanitized = sanitizeTypebotSchemaMedia(payload.typebot, tenant);
+  const typebotPublicId = String(payload.typebot.publicId ?? "").trim();
+  const handoffRuntimeVars = {
+    tenantId: String(tenant.id ?? "").trim(),
+    sourceFlowLabel: typebotPublicId,
+    typebotViewerUrl: buildViewerUrlForRepair(typebotPublicId),
+  };
+  let sanitized = applyHandoffPatchesToTypebotSchema(payload.typebot, tenant, handoffRuntimeVars);
+  sanitized = sanitizeTypebotSchemaMedia(sanitized, tenant);
   sanitized = alignHostAvatarFromBrandIcon(sanitized, { force: true });
   if (preferredIconUrl) {
     sanitized = applyTenantBrandMediaToTypebotSchema(sanitized, tenant, {
