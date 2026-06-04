@@ -3964,3 +3964,4 @@
 - Marker: `DEPLOY-2026-06-04-smtp-health-resend-welcome` → `DEPLOY-2026-06-04-resend-welcome-ui`.
 - Log: `doc/LOG-2026-06-04__173000__diagnostico-email-somaconecta-smtp-api.md`.
 - **Admin Assinantes:** botão "Reenviar e-mail" + modal senha; API reenvio sincroniza senha do master. Log: `doc/LOG-2026-06-04__181500__botao-reenviar-boas-vindas-assinantes.md`.
+- **Atendentes Soma (mozart/digitl):** SMTP já true em prod; cadastro 17:55 provável sem envio inicial. `POST .../attendants/:id/resend-welcome` + botão Master Console etapa 2. Marker `DEPLOY-2026-06-04-attendant-resend-welcome`. Log: `doc/LOG-2026-06-04__190000__atendentes-mozart-digitl-sem-email.md`.
