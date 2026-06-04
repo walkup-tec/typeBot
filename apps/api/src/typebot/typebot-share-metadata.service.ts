@@ -104,6 +104,26 @@ type ShareMetadataSnapshot = {
   allowIndexing: boolean;
 };
 
+/** Mescla patch em settings.metadata sem apagar título, descrição ou imagem OG já salvos no builder. */
+export const mergeTypebotSettingsMetadata = (
+  existingSettings: unknown,
+  metadataPatch: Record<string, unknown>,
+): Record<string, unknown> => {
+  const settings =
+    existingSettings && typeof existingSettings === "object"
+      ? ({ ...(existingSettings as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const metadata =
+    settings.metadata && typeof settings.metadata === "object"
+      ? ({ ...(settings.metadata as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  settings.metadata = { ...metadata, ...metadataPatch };
+  return settings;
+};
+
+export const fetchTypebotRecordOnTarget = async (typebotId: string): Promise<Record<string, unknown> | null> =>
+  fetchTypebotRecord(typebotId);
+
 const readShareMetadataSnapshot = (typebot: Record<string, unknown>): ShareMetadataSnapshot => {
   const settingsRaw = typebot.settings;
   const settings =

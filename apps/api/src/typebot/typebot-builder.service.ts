@@ -13,6 +13,10 @@ import {
   resolveTenantBrandIconUrl,
   sanitizeTypebotSchemaMedia,
 } from "./typebot-media-sanitize.service";
+import {
+  fetchTypebotRecordOnTarget,
+  mergeTypebotSettingsMetadata,
+} from "./typebot-share-metadata.service";
 
 type ImportMapEntry = {
   matchViewerUrl?: string;
@@ -808,17 +812,16 @@ const applyTenantIconOnTarget = async (typebotId: string, tenant: Tenant): Promi
   safeIcon = safeIcon || iconHttpUrl || "";
   if (!safeIcon) return;
 
+  const current = await fetchTypebotRecordOnTarget(typebotId);
+  const settings = mergeTypebotSettingsMetadata(current?.settings, { favIconUrl: safeIcon });
+
   const response = await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`, {
     method: "PATCH",
     headers: buildTargetHeaders(),
     body: JSON.stringify({
       typebot: {
         icon: safeIcon,
-        settings: {
-          metadata: {
-            favIconUrl: safeIcon,
-          },
-        },
+        settings,
         theme: {
           chat: {
             hostAvatar: {
