@@ -4,7 +4,13 @@ import { getDataFilePath } from "../lib/data-path";
 import { isAuthPostgresEnabled, schedulePersistTenants } from "../lib/auth-postgres";
 
 export type TenantStatus = "active" | "blocked";
-export type TypebotProvisionStatus = "not_started" | "pending_manual" | "provisioned" | "failed";
+export type TypebotProvisionStatus =
+  | "not_started"
+  | "pending_manual"
+  | "provisioned"
+  | "failed"
+  /** Workspace e saved-flows limpos; auto-sync não reimporta até sync manual. */
+  | "workspace_cleared";
 export type QueueDistributionMode = "assign_per_incoming" | "shared_pool" | "random";
 
 /** Tema "Padrão Sistema" aplicado ao chat do lead / parâmetros do redirect Typebot (por tenant). */

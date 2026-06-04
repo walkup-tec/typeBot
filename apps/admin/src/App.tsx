@@ -725,13 +725,43 @@ export function App() {
     () => selectedTenantFlows.filter((flow) => !flow.librarySourceId),
     [selectedTenantFlows],
   );
-  /** Etapa 6: fluxos criados no workspace Typebot deste assinante (sem librarySourceId); isolados por tenant. */
-  const tenantWorkspaceFlowsForStep6 = useMemo(() => {
-    if (selectedTenantObject && isSystemMasterTenant(selectedTenantObject)) {
-      return workspaceOnlyFlows;
+  const libraryLinkedTypebotKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const flow of libraryLinkedFlows) {
+      const remoteId = String(flow.typebotRemoteId ?? "").trim();
+      if (remoteId) keys.add(`rid:${remoteId.toLowerCase()}`);
+      const publicId = String(flow.typebotPublicId ?? "").trim();
+      if (publicId) keys.add(`pid:${publicId.toLowerCase()}`);
     }
-    return selectedTenantFlows.filter((flow) => !flow.librarySourceId);
-  }, [selectedTenantFlows, selectedTenantObject, workspaceOnlyFlows]);
+    return keys;
+  }, [libraryLinkedFlows]);
+  /** Etapa 6: bots do workspace Typebot que ainda não estão representados na biblioteca do assinante. */
+  const tenantWorkspaceFlowsForStep6 = useMemo(() => {
+    const base =
+      selectedTenantObject && isSystemMasterTenant(selectedTenantObject)
+        ? workspaceOnlyFlows
+        : selectedTenantFlows.filter((flow) => !flow.librarySourceId);
+    const seen = new Set<string>();
+    return base.filter((flow) => {
+      const remoteId = String(flow.typebotRemoteId ?? "").trim();
+      if (remoteId && libraryLinkedTypebotKeys.has(`rid:${remoteId.toLowerCase()}`)) return false;
+      const publicId = String(flow.typebotPublicId ?? "").trim();
+      if (publicId && libraryLinkedTypebotKeys.has(`pid:${publicId.toLowerCase()}`)) return false;
+      const dedupeKey =
+        (remoteId && `rid:${remoteId.toLowerCase()}`) ||
+        (publicId && `pid:${publicId.toLowerCase()}`) ||
+        normalizeFlowText(flow.url) ||
+        flow.id;
+      if (seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
+      return true;
+    });
+  }, [
+    selectedTenantFlows,
+    selectedTenantObject,
+    workspaceOnlyFlows,
+    libraryLinkedTypebotKeys,
+  ]);
   const activeWorkspaceOnlyFlows = useMemo(
     () =>
       workspaceOnlyFlows.filter((flow) => {

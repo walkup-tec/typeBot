@@ -18,6 +18,7 @@ import { registerBillingRoutes } from "./billing/billing.routes";
 import { BillingOrderRepository } from "./billing/billing-order.repository";
 import { PixAutomaticRenewalService } from "./billing/pix-automatic-renewal.service";
 import { syncAllSubscriberWorkspacesFromMaster } from "./typebot/typebot-builder.service";
+import { isTenantWorkspaceClearedForSync } from "./typebot/typebot-purge-tenant-workspace.service";
 import { importManualWorkspaceTypebotsIntoTenantFlows } from "./typebot/typebot-flow-viewer-url-sync";
 import { listSystemMasterLibrary } from "./flows/system-master-library.repository";
 import {
@@ -109,6 +110,7 @@ const runTenantFlowWatcher = async () => {
     const tenants = tenantRepository.list();
     for (const tenant of tenants) {
       if (!tenant.id) continue;
+      if (isTenantWorkspaceClearedForSync(tenant)) continue;
       scannedTenants += 1;
       try {
         const result = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);

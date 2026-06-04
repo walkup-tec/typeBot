@@ -625,44 +625,66 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
   typebotId: string,
   publicId: string,
   viewerUrl: string,
+  displayName?: string,
 ): boolean => {
   const nu = normalizeText(viewerUrl);
   const np = normalizeText(publicId);
+  const nn = normalizeText(String(displayName ?? "").trim());
   for (const f of flows) {
     if (String(f.typebotRemoteId ?? "").trim() === typebotId) return true;
     if (nu && normalizeText(f.url) === nu) return true;
     const pid = typebotPublicIdFromViewerUrl(f.url);
     if (np && pid && normalizeText(pid) === np) return true;
     if (np && f.typebotPublicId && normalizeText(f.typebotPublicId) === np) return true;
+    if (nn) {
+      const label = normalizeText(String(f.displayLabel ?? f.nickname ?? "").trim());
+      if (label && label === nn) return true;
+    }
   }
   return false;
 };
 
-/** Remove cópias extras do mesmo bot (mesmo remoteId, publicId ou URL) no tenant. */
-const dedupeTenantWorkspaceExclusiveFlows = (tenantId: string): number => {
-  const flows = flowRepository.listByTenant(tenantId).filter((flow) => !String(flow.librarySourceId ?? "").trim());
+const flowKeeperScore = (flow: SavedFlow): number => {
+  let score = 0;
+  if (String(flow.librarySourceId ?? "").trim()) score += 32;
+  if (String(flow.typebotRemoteId ?? "").trim()) score += 16;
+  if (String(flow.typebotPublicId ?? "").trim()) score += 8;
+  if (String(flow.displayLabel ?? "").trim()) score += 4;
+  const stamp = String(flow.updatedAt ?? flow.createdAt ?? "").trim();
+  if (stamp) score += 1;
+  return score;
+};
+
+const flowIdentityKey = (flow: SavedFlow): string => {
+  const remoteId = normalizeText(String(flow.typebotRemoteId ?? "").trim());
+  if (remoteId) return `rid:${remoteId}`;
+  const publicId = flowPublicIdKey(flow);
+  if (publicId) return `pid:${publicId}`;
+  const url = normalizeText(flow.url);
+  if (url) return `url:${url}`;
+  const label = normalizeText(String(flow.displayLabel ?? flow.nickname ?? "").trim());
+  if (label) return `label:${label}`;
+  return "";
+};
+
+/** Remove cópias extras do mesmo bot (biblioteca + workspace) no tenant. */
+const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => {
+  const flows = flowRepository.listByTenant(tenantId);
   const groups = new Map<string, SavedFlow[]>();
 
   for (const flow of flows) {
-    const key =
-      normalizeText(String(flow.typebotRemoteId ?? "").trim()) ||
-      flowPublicIdKey(flow) ||
-      normalizeText(flow.url);
+    if (isLinkedToSystemMasterDefault(flow)) continue;
+    const key = flowIdentityKey(flow);
     if (!key) continue;
     const bucket = groups.get(key) ?? [];
     bucket.push(flow);
     groups.set(key, bucket);
   }
 
-  const scoreKeeper = (flow: SavedFlow): number =>
-    (String(flow.typebotRemoteId ?? "").trim() ? 8 : 0) +
-    (String(flow.typebotPublicId ?? "").trim() ? 4 : 0) +
-    (String(flow.displayLabel ?? "").trim() ? 2 : 0);
-
   let removed = 0;
   for (const bucket of groups.values()) {
     if (bucket.length <= 1) continue;
-    const sorted = [...bucket].sort((a, b) => scoreKeeper(b) - scoreKeeper(a));
+    const sorted = [...bucket].sort((a, b) => flowKeeperScore(b) - flowKeeperScore(a));
     for (const flow of sorted.slice(1)) {
       flowRepository.removeById(flow.id);
       removed += 1;
@@ -670,6 +692,10 @@ const dedupeTenantWorkspaceExclusiveFlows = (tenantId: string): number => {
   }
   return removed;
 };
+
+/** @deprecated Prefer `dedupeTenantFlowsByTypebotIdentity` — mantido para chamadas legadas. */
+const dedupeTenantWorkspaceExclusiveFlows = (tenantId: string): number =>
+  dedupeTenantFlowsByTypebotIdentity(tenantId);
 
 export type TenantWorkspaceFlowImportResult = {
   imported: number;
@@ -779,10 +805,14 @@ const alignTenantFlowsWithWorkspaceRows = async (
 
     const viewerUrl = buildViewerUrl(viewerBase, publicId);
     const tenantFlows = flowRepository.listByTenant(tenantId);
-    const match =
-      tenantFlows.find((f) => String(f.typebotRemoteId ?? "").trim() === typebotId) ??
-      tenantFlows.find((f) => flowPublicIdKey(f) === normalizeText(publicId));
-    if (!match) continue;
+    const normName = normalizeText(displayName);
+    const matches = tenantFlows.filter(
+      (f) =>
+        String(f.typebotRemoteId ?? "").trim() === typebotId ||
+        flowPublicIdKey(f) === normalizeText(publicId) ||
+        (normName && normalizeText(String(f.displayLabel ?? f.nickname ?? "").trim()) === normName),
+    );
+    if (matches.length === 0) continue;
 
     const patch: Partial<SavedFlow> = {
       displayLabel: displayName,
@@ -790,11 +820,14 @@ const alignTenantFlowsWithWorkspaceRows = async (
       typebotPublicId: publicId,
       typebotRemoteId: typebotId,
     };
-    const sameLabel = normalizeText(match.displayLabel ?? "") === normalizeText(displayName);
-    const sameUrl = normalizeText(match.url) === normalizeText(viewerUrl);
-    const samePid = normalizeText(match.typebotPublicId ?? "") === normalizeText(publicId);
-    if (!sameLabel || !sameUrl || !samePid) {
-      flowRepository.updateById(match.id, patch);
+    for (const match of matches) {
+      const sameLabel = normalizeText(match.displayLabel ?? "") === normalizeText(displayName);
+      const sameUrl = normalizeText(match.url) === normalizeText(viewerUrl);
+      const samePid = normalizeText(match.typebotPublicId ?? "") === normalizeText(publicId);
+      const sameRemote = String(match.typebotRemoteId ?? "").trim() === typebotId;
+      if (!sameLabel || !sameUrl || !samePid || !sameRemote) {
+        flowRepository.updateById(match.id, patch);
+      }
     }
   }
 };
@@ -913,7 +946,23 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
     if (!publicId) continue;
 
     const viewerUrl = buildViewerUrl(viewerBase, publicId);
-    if (flowAlreadyLinkedToWorkspaceTypebot(existingFlows, typebotId, publicId, viewerUrl)) continue;
+    if (flowAlreadyLinkedToWorkspaceTypebot(existingFlows, typebotId, publicId, viewerUrl, displayName)) {
+      continue;
+    }
+
+    const titleMatch = existingFlows.find(
+      (flow) => normalizeText(String(flow.displayLabel ?? flow.nickname ?? "").trim()) === normalizeText(displayName),
+    );
+    if (titleMatch) {
+      await applyWorkspaceRowToFlow(titleMatch, row, viewerBase);
+      const refreshed = flowRepository.getById(titleMatch.id);
+      if (refreshed) {
+        const idx = existingFlows.findIndex((flow) => flow.id === titleMatch.id);
+        if (idx >= 0) existingFlows[idx] = refreshed;
+        else existingFlows.push(refreshed);
+      }
+      continue;
+    }
 
     // Inclui mesmo com viewer temporariamente fora (502); o painel mostra status Inativo até o viewer voltar.
     const nickname = deriveUniqueFlowNickname(existingFlows, displayName, typebotId);
@@ -932,9 +981,9 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
   }
 
   pruned += await pruneTenantFlowsToMatchWorkspace(tenantId, rows);
-  pruned += dedupeTenantWorkspaceExclusiveFlows(tenantId);
+  pruned += dedupeTenantFlowsByTypebotIdentity(tenantId);
   await alignTenantFlowsWithWorkspaceRows(tenantId, rows, viewerBase);
-  pruned += dedupeTenantWorkspaceExclusiveFlows(tenantId);
+  pruned += dedupeTenantFlowsByTypebotIdentity(tenantId);
 
   let metadataRepublished = 0;
   for (const row of rows) {

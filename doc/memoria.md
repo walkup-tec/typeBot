@@ -1,4 +1,48 @@
-﻿## 2026-06-04 - Regra deploy Easypanel no repo + script commit
+﻿## 2026-06-04 - Dedupe fluxos tenant (biblioteca + workspace)
+
+- **Problema (Soma Etapa 6):** 1 bot no Typebot, painel com 2 linhas iguais em “Fluxos do workspace” + 1 na biblioteca; URL `empr-stimo-do-trabalhador-clt-bxn7orp` ≠ slug matriz `emprestimo-clt`.
+- **Causa:** stub biblioteca (URL matriz) + import criava cópias workspace quando `publicId`/URL não batiam; dedupe antigo só em fluxos sem `librarySourceId`.
+- **Fix:** `dedupeTenantFlowsByTypebotIdentity`, import por título → `applyWorkspaceRowToFlow`, `align` em todos os matches, UI Etapa 6 oculta workspace já coberto pela biblioteca.
+- **Marker:** `DEPLOY-2026-06-04-tenant-flow-dedupe-by-remote-id` / `tenant-flow-dedupe-v37`.
+- **Próximo:** redeploy API + admin → Etapa 6 **Atualizar lista** (Soma).
+
+## 2026-06-04 - Fluxo matriz emprestimo-clt → handoff-view
+
+- **Viewer:** `https://typebot-typebot-walkup-viewer.achpyp.easypanel.host/emprestimo-clt` (200 OK).
+- **Walkup tenant:** `07d245ea-48b9-4eda-a4a0-b8be573eb4bf`; handoff deve usar esse tenant (não Drax).
+- **Código:** `repair-matrix-handoff`, preferência viewer matriz no `/api/typebot/handoff`, doc `doc/FLUXO-MATRIZ-EMPRESTIMO-CLT-HANDOFF.md`.
+- **Produção:** API antiga — handoff com viewer matriz ainda pode cair em `b2b29f0d` (Drax) até deploy.
+- **Próximo:** redeploy → `node scripts/repair-matrix-emprestimo-clt.cjs` → testar fluxo no viewer.
+
+## 2026-06-04 - Purge workspace Soma (aguardando deploy API)
+
+- **Pedido:** apagar fluxos Typebot + registros locais Soma antes de recopiar da matriz.
+- **Prod hoje:** 5 saved-flows (4× CLT dup + Drax); workspace `cmpzox1zz0002pj1edk97zsrf`; rota purge → 404 até deploy.
+- **Código:** `purge-workspace-flows`, status `workspace_cleared`, script `scripts/purge-soma-workspace-flows.cjs`.
+- **Próximo:** deploy marker `DEPLOY-2026-06-04-purge-tenant-workspace-flows` → `node scripts/purge-soma-workspace-flows.cjs`.
+
+## 2026-06-04 - Set variable handoff automático por tenant (pós-cópia matriz)
+
+- **Problema:** fluxos copiados da matriz mantinham `tenantId`/`sourceFlowLabel`/`viewer_url` do Drax no bloco Set variable.
+- **Fix:** `patchHandoffRuntimeSetVariableBlocks` no sync/import/repair (`patchHandoffWebhookOnTarget`).
+- **Marker:** `DEPLOY-2026-06-04-handoff-runtime-set-variables` / `handoff-runtime-vars-v34`.
+- **Log:** `doc/LOG-2026-06-04__200000__handoff-runtime-set-variables-auto.md`
+- **Próximo:** redeploy API + Etapa 6 Atualizar lista no tenant.
+
+## 2026-06-04 - Handoff CLT: Redirect → {{url_direct}} (não MinIO)
+
+- **Causa:** API/handoff-view OK; bloco Redirect do Typebot ainda apontava URL MinIO/imagem.
+- **Fix:** patch automático Redirect + repair mídia aplica handoff; marker `DEPLOY-2026-06-04-handoff-redirect-url-direct`.
+- **Pós-deploy:** sync workspace Soma (`1f992ff8-...`) para republicar fluxo CLT `lvgj2gl`.
+
+## 2026-06-04 - Marker Easypanel alinhado à regra (push c6dd0f2)
+
+- **Problema:** Easypanel mostrava `Deploy service: fix: … Co-authored-by: Cursor` (assunto longo + trailer).
+- **Correção:** regra no repo + `npm run easypanel:commit` remove `Co-authored-by`, força 1 linha, prefixo `[shortsha]`.
+- **Commits:** `9d451da`, `0070894`, `c6dd0f2` — próximos deploys: sempre `easypanel:commit` ou `easypanel:deploy-empty`.
+- **Nota:** prefixo `[sha]` no assunto pode divergir 1 amend do `git log -1`; hash real = `git rev-parse --short HEAD`.
+
+## 2026-06-04 - Regra deploy Easypanel no repo + script commit
 
 - **Rule:** `.cursor/rules/deploy-commit-fonte-maker.mdc` (espelha regra global Cursor).
 - **Commits:** usar `npm run easypanel:commit -- "fix: …"` — nunca assunto longo sem `[shortsha]`; sem `Co-authored-by` no título.

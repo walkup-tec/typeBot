@@ -9,6 +9,7 @@ import {
 } from "./tenant-workspace-flows.service";
 import type { SavedFlow } from "./flow.repository";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
+import { isTenantWorkspaceClearedForSync } from "../typebot/typebot-purge-tenant-workspace.service";
 import { FlowService } from "./flow.service";
 import { listSystemMasterLibrary, type SystemMasterLibraryItem } from "./system-master-library.repository";
 
@@ -92,6 +93,9 @@ export const flowMatchesSystemDefaultItem = (
 
 /** Só disco + vínculo (rápido). Import completo do workspace fica para sync=1 ou sync-workspace. */
 export const ensureSubscriberFlowsQuick = async (tenantId: string): Promise<void> => {
+  const tenant = tenantRepository.getById(tenantId);
+  if (isTenantWorkspaceClearedForSync(tenant)) return;
+
   const activeDefaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
   repairSubscriberDefaultLibrarySourceIds(tenantId);
   for (const item of activeDefaults) {
@@ -213,6 +217,9 @@ export const ensureSubscriberSavedFlowsFromDefaults = async (
   tenantId: string,
   defaults: SystemMasterLibraryItem[] = listSystemMasterLibrary(),
 ): Promise<void> => {
+  const tenant = tenantRepository.getById(tenantId);
+  if (isTenantWorkspaceClearedForSync(tenant)) return;
+
   const activeDefaults = defaults.filter((item) => item.isSystemDefault);
   if (activeDefaults.length === 0) return;
 

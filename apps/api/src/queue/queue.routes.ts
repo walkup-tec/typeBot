@@ -12,6 +12,8 @@ import {
   queueRepository,
   tenantRepository,
 } from "../lib/repositories";
+import { findSystemMasterTenant } from "../auth/system-master-auth";
+import { isWalkupMatrixViewerUrl } from "../typebot/typebot-matrix-viewer";
 import { LabelService } from "../labels/label.service";
 import { PriorityService } from "../priorities/priority.service";
 import {
@@ -3125,10 +3127,16 @@ export const registerQueueRoutes = (app: Express) => {
       const requestedTenantId = String(payload.tenantId ?? payload.tenant_id ?? "").trim();
       const requestedTenantExists = requestedTenantId ? Boolean(tenantRepository.getById(requestedTenantId)) : false;
       const singleMatchedTenantId = resolvedTenantIds.length === 1 ? resolvedTenantIds[0] : "";
+      const masterTenant = findSystemMasterTenant();
+      const masterTenantId = String(masterTenant?.id ?? "").trim();
       const resolvedTenantId = (() => {
+        if (resolvedViewerUrlFromPayload && isWalkupMatrixViewerUrl(resolvedViewerUrlFromPayload) && masterTenantId) {
+          return masterTenantId;
+        }
         if (requestedTenantExists && requestedTenantId) {
           const hasFlowForRequested = matchingFlows.some((flow) => flow.tenantId === requestedTenantId);
           if (hasFlowForRequested) return requestedTenantId;
+          if (masterTenantId && requestedTenantId === masterTenantId) return requestedTenantId;
           // Quando o payload vem com tenant antigo/incorreto, prioriza o tenant inferido pelo fluxo.
           if (singleMatchedTenantId) return singleMatchedTenantId;
           return requestedTenantId;

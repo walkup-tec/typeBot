@@ -208,6 +208,20 @@ export const registerFlowRoutes = (app: Express) => {
 
   app.get("/api/master/system-library/source-flows", handleSourceFlowsRequest);
 
+  app.post("/api/master/system-library/repair-matrix-handoff", async (req, res) => {
+    const preferredPublicId = String(req.body?.publicId ?? req.query?.publicId ?? "emprestimo-clt").trim();
+    try {
+      const { repairMatrixEmprestimoCltHandoff } = await import("../typebot/typebot-matrix-handoff-repair.service.js");
+      const result = await repairMatrixEmprestimoCltHandoff(preferredPublicId || "emprestimo-clt");
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Falha ao reparar handoff da matriz CLT.",
+      });
+    }
+  });
+
   app.post("/api/master/system-library/sync-source", async (_req, res) => {
     try {
       const result = await syncSourceWorkspaceFlowsToMasterTenant();

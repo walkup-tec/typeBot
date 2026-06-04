@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { TenantRepository, type QueueDistributionMode, type TenantStatus } from "./tenant.repository";
+import {
+  TenantRepository,
+  type QueueDistributionMode,
+  type TenantStatus,
+  type TypebotProvisionStatus,
+} from "./tenant.repository";
 import type { AttendantRepository } from "../attendants/attendant.repository";
 import type { LabelRepository } from "../labels/label.repository";
 import type { PriorityRepository } from "../priorities/priority.repository";
@@ -60,7 +65,7 @@ const resolveAutoProvisionedTypebotState = (
     ownerEmail: string;
     typebotAccessUrl?: string;
     typebotWorkspaceId?: string;
-    typebotProvisionStatus?: "not_started" | "pending_manual" | "provisioned" | "failed";
+    typebotProvisionStatus?: TypebotProvisionStatus;
     typebotProvisionError?: string;
     typebotLastSyncAt?: string;
   },
@@ -72,9 +77,11 @@ const resolveAutoProvisionedTypebotState = (
   const hasWorkspace = Boolean(String(tenant.typebotWorkspaceId ?? "").trim());
   const hasDirectAccess = Boolean(String(directAccessUrl ?? "").trim());
   const currentStatus = tenant.typebotProvisionStatus;
-  const derivedStatus: "not_started" | "pending_manual" | "provisioned" | "failed" =
-    currentStatus && currentStatus !== "provisioned"
+  const derivedStatus: TypebotProvisionStatus =
+    currentStatus && currentStatus !== "provisioned" && currentStatus !== "workspace_cleared"
       ? currentStatus
+      : currentStatus === "workspace_cleared"
+        ? "workspace_cleared"
       : hasWorkspace || hasDirectAccess
         ? "provisioned"
         : "not_started";

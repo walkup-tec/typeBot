@@ -25,6 +25,10 @@ import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-bui
 import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
 import { repairTenantTypebotMediaOnTarget } from "../typebot/typebot-media-repair.service";
 import {
+  clearTenantWorkspaceClearedFlag,
+  purgeTenantWorkspaceFlowsCompletely,
+} from "../typebot/typebot-purge-tenant-workspace.service";
+import {
   importManualWorkspaceTypebotsIntoTenantFlows,
   refreshTenantFlowViewerUrls,
   refreshTenantWorkspaceFlowUrlsFromTypebot,
@@ -265,6 +269,7 @@ export const registerTenantRoutes = (app: Express) => {
     const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
     try {
+      clearTenantWorkspaceClearedFlag(tenant.id);
       const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenant.id);
       const systemDefaultItems = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
       if (systemDefaultItems.length > 0) {
@@ -328,6 +333,28 @@ export const registerTenantRoutes = (app: Express) => {
       return res.status(500).json({
         status: "failed",
         message: error instanceof Error ? error.message : "Falha na recuperação de fluxos Typebot.",
+      });
+    }
+  });
+
+  app.post("/api/master/tenants/:id/typebot/purge-workspace-flows", async (req, res) => {
+    const tenant = tenantRepository.getById(String(req.params.id ?? "").trim());
+    if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+    const clearQueue = req.body?.clearQueue !== false;
+    try {
+      const result = await purgeTenantWorkspaceFlowsCompletely(tenant.id, { clearQueue });
+      const flows = flowService.listByTenant(tenant.id);
+      return res.status(200).json({
+        status: result.failedRemote.length > 0 ? "partial" : "ok",
+        message:
+          "Workspace Typebot e registros locais de fluxo removidos. Auto-sync pausado até Atualizar lista / sync-workspace.",
+        flowCount: flows.length,
+        ...result,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Falha ao limpar workspace Typebot do assinante.",
       });
     }
   });

@@ -14,6 +14,8 @@ import {
   sanitizeTypebotSchemaMedia,
 } from "./typebot-media-sanitize.service";
 import { fetchTypebotRecordOnTarget, mergeTypebotThemeHostAvatar } from "./typebot-share-metadata.service";
+import { patchHandoffRuntimeSetVariableBlocks } from "./typebot-handoff-runtime-variables.service.js";
+import { isTenantWorkspaceClearedForSync } from "./typebot-purge-tenant-workspace.service.js";
 
 type ImportMapEntry = {
   matchViewerUrl?: string;
@@ -429,10 +431,16 @@ const patchHandoffWebhookAndRedirectConfig = (
     });
     return groupRecord;
   });
-  return {
+  const withGroups = {
     ...schema,
     groups: nextGroups,
   };
+  const effectiveRuntime: HandoffRuntimeVars = {
+    tenantId: String(runtimeVars?.tenantId ?? tenant.id ?? "").trim() || undefined,
+    sourceFlowLabel: runtimeVars?.sourceFlowLabel,
+    typebotViewerUrl: runtimeVars?.typebotViewerUrl,
+  };
+  return patchHandoffRuntimeSetVariableBlocks(withGroups, effectiveRuntime);
 };
 
 const getReadableButtonTextColor = (hex: string): string => {
@@ -683,7 +691,9 @@ const applyTenantMetadataToTypebotSchema = (
   tenant: Tenant,
   flowTitle: string,
 ): Record<string, unknown> => {
-  const next: Record<string, unknown> = patchHandoffWebhookAndRedirectConfig({ ...schema }, tenant);
+  const next: Record<string, unknown> = patchHandoffWebhookAndRedirectConfig({ ...schema }, tenant, {
+    tenantId: String(tenant.id ?? "").trim(),
+  });
   const title = sanitizeTypebotText(String(flowTitle ?? "").trim(), "Fluxo");
   const iconRaw = String(tenant.profileImageUrl ?? "").trim();
   const imageRaw = String(tenant.shareImageUrl ?? "").trim();
@@ -1301,6 +1311,7 @@ export const syncSystemDefaultsToRealTypebotWorkspace = async (
 
   const tenant = tenantRepository.getById(tenantId);
   if (!tenant) return;
+  if (isTenantWorkspaceClearedForSync(tenant)) return;
 
   if (
     TYPEBOT_SOURCE_MASTER_WORKSPACE_ID &&
@@ -1540,7 +1551,7 @@ export const syncAllSubscriberWorkspacesFromMaster = async (): Promise<{
 
   for (const tenant of tenants) {
     const ownerEmail = normalizeEmail(tenant.ownerEmail);
-    if (!tenant.id || ownerEmail === "walkup@walkuptec.com.br") {
+    if (!tenant.id || ownerEmail === "walkup@walkuptec.com.br" || isTenantWorkspaceClearedForSync(tenant)) {
       skipped += 1;
       continue;
     }
