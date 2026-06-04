@@ -1,5 +1,5 @@
 /** Versão da lógica da Biblioteca Master — validar em /health após redeploy do serviço `api`. */
-export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-preserve-share-metadata-v26";
+export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-icon-patch-no-settings-wipe-v27";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-preserve-typebot-share-metadata";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-icon-patch-without-settings-wipe";

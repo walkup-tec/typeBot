@@ -124,7 +124,37 @@ export const mergeTypebotSettingsMetadata = (
 export const fetchTypebotRecordOnTarget = async (typebotId: string): Promise<Record<string, unknown> | null> =>
   fetchTypebotRecord(typebotId);
 
-const readShareMetadataSnapshot = (typebot: Record<string, unknown>): ShareMetadataSnapshot => {
+/** Mescla hostAvatar no theme sem apagar botões/CSS/outros campos do chat. */
+export const mergeTypebotThemeHostAvatar = (
+  existingTheme: unknown,
+  avatarUrl: string,
+): Record<string, unknown> => {
+  const theme =
+    existingTheme && typeof existingTheme === "object"
+      ? ({ ...(existingTheme as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const chat =
+    theme.chat && typeof theme.chat === "object"
+      ? ({ ...(theme.chat as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  const hostAvatar =
+    chat.hostAvatar && typeof chat.hostAvatar === "object"
+      ? ({ ...(chat.hostAvatar as Record<string, unknown>) } as Record<string, unknown>)
+      : {};
+  chat.hostAvatar = { ...hostAvatar, isEnabled: true, url: avatarUrl };
+  theme.chat = chat;
+  return theme;
+};
+
+const TYPEBOT_DEFAULT_SHARE_DESCRIPTION =
+  "build beautiful conversational forms and embed them directly in your applications";
+
+const isTypebotFactoryShareDescription = (value: string): boolean => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized.includes(TYPEBOT_DEFAULT_SHARE_DESCRIPTION);
+};
+
+export const readShareMetadataSnapshot = (typebot: Record<string, unknown>): ShareMetadataSnapshot => {
   const settingsRaw = typebot.settings;
   const settings =
     settingsRaw && typeof settingsRaw === "object"
@@ -202,6 +232,24 @@ const applyShareMetadataSnapshot = (
   }
 
   return { typebot, changed };
+};
+
+/** Restaura descrição/imagem/título OG capturados antes de sanitize/repair (não mexe no ícone). */
+export const restoreShareMetadataExceptIcon = (
+  typebot: Record<string, unknown>,
+  snapshot: ShareMetadataSnapshot,
+): Record<string, unknown> => {
+  const restore: ShareMetadataSnapshot = {
+    title: snapshot.title,
+    description:
+      snapshot.description && !isTypebotFactoryShareDescription(snapshot.description)
+        ? snapshot.description
+        : "",
+    imageUrl: snapshot.imageUrl,
+    favIconUrl: "",
+    allowIndexing: snapshot.allowIndexing,
+  };
+  return applyShareMetadataSnapshot(typebot, restore).typebot;
 };
 
 /** Lê metadados atuais do typebot no builder (diagnóstico / painel). */

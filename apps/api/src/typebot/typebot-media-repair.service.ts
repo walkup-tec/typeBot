@@ -4,7 +4,11 @@
 import { isSystemMasterEmail } from "../auth/system-master-auth";
 import { tenantRepository } from "../lib/repositories";
 import type { Tenant } from "../tenants/tenant.repository";
-import { ensureTypebotShareMetadataPublished } from "./typebot-share-metadata.service";
+import {
+  ensureTypebotShareMetadataPublished,
+  readShareMetadataSnapshot,
+  restoreShareMetadataExceptIcon,
+} from "./typebot-share-metadata.service";
 import { ensureTenantBrandLogoOnMinio } from "./typebot-brand-logo-minio.service";
 import {
   alignHostAvatarFromBrandIcon,
@@ -151,6 +155,8 @@ const repairSingleTypebotOnTarget = async (
     return { patched: false, published: false, shareMetadata: false };
   }
 
+  const shareMetadataBeforeRepair = readShareMetadataSnapshot(payload.typebot);
+
   let preferredIconUrl = "";
   try {
     preferredIconUrl = (await ensureTenantBrandLogoOnMinio(tenant)) || "";
@@ -173,6 +179,7 @@ const repairSingleTypebotOnTarget = async (
     });
   }
   sanitized = alignHostAvatarFromBrandIcon(sanitized, { force: true });
+  sanitized = restoreShareMetadataExceptIcon(sanitized, shareMetadataBeforeRepair);
 
   const patchResponse = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`,
