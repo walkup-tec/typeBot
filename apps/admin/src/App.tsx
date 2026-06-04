@@ -573,6 +573,10 @@ export function App() {
   const [resendWelcomeTenant, setResendWelcomeTenant] = useState<Tenant | null>(null);
   const [resendWelcomePassword, setResendWelcomePassword] = useState("");
   const [isResendingWelcome, setIsResendingWelcome] = useState(false);
+  const [isResendAttendantWelcomeModalOpen, setIsResendAttendantWelcomeModalOpen] = useState(false);
+  const [resendAttendantWelcomeTarget, setResendAttendantWelcomeTarget] = useState<AttendantRow | null>(null);
+  const [resendAttendantWelcomePassword, setResendAttendantWelcomePassword] = useState("");
+  const [isResendingAttendantWelcome, setIsResendingAttendantWelcome] = useState(false);
   const [agentId, setAgentId] = useState("atendente-01");
   const [savedFlowsByTenant, setSavedFlowsByTenant] = useState<Record<string, SavedFlow[]>>({});
   const [flowStatuses, setFlowStatuses] = useState<Record<string, FlowStatus>>({});
@@ -2026,6 +2030,61 @@ export function App() {
     setMasterWizardStep(next);
   }
 
+  function openResendAttendantWelcomeModal(row: AttendantRow) {
+    setResendAttendantWelcomeTarget(row);
+    setResendAttendantWelcomePassword("");
+    setIsResendAttendantWelcomeModalOpen(true);
+  }
+
+  function closeResendAttendantWelcomeModal() {
+    setIsResendAttendantWelcomeModalOpen(false);
+    setResendAttendantWelcomeTarget(null);
+    setResendAttendantWelcomePassword("");
+  }
+
+  async function confirmResendAttendantWelcomeEmail() {
+    if (!selectedTenant || !resendAttendantWelcomeTarget) return;
+    if (resendAttendantWelcomePassword.trim().length < 4) {
+      setStatusMessage("Informe a senha (mín. 4 caracteres) para o e-mail de boas-vindas do atendente.");
+      return;
+    }
+
+    setIsResendingAttendantWelcome(true);
+    try {
+      const response = await fetch(
+        `${apiBase}/api/master/tenants/${encodeURIComponent(selectedTenant)}/attendants/${encodeURIComponent(resendAttendantWelcomeTarget.id)}/resend-welcome`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ password: resendAttendantWelcomePassword.trim() }),
+        },
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        emailDelivery?: CreateAttendantResponse["emailDelivery"];
+      };
+      if (!response.ok) {
+        setStatusMessage(payload.message ?? "Falha ao reenviar e-mail de boas-vindas.");
+        return;
+      }
+
+      const delivery = payload.emailDelivery;
+      const targetEmail = resendAttendantWelcomeTarget.email?.trim() || "destinatário";
+      if (delivery?.status === "sent") {
+        setStatusMessage(`E-mail de boas-vindas reenviado para ${targetEmail}. Login: usuário "${resendAttendantWelcomeTarget.username}".`);
+      } else if (delivery?.status === "failed") {
+        setStatusMessage(delivery.message ?? "Falha ao reenviar e-mail de boas-vindas.");
+      } else if (delivery?.status === "skipped") {
+        setStatusMessage(delivery.message ?? "E-mail não enviado (SMTP não configurado na API).");
+      } else {
+        setStatusMessage("Solicitação de reenvio concluída.");
+      }
+      closeResendAttendantWelcomeModal();
+    } finally {
+      setIsResendingAttendantWelcome(false);
+    }
+  }
+
   async function registerAttendant(): Promise<boolean> {
     if (!selectedTenant) {
       setStatusMessage("Selecione um assinante.");
@@ -2058,19 +2117,26 @@ export function App() {
     }
     const payload = (await response.json().catch(() => ({}))) as CreateAttendantResponse;
     const delivery = payload.emailDelivery;
+    const savedUsername = attendantUsername.trim();
+    const savedEmail = attendantEmail.trim().toLowerCase();
     setAttendantUsername("");
     setAttendantEmail("");
     setAttendantDisplayName("");
     setAttendantPassword("");
     setAttendantRole("");
     if (delivery?.status === "sent") {
-      setStatusMessage("Atendente cadastrado e e-mail enviado.");
+      setStatusMessage(
+        `Atendente cadastrado e e-mail enviado para ${savedEmail}. Login com usuário "${savedUsername}".`,
+      );
     } else if (delivery?.status === "failed") {
-      setStatusMessage(delivery.message ?? "Atendente cadastrado, mas o envio de e-mail falhou.");
+      setStatusMessage(delivery.message ?? "Atendente cadastrado, mas o envio de e-mail falhou. Use Reenviar e-mail na lista.");
     } else if (delivery?.status === "skipped") {
-      setStatusMessage(delivery.message ?? "Atendente cadastrado sem envio de e-mail.");
+      setStatusMessage(
+        delivery.message ??
+          "Atendente cadastrado sem envio de e-mail (SMTP). Configure a API ou use Reenviar e-mail na lista.",
+      );
     } else {
-      setStatusMessage("Atendente cadastrado.");
+      setStatusMessage(`Atendente cadastrado. Login com usuário "${savedUsername}".`);
     }
     await loadAttendants(selectedTenant);
     return true;
@@ -3081,7 +3147,17 @@ export function App() {
                         <span>
                           {row.role === "master" ? "Master" : row.role === "manager" ? "Gerente" : "Atendente"}
                         </span>
-                        <span>
+                        <span className="subscriber-actions">
+                          {row.email?.trim() ? (
+                            <button
+                              type="button"
+                              className="ghost-btn"
+                              title="Reenviar e-mail de boas-vindas"
+                              onClick={() => openResendAttendantWelcomeModal(row)}
+                            >
+                              Reenviar e-mail
+                            </button>
+                          ) : null}
                           <button type="button" className="ghost-btn danger-btn" onClick={() => void removeAttendant(row.id)}>
                             Remover
                           </button>
@@ -3765,6 +3841,53 @@ export function App() {
                 </button>
                 <button onClick={saveTenantFlow}>Salvar fluxo</button>
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isResendAttendantWelcomeModalOpen && resendAttendantWelcomeTarget ? (
+          <div className="modal-overlay" onClick={() => !isResendingAttendantWelcome && closeResendAttendantWelcomeModal()}>
+            <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+              <h3>Reenviar boas-vindas — atendente</h3>
+              <p className="muted">
+                E-mail: <strong>{resendAttendantWelcomeTarget.email}</strong> · Usuário de login:{" "}
+                <strong>{resendAttendantWelcomeTarget.username}</strong> (o e-mail mostra este usuário, não o e-mail).
+              </p>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (isResendingAttendantWelcome) return;
+                  confirmResendAttendantWelcomeEmail().catch(() =>
+                    setStatusMessage("Falha ao reenviar e-mail de boas-vindas."),
+                  );
+                }}
+              >
+                <div className="grid-form">
+                  <input
+                    type="password"
+                    placeholder="Senha de acesso no e-mail (mín. 4 caracteres)"
+                    value={resendAttendantWelcomePassword}
+                    onChange={(event) => setResendAttendantWelcomePassword(event.target.value)}
+                    disabled={isResendingAttendantWelcome}
+                    minLength={4}
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={closeResendAttendantWelcomeModal}
+                    disabled={isResendingAttendantWelcome}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={isResendingAttendantWelcome}>
+                    {isResendingAttendantWelcome ? "Enviando..." : "Enviar e-mail"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         ) : null}

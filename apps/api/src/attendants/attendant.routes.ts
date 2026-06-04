@@ -1,12 +1,14 @@
 import type { Express } from "express";
-import { attendantRepository } from "../lib/repositories";
-import { tenantRepository } from "../lib/repositories";
-import { AttendantService, createAttendantSchema } from "./attendant.service";
-import { mailService } from "../mail/mail.service";
-import { buildWelcomeCredentialsTemplate } from "../mail/mail.templates";
+import { z } from "zod";
+import { attendantRepository, tenantRepository } from "../lib/repositories";
+import { deliverAttendantWelcomeEmail } from "../mail/attendant-welcome-delivery";
+import { AttendantService, createAttendantSchema, hashAttendantPassword } from "./attendant.service";
 
 const attendantService = new AttendantService(attendantRepository);
-const SYSTEM_LOGIN_URL = String(process.env.SYSTEM_LOGIN_URL ?? "http://localhost:5173").trim();
+
+const resendAttendantWelcomeSchema = z.object({
+  password: z.string().min(4).max(200),
+});
 
 export const registerAttendantRoutes = (app: Express) => {
   app.get("/api/master/tenants/:tenantId/attendants", (req, res) => {
@@ -21,52 +23,15 @@ export const registerAttendantRoutes = (app: Express) => {
         .listByTenant(req.params.tenantId)
         .find((row) => row.id === created.id);
       const registeredName = String(persisted?.displayName || created.displayName || created.username).trim();
-      let emailDelivery: { status: "sent" | "failed" | "skipped"; message?: string } = {
-        status: "skipped",
-      };
-
-      if (mailService.isConfigured() && created.email) {
-        const tenantName =
-          tenantRepository.getById(req.params.tenantId)?.name?.trim() ||
-          "Walkup";
-        const mail = buildWelcomeCredentialsTemplate({
-          recipientName: registeredName || created.username,
-          userIdentifier: created.username,
-          password: input.password,
-          loginUrl: SYSTEM_LOGIN_URL,
-          createdByLabel: tenantName,
-        });
-        try {
-          const delivery = await mailService.send({
-            to: created.email,
-            subject: mail.subject,
-            html: mail.html,
-          });
-          const expectedRecipient = created.email.trim().toLowerCase();
-          const acceptedRecipients = delivery.accepted.map((item) => item.trim().toLowerCase());
-          const isAccepted = acceptedRecipients.includes(expectedRecipient);
-          if (!isAccepted) {
-            emailDelivery = {
-              status: "failed",
-              message: `SMTP não confirmou aceitação do destinatário. messageId=${delivery.messageId || "n/a"} response=${delivery.response || "n/a"}`,
-            };
-          } else {
-            emailDelivery = {
-              status: "sent",
-              message: `SMTP accepted. messageId=${delivery.messageId || "n/a"}`,
-            };
-          }
-        } catch (emailError) {
-          const reason = emailError instanceof Error ? emailError.message : "Falha no envio SMTP.";
-          emailDelivery = { status: "failed", message: reason };
-          // eslint-disable-next-line no-console
-          console.error("Falha ao enviar e-mail de boas-vindas:", emailError);
-        }
-      } else if (!mailService.isConfigured()) {
-        emailDelivery = { status: "skipped", message: "SMTP não configurado." };
-      } else if (!created.email) {
-        emailDelivery = { status: "skipped", message: "Usuário sem e-mail cadastrado." };
-      }
+      const tenantName = tenantRepository.getById(req.params.tenantId)?.name?.trim() || "Walkup";
+      const toEmail = String(persisted?.email ?? created.email ?? "").trim();
+      const emailDelivery = await deliverAttendantWelcomeEmail({
+        toEmail,
+        recipientName: registeredName || created.username,
+        userIdentifier: created.username,
+        password: input.password,
+        createdByLabel: tenantName,
+      });
 
       return res.status(201).json({
         ...created,
@@ -76,6 +41,40 @@ export const registerAttendantRoutes = (app: Express) => {
       if (error instanceof Error && error.message.includes("Já existe um usuário")) {
         return res.status(409).json({ message: error.message });
       }
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
+  });
+
+  app.post("/api/master/tenants/:tenantId/attendants/:attendantId/resend-welcome", async (req, res) => {
+    try {
+      const tenantId = String(req.params.tenantId ?? "").trim();
+      const attendantId = String(req.params.attendantId ?? "").trim();
+      const tenant = tenantRepository.getById(tenantId);
+      if (!tenant) return res.status(404).json({ message: "Assinante não encontrado." });
+
+      const attendant = attendantRepository.listByTenant(tenantId).find((row) => row.id === attendantId);
+      if (!attendant) return res.status(404).json({ message: "Atendente não encontrado." });
+
+      const input = resendAttendantWelcomeSchema.parse(req.body);
+      attendantRepository.updateById(attendant.id, {
+        passwordHash: hashAttendantPassword(input.password),
+      });
+
+      const emailDelivery = await deliverAttendantWelcomeEmail({
+        toEmail: String(attendant.email ?? "").trim(),
+        recipientName: String(attendant.displayName || attendant.username).trim(),
+        userIdentifier: attendant.username,
+        password: input.password,
+        createdByLabel: tenant.name,
+      });
+
+      return res.status(200).json({
+        ok: true,
+        email: attendant.email ?? null,
+        username: attendant.username,
+        emailDelivery,
+      });
+    } catch (error) {
       return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
     }
   });
