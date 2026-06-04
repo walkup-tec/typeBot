@@ -1222,6 +1222,8 @@ export const syncSystemDefaultsToRealTypebotWorkspace = async (
   const alreadyExistsNames: string[] = [];
   const existingWorkspaceTypebots = await listWorkspaceTypebotsOnTarget(workspaceId);
   const existingWorkspaceTypebotNames = new Set(existingWorkspaceTypebots.map((row) => normalizeText(row.name)));
+  /** Workspace vazio (ex.: após prune antigo): reimporta padrões mesmo se URL da matriz estiver inativa. */
+  const recoverEmptyWorkspace = existingWorkspaceTypebots.length === 0;
 
   for (const item of defaults) {
     const normalizedTargetName = normalizeText(item.title);
@@ -1252,7 +1254,7 @@ export const syncSystemDefaultsToRealTypebotWorkspace = async (
       skippedNames.push(item.title);
       continue;
     }
-    if (TYPEBOT_TYPEBOT_IMPORT_ONLY_ACTIVE) {
+    if (TYPEBOT_TYPEBOT_IMPORT_ONLY_ACTIVE && !recoverEmptyWorkspace) {
       const viewerUrl = String(item.viewerUrl ?? "").trim();
       if (!viewerUrl || !(await isFlowUrlActive(viewerUrl))) {
         skippedInactiveDefaults.push(item.title);

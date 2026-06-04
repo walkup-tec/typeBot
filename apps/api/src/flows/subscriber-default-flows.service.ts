@@ -194,7 +194,7 @@ export const propagateDefaultsToSubscriberWorkspacesInBackground = (defaults: Sy
   void (async () => {
     for (const tenant of subscribers) {
       try {
-        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id!, activeDefaults, { overwriteExisting: true });
+        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id!, activeDefaults, { overwriteExisting: false });
         await syncWorkspaceTypebotFlowsForTenant(tenant.id!);
         await ensureSubscriberSavedFlowsFromDefaults(tenant.id!, activeDefaults);
       } catch (error) {

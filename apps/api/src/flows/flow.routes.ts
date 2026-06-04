@@ -304,7 +304,7 @@ export const registerFlowRoutes = (app: Express) => {
     try {
       const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
       if (defaults.length > 0) {
-        await syncSystemDefaultsToRealTypebotWorkspace(tenantId, defaults, { overwriteExisting: true });
+        await syncSystemDefaultsToRealTypebotWorkspace(tenantId, defaults, { overwriteExisting: false });
         await ensureSubscriberSavedFlowsFromDefaults(tenantId, defaults);
       }
       const result = await syncWorkspaceTypebotFlowsForTenant(tenantId);

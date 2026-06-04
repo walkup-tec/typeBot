@@ -2,4 +2,4 @@
 export const MASTER_LIBRARY_LOGIC_VERSION = "walkup-live-only-v18-never-delete-workspace-bots";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-walkup-fix-nao-apagar-fluxos-workspace";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-04-walkup-recupera-workspace-vazio";

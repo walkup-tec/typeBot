@@ -226,7 +226,7 @@ export const registerTenantRoutes = (app: Express) => {
       // Sempre que a logo for definida/alterada, reaplica tema/avatar nos flows padrão do tenant.
       if (input.profileImageUrl !== undefined) {
         const systemDefaultItems = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
-        void syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: true }).catch(
+        void syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: false }).catch(
           (syncError) => {
             // eslint-disable-next-line no-console
             console.error("Falha ao reaplicar avatar/metadata após update de logo do tenant:", syncError);
@@ -269,7 +269,7 @@ export const registerTenantRoutes = (app: Express) => {
     try {
       const systemDefaultItems = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
       if (systemDefaultItems.length > 0) {
-        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: true });
+        await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: false });
       }
       const importResult = await importManualWorkspaceTypebotsIntoTenantFlows(tenant.id);
       await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaultItems);
@@ -320,7 +320,7 @@ export const registerTenantRoutes = (app: Express) => {
       });
     }
     try {
-      await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: true });
+      await syncSystemDefaultsToRealTypebotWorkspace(tenant.id, systemDefaultItems, { overwriteExisting: false });
       await ensureSubscriberSavedFlowsFromDefaults(tenant.id, systemDefaultItems);
       const refreshed = tenantRepository.getById(tenant.id);
       return res.status(200).json({
