@@ -16,6 +16,12 @@ export const isBrokenTypebotMediaUrl = (raw: string): boolean => {
   if (isDataImageValue(value)) return false;
   if (/localhost|127\.0\.0\.1/i.test(value)) return true;
   if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsed = new URL(value);
+      if (isLegacyMinioPublicHost(parsed.hostname)) return true;
+    } catch {
+      return true;
+    }
     const rewritten = normalizeTypebotMediaUrl(value);
     return !rewritten;
   }
@@ -88,6 +94,34 @@ const MEDIA_URL_KEYS = new Set([
   "image",
 ]);
 
+/** Hosts MinIO antigos (migração Soma → typebot-minio) que retornam 502 no viewer. */
+const isLegacyMinioPublicHost = (hostname: string): boolean => {
+  const host = String(hostname ?? "").trim().toLowerCase();
+  if (!host) return false;
+  if (/soma-minio\./i.test(host)) return true;
+  const extra = String(process.env.TYPEBOT_S3_LEGACY_HOSTS ?? "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  return extra.some((legacy) => host === legacy || host.endsWith(`.${legacy}`) || host.includes(legacy));
+};
+
+const rewriteMinioPublicUrlToCurrentBase = (absoluteUrl: string): string => {
+  const publicBase = resolveS3PublicBaseUrl();
+  if (!publicBase) return "";
+  try {
+    const parsed = new URL(absoluteUrl);
+    const path = parsed.pathname.replace(/^\/+/, "");
+    const idx = path.indexOf("public/");
+    if (idx < 0) return "";
+    const afterPublic = path.slice(idx + "public/".length);
+    const suffix = parsed.search || "";
+    return `${publicBase}/${afterPublic}${suffix}`;
+  } catch {
+    return "";
+  }
+};
+
 export const normalizeTypebotMediaUrl = (raw: string): string => {
   const value = String(raw ?? "").trim();
   if (!value) return "";
@@ -101,12 +135,25 @@ export const normalizeTypebotMediaUrl = (raw: string): string => {
   };
 
   if (/^https?:\/\//i.test(value)) {
-    if (!/localhost|127\.0\.0\.1/i.test(value)) return value;
+    if (!/localhost|127\.0\.0\.1/i.test(value)) {
+      try {
+        const parsed = new URL(value);
+        if (isLegacyMinioPublicHost(parsed.hostname)) {
+          return rewriteMinioPublicUrlToCurrentBase(value) || value;
+        }
+      } catch {
+        return value;
+      }
+      return value;
+    }
     try {
       const parsed = new URL(value);
       const path = parsed.pathname.replace(/^\/+/, "");
       const idx = path.indexOf("public/");
       if (idx >= 0) return rewriteLocalOrRelative(path.slice(idx + "public/".length));
+      if (isLegacyMinioPublicHost(parsed.hostname)) {
+        return rewriteMinioPublicUrlToCurrentBase(value);
+      }
     } catch {
       return "";
     }
