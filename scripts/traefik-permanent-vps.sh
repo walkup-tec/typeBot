@@ -38,6 +38,7 @@ script_path() {
 
 container_ip() {
   local filter="$1"
+  local network="${2:-${NET}}"
   local cid
   # Após redeploy o IP muda: usar o container mais recente (evita Traefik apontar para task morta).
   cid=$(
@@ -49,7 +50,39 @@ container_ip() {
   )
   [[ -z "$cid" ]] && cid=$(docker ps -q -f "name=${filter}" -f status=running | head -1)
   [[ -z "$cid" ]] && return 1
-  docker inspect "$cid" --format "{{index .NetworkSettings.Networks \"${NET}\" \"IPAddress\"}}"
+  docker inspect "$cid" --format "{{index .NetworkSettings.Networks \"${network}\" \"IPAddress\"}}"
+}
+
+# MinIO: em alguns VPS só responde na rede easypanel (10.11.x), não em easypanel-typebot (10.0.4.x).
+resolve_minio_ip() {
+  local cid ip_t ip_e traefik
+  cid=$(docker ps -q -f name=minio -f status=running | head -1)
+  [[ -z "$cid" ]] && return 1
+  ip_t=$(docker inspect "$cid" --format '{{index .NetworkSettings.Networks "easypanel-typebot" "IPAddress"}}' 2>/dev/null || true)
+  ip_e=$(docker inspect "$cid" --format '{{index .NetworkSettings.Networks "easypanel" "IPAddress"}}' 2>/dev/null || true)
+  traefik=$(traefik_container || true)
+  if [[ -n "$traefik" && -n "$ip_e" ]] && docker exec "$traefik" wget -qO- --timeout=4 "http://${ip_e}:9000/minio/health/live" >/dev/null 2>&1; then
+    echo "$ip_e"
+    return 0
+  fi
+  if [[ -n "$traefik" && -n "$ip_t" ]] && docker exec "$traefik" wget -qO- --timeout=4 "http://${ip_t}:9000/minio/health/live" >/dev/null 2>&1; then
+    echo "$ip_t"
+    return 0
+  fi
+  [[ -n "$ip_e" ]] && echo "$ip_e" && return 0
+  [[ -n "$ip_t" ]] && echo "$ip_t" && return 0
+  return 1
+}
+
+# MinIO publicado no host (9000/9001): overlay Swarm nao roteia entre Traefik e MinIO neste VPS.
+resolve_minio_backend() {
+  local code
+  code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 4 "http://127.0.0.1:9000/minio/health/live" 2>/dev/null || echo "000")
+  if [[ "$code" == "200" ]]; then
+    echo "172.17.0.1"
+    return 0
+  fi
+  resolve_minio_ip
 }
 
 # Easypanel pode nomear o serviço como painel-typebot-crm ou painel
@@ -108,7 +141,10 @@ patch_main_yaml() {
   painel_ip=$(resolve_painel_ip || true)
   builder_ip=$(container_ip typebot-walkup-builder || true)
   viewer_ip=$(container_ip typebot-walkup-viewer || true)
-  minio_ip=$(container_ip minio || true)
+  minio_ip=$(resolve_minio_backend || container_ip minio easypanel || container_ip minio || true)
+  if [[ "${minio_ip:-}" == "172.17.0.1" ]]; then
+    echo "  MinIO backend: host gateway ${minio_ip} (portas 9000/9001 publicadas)"
+  fi
 
   [[ -z "$lp_ip" || -z "$painel_ip" ]] && {
     echo "ERRO: LP ou painel sem IP em ${NET}"
@@ -137,20 +173,21 @@ def fix_service(name: str, ip: str, port: str = "3000") -> int:
         print(f"  {name} -> http://{ip}:{port}/")
     return n
 
-for svc, ip in [
-    ("typebot_paginadevendas-1", lp),
-    ("typebot_paginadevendas-0", lp),
-    ("typebot_painel-typebot-crm-0", painel),
-    ("typebot_painel-0", painel),
-    ("typebot_painel-1", painel),
-    ("typebot_typebot-walkup-builder-0", builder),
-    ("typebot_typebot-typebot-walkup-builder-0", builder),
-    ("typebot_typebot-walkup-viewer-0", viewer),
-    ("typebot_typebot-typebot-walkup-viewer-0", viewer),
-    ("typebot_minio-0", minio),
-    ("typebot_minio", minio),
+for svc, ip, port in [
+    ("typebot_paginadevendas-1", lp, "3000"),
+    ("typebot_paginadevendas-0", lp, "3000"),
+    ("typebot_painel-typebot-crm-0", painel, "3000"),
+    ("typebot_painel-0", painel, "3000"),
+    ("typebot_painel-1", painel, "3000"),
+    ("typebot_typebot-walkup-builder-0", builder, "3000"),
+    ("typebot_typebot-typebot-walkup-builder-0", builder, "3000"),
+    ("typebot_typebot-walkup-viewer-0", viewer, "3000"),
+    ("typebot_typebot-typebot-walkup-viewer-0", viewer, "3000"),
+    ("typebot_minio-0", minio, "9001"),
+    ("typebot_minio-1", minio, "9000"),
+    ("typebot_minio", minio, "9000"),
 ]:
-    fix_service(svc, ip)
+    fix_service(svc, ip, port)
 
 for host, ip, port in [
     ("typebot_paginadevendas", lp, "3000"),
@@ -303,6 +340,10 @@ builder_wrong_backend() {
 
 run_fix() {
   echo "=== traefik-permanent $(date -Is) ==="
+  local api_rollout="/root/force-api-swarm-rollout-vps.sh"
+  if [[ -x "$api_rollout" ]]; then
+    "$api_rollout" auto >> "${LOG}" 2>&1 || true
+  fi
   ensure_traefik_on_overlay
   patch_main_yaml
 
@@ -349,16 +390,17 @@ run_fix() {
     fi
   fi
 
-  local builder_code
+  local builder_code minio_health
   builder_code=$(http_code typebot-typebot-walkup-builder.achpyp.easypanel.host /signin)
-  echo "RESULTADO lp:${lp} painel:${painel} app:${app} builder_signin:${builder_code}"
+  minio_health=$(http_code typebot-minio.achpyp.easypanel.host /minio/health/live)
+  echo "RESULTADO lp:${lp} painel:${painel} app:${app} builder_signin:${builder_code} minio_health:${minio_health}"
   [[ "$lp" == "200" || "$lp" == "307" ]] && [[ "$painel" == "200" || "$painel" == "307" ]]
 }
 
 should_patch_for_name() {
   local name="$1"
   case "$name" in
-    *painel*|*paginadevendas*|*typebot_api*|*api-typebot*|*typebot_api-*|*easypanel*)
+    *painel*|*paginadevendas*|*minio*|*walkup-builder*|*walkup-viewer*|*typebot_api*|*api-typebot*|*typebot_api-*|*easypanel*)
       return 0
       ;;
   esac
