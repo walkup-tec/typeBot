@@ -14,6 +14,8 @@
 - **Tela lead sempre aguarda:** `enqueue` não chama mais `assign()`; modos `assign_per_incoming`/`random` só `reserveAgent` (waiting + atendente sugerido). Chat lead só em `in_service` após assumir no painel.
 - **Fila ao vivo:** "Não atribuídas" = waiting sem reserva; "Minhas" = reservados/aguardando + em atendimento.
 - **Marker v10:** `DEPLOY-2026-06-05-handoff-wait-until-assign-v10` (+ redeploy `painel-typebot-crm` para abas).
+- **Lead na fila sem handoff-view:** fluxo Soma só executou HTTP POST (entrou na fila); bloco Redirect ausente ou `{{url_direct}}` vazio. Fix v11: repair injeta Redirect GET + força URL + arestas.
+- **Marker v11:** `DEPLOY-2026-06-05-handoff-redirect-get-force-v11`.
 - **Próximo:** deploy v7 → repair Soma → teste viewer.
 
 ## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)

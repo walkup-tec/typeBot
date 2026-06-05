@@ -140,7 +140,7 @@ export const repairSubscriberTenantHandoff = async (
     typebots,
     message:
       patched > 0
-        ? `Handoff reparado em ${patched} typebot(s). Redirect deve usar {{url_direct}}; teste o viewer após limpar cache.`
+        ? `Handoff reparado em ${patched} typebot(s). Redirect via GET /api/typebot/handoff (302 → handoff-view). Teste o viewer em aba anônima.`
         : "Nenhum typebot foi patchado. Verifique TYPEBOT_TARGET_BUILDER_API_* e se o fluxo tem blocos HTTP + Redirect.",
   };
 };
