@@ -1,4 +1,18 @@
-﻿## 2026-06-05 - API nova no ar (stop + implantar)
+﻿## 2026-06-05 - Soma: viewer sem redirect (handoff patch agressivo v6)
+
+- **Sintoma:** API `POST /api/typebot/handoff` OK (tenant Soma); viewer CLT não redireciona — fica na tela do fluxo.
+- **Causa provável:** patch antigo só corrigia Redirect se URL do webhook já contivesse `handoff`; cópias com HTTP+tenantId no body mas URL genérica não recebiam `{{url_direct}}` nem mapping `url_direct`.
+- **Fix:** `patchHandoffWebhookAndRedirectConfig` modo `aggressiveSubscriber`; `reapplyHandoffPatches` sempre agressivo; variável/mapping `url_direct`; endpoint `POST /api/master/tenants/:tenantId/typebot/repair-handoff`.
+- **Marker:** `DEPLOY-2026-06-05-soma-handoff-redirect-patch-v6` / `soma-handoff-aggressive-patch-v43`.
+- **Próximo:** redeploy `api` → repair Soma → retestar viewer.
+
+## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)
+
+- **Push:** `24c700f` — dedupe só protege cópia com `librarySourceId`; painel timeout 120s.
+- **Marker esperado:** `DEPLOY-2026-06-05-soma-dedupe-title-fix-v3` / `soma-flow-dedupe-handoff-v40`.
+- **Deploy:** `api` + `painel-typebot-crm` → Soma Etapa 6 Atualizar lista.
+
+## 2026-06-05 - API nova no ar (stop + implantar)
 
 - **Fix Swarm:** Parar `api` → Implantar liberou porta 3333; task nova assumiu tráfego.
 - **`GET /health`:** `DEPLOY-2026-06-04-soma-dedupe-handoff-sync-v2` + `soma-flow-dedupe-handoff-v39` ✓

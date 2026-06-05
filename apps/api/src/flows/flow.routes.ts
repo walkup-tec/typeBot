@@ -357,6 +357,26 @@ export const registerFlowRoutes = (app: Express) => {
     return res.status(200).json(loadFlowLibrary());
   });
 
+  app.post("/api/master/tenants/:tenantId/typebot/repair-handoff", async (req, res) => {
+    const tenantId = String(req.params.tenantId ?? "").trim();
+    const preferredPublicId = String(req.body?.publicId ?? req.query?.publicId ?? "").trim();
+    if (!tenantId) {
+      return res.status(400).json({ message: "tenantId obrigatório." });
+    }
+    try {
+      const { repairSubscriberTenantHandoff } = await import(
+        "../typebot/typebot-subscriber-handoff-repair.service.js"
+      );
+      const result = await repairSubscriberTenantHandoff(tenantId, preferredPublicId);
+      return res.status(200).json(result);
+    } catch (error) {
+      return res.status(500).json({
+        status: "failed",
+        message: error instanceof Error ? error.message : "Falha ao reparar handoff do assinante.",
+      });
+    }
+  });
+
   app.post("/api/master/tenants/:tenantId/flows/sync-workspace", async (req, res) => {
     const tenantId = String(req.params.tenantId ?? "").trim();
     if (!tenantId) {

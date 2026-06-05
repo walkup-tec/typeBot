@@ -327,10 +327,73 @@ const isHandoffRedirectUrl = (rawUrl: string): boolean => {
   );
 };
 
+const HANDOFF_WEBHOOK_FALLBACK_URL =
+  TYPEBOT_HANDOFF_WEBHOOK_URL || "https://app.chattypebot.com/api/typebot/handoff";
+
+const handoffNeedleInUrl = (rawUrl: string): boolean => {
+  const webhookUrl = String(rawUrl ?? "").trim().toLowerCase();
+  if (!webhookUrl) return false;
+  if (webhookUrl.includes("typebot/handoff")) return true;
+  const handoffNeedle = HANDOFF_WEBHOOK_FALLBACK_URL.replace(/^https?:\/\//, "").toLowerCase();
+  return Boolean(handoffNeedle && webhookUrl.includes(handoffNeedle));
+};
+
+const httpBlockBodyLooksLikeHandoff = (body: string): boolean =>
+  /tenantId|sourceFlowLabel|typebotViewerUrl|viewer_url|contactName|"source"\s*:\s*"typebot"/i.test(String(body ?? ""));
+
+const mappingLooksLikeHandoffUrl = (mappingRaw: unknown): boolean => {
+  if (!Array.isArray(mappingRaw)) return false;
+  return mappingRaw.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    const path = String((row as Record<string, unknown>).bodyPath ?? "").trim().toLowerCase();
+    return path.includes("url") || path.includes("handoff") || path.includes("redirect");
+  });
+};
+
+const resolveOrCreateWebhookOnHttpOptions = (options: Record<string, unknown>): Record<string, unknown> => {
+  const webhookRaw = options.webhook;
+  if (webhookRaw && typeof webhookRaw === "object") {
+    return { ...(webhookRaw as Record<string, unknown>) };
+  }
+  const flatUrl = String(options.url ?? options.endpoint ?? "").trim();
+  const flatBody = String(options.body ?? "").trim();
+  const method = String(options.method ?? "POST").trim() || "POST";
+  return {
+    url: flatUrl || HANDOFF_WEBHOOK_FALLBACK_URL,
+    method,
+    body: flatBody,
+    headers: Array.isArray(options.headers) ? options.headers : [],
+  };
+};
+
+const schemaHasRedirectBlock = (schema: Record<string, unknown>): boolean => {
+  const groups = Array.isArray(schema.groups) ? schema.groups : [];
+  for (const group of groups) {
+    if (!group || typeof group !== "object") continue;
+    const blocksRaw = (group as Record<string, unknown>).blocks;
+    if (!Array.isArray(blocksRaw)) continue;
+    for (const block of blocksRaw) {
+      if (!block || typeof block !== "object") continue;
+      if (String((block as Record<string, unknown>).type ?? "").trim() === "Redirect") return true;
+    }
+  }
+  return false;
+};
+
+const httpOptionsLookLikeHandoffBlock = (options: Record<string, unknown>): boolean => {
+  const webhook = resolveOrCreateWebhookOnHttpOptions(options);
+  const webhookUrl = String(webhook.url ?? "").trim();
+  const body = String(webhook.body ?? "").trim();
+  return (
+    handoffNeedleInUrl(webhookUrl) ||
+    httpBlockBodyLooksLikeHandoff(body) ||
+    mappingLooksLikeHandoffUrl(options.responseVariableMapping)
+  );
+};
+
 const schemaUsesHandoffWebhook = (schema: Record<string, unknown>): boolean => {
   const groupsRaw = schema.groups;
   const groups = Array.isArray(groupsRaw) ? groupsRaw : [];
-  const handoffNeedle = (TYPEBOT_HANDOFF_WEBHOOK_URL || "api/typebot/handoff").trim().toLowerCase();
   for (const group of groups) {
     if (!group || typeof group !== "object") continue;
     const blocksRaw = (group as Record<string, unknown>).blocks;
@@ -341,14 +404,87 @@ const schemaUsesHandoffWebhook = (schema: Record<string, unknown>): boolean => {
       if (!isWebhookLikeHttpBlock(type)) continue;
       const options = (block as Record<string, unknown>).options;
       if (!options || typeof options !== "object") continue;
-      const webhook = (options as Record<string, unknown>).webhook;
-      if (!webhook || typeof webhook !== "object") continue;
-      const webhookUrl = String((webhook as Record<string, unknown>).url ?? "").trim().toLowerCase();
-      if (webhookUrl.includes("typebot/handoff")) return true;
-      if (handoffNeedle && webhookUrl.includes(handoffNeedle.replace(/^https?:\/\//, ""))) return true;
+      if (httpOptionsLookLikeHandoffBlock(options as Record<string, unknown>)) return true;
     }
   }
   return false;
+};
+
+const createTypebotVariableId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const findOrEnsureUrlDirectVariable = (
+  schema: Record<string, unknown>,
+): { schema: Record<string, unknown>; variableId: string } => {
+  const variablesRaw = schema.variables;
+  const variables = Array.isArray(variablesRaw) ? [...variablesRaw] : [];
+  for (const variable of variables) {
+    if (!variable || typeof variable !== "object") continue;
+    const record = variable as { id?: unknown; name?: unknown };
+    const name = String(record.name ?? "").trim().toLowerCase();
+    const id = String(record.id ?? "").trim();
+    if (name === "url_direct" && id) {
+      return { schema, variableId: id };
+    }
+  }
+  const variableId = createTypebotVariableId();
+  variables.push({
+    id: variableId,
+    name: "url_direct",
+    isSessionVariable: false,
+  });
+  return { schema: { ...schema, variables }, variableId };
+};
+
+const ensureUrlDirectResponseMapping = (
+  options: Record<string, unknown>,
+  urlDirectVariableId: string,
+): void => {
+  const mappingRaw = options.responseVariableMapping;
+  const mapping = Array.isArray(mappingRaw) ? mappingRaw.map((row) => ({ ...(row as Record<string, unknown>) })) : [];
+  let hasUrlDirect = false;
+  const normalized = mapping.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const item = { ...(row as Record<string, unknown>) };
+    const path = String(item.bodyPath ?? "").trim().toLowerCase();
+    if (
+      path === "urlflat" ||
+      path === "url" ||
+      path === "data.url" ||
+      path === "data.urlflat" ||
+      path === "handoffurl" ||
+      path === "redirecturl" ||
+      path === "urldirect" ||
+      path === "url_direct" ||
+      path === "data.url_direct"
+    ) {
+      item.bodyPath = "url_direct";
+      item.variableId = urlDirectVariableId;
+      hasUrlDirect = true;
+    }
+    if (path === "url_direct" || path === "data.url_direct") {
+      item.variableId = urlDirectVariableId;
+      hasUrlDirect = true;
+    }
+    return item;
+  });
+  if (!hasUrlDirect) {
+    normalized.push({
+      id: createTypebotVariableId(),
+      bodyPath: "url_direct",
+      variableId: urlDirectVariableId,
+    });
+  }
+  options.responseVariableMapping = normalized;
+};
+
+export type HandoffPatchOptions = {
+  /** Reaplica em assinantes: força Redirect → {{url_direct}} e patch de HTTP mesmo sem URL handoff no schema. */
+  aggressiveSubscriber?: boolean;
 };
 
 const patchHandoffRedirectBlock = (
@@ -374,9 +510,15 @@ const patchHandoffWebhookAndRedirectConfig = (
   schema: Record<string, unknown>,
   tenant: Tenant,
   runtimeVars?: HandoffRuntimeVars,
+  patchOptions?: HandoffPatchOptions,
 ): Record<string, unknown> => {
-  const forceHandoffRedirect = schemaUsesHandoffWebhook(schema);
-  const groupsRaw = schema.groups;
+  const aggressive = patchOptions?.aggressiveSubscriber === true;
+  const hasHandoffPipeline = schemaUsesHandoffWebhook(schema);
+  const forceHandoffRedirect =
+    aggressive && (hasHandoffPipeline || schemaHasRedirectBlock(schema)) ? true : hasHandoffPipeline;
+  const withUrlDirectVar = findOrEnsureUrlDirectVariable(schema);
+  const urlDirectVariableId = withUrlDirectVar.variableId;
+  const groupsRaw = withUrlDirectVar.schema.groups;
   const groups = Array.isArray(groupsRaw) ? groupsRaw : [];
   const nextGroups = groups.map((group) => {
     if (!group || typeof group !== "object") return group;
@@ -394,11 +536,14 @@ const patchHandoffWebhookAndRedirectConfig = (
       const optionsRaw = blockRecord.options;
       if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
       const options = { ...(optionsRaw as Record<string, unknown>) };
-      const webhookRaw = options.webhook;
-      if (!webhookRaw || typeof webhookRaw !== "object") return blockRecord;
-      const webhook = { ...(webhookRaw as Record<string, unknown>) };
-      if (TYPEBOT_HANDOFF_WEBHOOK_URL) {
-        webhook.url = TYPEBOT_HANDOFF_WEBHOOK_URL;
+      const shouldPatchHttp =
+        httpOptionsLookLikeHandoffBlock(options) ||
+        (aggressive && schemaHasRedirectBlock(withUrlDirectVar.schema));
+      if (!shouldPatchHttp) return blockRecord;
+
+      const webhook = resolveOrCreateWebhookOnHttpOptions(options);
+      if (HANDOFF_WEBHOOK_FALLBACK_URL) {
+        webhook.url = HANDOFF_WEBHOOK_FALLBACK_URL;
       }
       const body = String(webhook.body ?? "");
       const normalizedBody = normalizeTypebotWebhookBody(body, {
@@ -406,39 +551,16 @@ const patchHandoffWebhookAndRedirectConfig = (
         sourceFlowLabel: runtimeVars?.sourceFlowLabel,
         typebotViewerUrl: runtimeVars?.typebotViewerUrl,
       });
-      webhook.body = mergeHandoffWebhookLeadFields(normalizedBody, collectHandoffLeadVariableNames(schema));
+      webhook.body = mergeHandoffWebhookLeadFields(normalizedBody, collectHandoffLeadVariableNames(withUrlDirectVar.schema));
       options.webhook = webhook;
-      const responseVariableMappingRaw = options.responseVariableMapping;
-      const responseVariableMapping = Array.isArray(responseVariableMappingRaw)
-        ? responseVariableMappingRaw.map((row) => {
-            if (!row || typeof row !== "object") return row;
-            const item = { ...(row as Record<string, unknown>) };
-            const path = String(item.bodyPath ?? "").trim().toLowerCase();
-            // Resposta do handoff expõe `url_direct` na raiz (e em data) para combinar com Redirect `{{url_direct}}`.
-            if (
-              path === "urlflat" ||
-              path === "url" ||
-              path === "data.url" ||
-              path === "data.urlflat" ||
-              path === "handoffurl" ||
-              path === "redirecturl" ||
-              path === "urldirect" ||
-              path === "url_direct" ||
-              path === "data.url_direct"
-            ) {
-              item.bodyPath = "url_direct";
-            }
-            return item;
-          })
-        : responseVariableMappingRaw;
-      options.responseVariableMapping = responseVariableMapping;
+      ensureUrlDirectResponseMapping(options, urlDirectVariableId);
       blockRecord.options = options;
       return blockRecord;
     });
     return groupRecord;
   });
   const withGroups = {
-    ...schema,
+    ...withUrlDirectVar.schema,
     groups: nextGroups,
   };
   const effectiveRuntime: HandoffRuntimeVars = {
@@ -999,7 +1121,7 @@ const importTypebotIntoTargetWorkspace = async (
 
 type TargetWorkspaceTypebotRow = { id: string; name: string };
 
-const listWorkspaceTypebotsOnTarget = async (workspaceId: string): Promise<TargetWorkspaceTypebotRow[]> => {
+export const listWorkspaceTypebotsOnTarget = async (workspaceId: string): Promise<TargetWorkspaceTypebotRow[]> => {
   ensureTargetConfigured();
   const response = await fetch(
     `${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots?workspaceId=${encodeURIComponent(workspaceId)}`,
@@ -1244,7 +1366,11 @@ const updateTypebotMetadataOnTarget = async (typebotId: string, name: string, te
   }
 };
 
-const patchHandoffWebhookOnTarget = async (typebotId: string, tenant: Tenant): Promise<boolean> => {
+const patchHandoffWebhookOnTarget = async (
+  typebotId: string,
+  tenant: Tenant,
+  patchOptions?: HandoffPatchOptions,
+): Promise<boolean> => {
   ensureTargetConfigured();
   const typebotPublicId = (await fetchTypebotPublicIdOnTarget(typebotId)) || "";
   const viewerBase = resolveTargetViewerBaseUrl();
@@ -1264,8 +1390,9 @@ const patchHandoffWebhookOnTarget = async (typebotId: string, tenant: Tenant): P
   if (!response.ok) return false;
   const payload = (await response.json()) as { typebot?: Record<string, unknown> };
   if (!payload.typebot || typeof payload.typebot !== "object") return false;
-  const patched = patchHandoffWebhookAndRedirectConfig(payload.typebot, tenant, runtimeVars);
+  const patched = patchHandoffWebhookAndRedirectConfig(payload.typebot, tenant, runtimeVars, patchOptions);
   const groups = patched.groups;
+  const variables = patched.variables;
   if (!Array.isArray(groups)) return false;
   const patchResponse = await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`, {
     method: "PATCH",
@@ -1273,6 +1400,7 @@ const patchHandoffWebhookOnTarget = async (typebotId: string, tenant: Tenant): P
     body: JSON.stringify({
       typebot: {
         groups,
+        ...(Array.isArray(variables) ? { variables } : {}),
       },
     }),
   });
@@ -1341,7 +1469,59 @@ export const applyHandoffPatchesToTypebotSchema = (
   schema: Record<string, unknown>,
   tenant: Tenant,
   runtimeVars?: HandoffRuntimeVars,
-): Record<string, unknown> => patchHandoffWebhookAndRedirectConfig(schema, tenant, runtimeVars);
+  patchOptions?: HandoffPatchOptions,
+): Record<string, unknown> => patchHandoffWebhookAndRedirectConfig(schema, tenant, runtimeVars, patchOptions);
+
+export type HandoffSchemaDiagnostics = {
+  hasHandoffPipeline: boolean;
+  hasRedirectBlock: boolean;
+  redirectUrls: string[];
+  httpWebhookUrls: string[];
+  hasUrlDirectVariable: boolean;
+};
+
+export const diagnoseHandoffSchema = (schema: Record<string, unknown>): HandoffSchemaDiagnostics => {
+  const redirectUrls: string[] = [];
+  const httpWebhookUrls: string[] = [];
+  let hasUrlDirectVariable = false;
+  const variables = Array.isArray(schema.variables) ? schema.variables : [];
+  for (const variable of variables) {
+    if (!variable || typeof variable !== "object") continue;
+    if (String((variable as { name?: unknown }).name ?? "").trim().toLowerCase() === "url_direct") {
+      hasUrlDirectVariable = true;
+      break;
+    }
+  }
+  const groups = Array.isArray(schema.groups) ? schema.groups : [];
+  for (const group of groups) {
+    if (!group || typeof group !== "object") continue;
+    const blocksRaw = (group as Record<string, unknown>).blocks;
+    if (!Array.isArray(blocksRaw)) continue;
+    for (const block of blocksRaw) {
+      if (!block || typeof block !== "object") continue;
+      const blockRecord = block as Record<string, unknown>;
+      const type = String(blockRecord.type ?? "").trim();
+      if (type === "Redirect") {
+        const options = blockRecord.options;
+        if (options && typeof options === "object") {
+          redirectUrls.push(String((options as Record<string, unknown>).url ?? "").trim());
+        }
+      }
+      if (!isWebhookLikeHttpBlock(type)) continue;
+      const options = blockRecord.options;
+      if (!options || typeof options !== "object") continue;
+      const webhook = resolveOrCreateWebhookOnHttpOptions(options as Record<string, unknown>);
+      httpWebhookUrls.push(String(webhook.url ?? "").trim());
+    }
+  }
+  return {
+    hasHandoffPipeline: schemaUsesHandoffWebhook(schema),
+    hasRedirectBlock: schemaHasRedirectBlock(schema),
+    redirectUrls,
+    httpWebhookUrls,
+    hasUrlDirectVariable,
+  };
+};
 
 export const syncSystemDefaultsToRealTypebotWorkspace = async (
   tenantId: string,
@@ -1630,6 +1810,9 @@ export const removeSystemDefaultFromSubscriberWorkspaces = async (item: SystemMa
   }
 };
 
+/** Patch + publica handoff em um typebot do workspace alvo (builder target). */
+export const repairHandoffForTypebotOnTarget = patchHandoffWebhookOnTarget;
+
 /** Reaplica tenantId, sourceFlowLabel, viewer_url, webhook e Redirect em todos os bots do workspace do assinante. */
 export const reapplyHandoffPatchesForTenantWorkspace = async (
   tenantId: string,
@@ -1647,7 +1830,11 @@ export const reapplyHandoffPatchesForTenantWorkspace = async (
   for (const row of rows) {
     const typebotId = String(row.id ?? "").trim();
     if (!typebotId) continue;
-    if (await patchHandoffWebhookOnTarget(typebotId, tenant)) {
+    if (
+      await patchHandoffWebhookOnTarget(typebotId, tenant, {
+        aggressiveSubscriber: true,
+      })
+    ) {
       patched += 1;
     }
   }
