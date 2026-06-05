@@ -547,9 +547,7 @@ export const registerQueueRoutes = (app: Express) => {
     const tenantId = resolvedTenantIdForSession;
     const contactClosed = queuedContact?.status === "closed";
     const initialVisitorChatEnabled =
-      mode !== "agent" &&
-      !contactClosed &&
-      (queuedContact?.status === "in_service" || Boolean(String(queuedContact?.assignedAgentId ?? "").trim()));
+      mode !== "agent" && !contactClosed && queuedContact?.status === "in_service";
     const tenant = tenantRepository.getById(tenantId);
     const tenantTheme = tenant?.defaultChatTheme;
     const tenantDisplayName =
@@ -1602,9 +1600,7 @@ export const registerQueueRoutes = (app: Express) => {
     function shouldEnableVisitorLiveChat(contact) {
       if (!contact) return false;
       if (contact.status === "closed") return false;
-      if (contact.status === "in_service") return true;
-      const assigned = String(contact.assignedAgentId || "").trim();
-      return contact.status === "waiting" && assigned.length > 0;
+      return contact.status === "in_service";
     }
 
     async function syncVisitorSessionState() {
@@ -3169,8 +3165,9 @@ export const registerQueueRoutes = (app: Express) => {
           "Fluxo",
       ).trim();
       const tenant = tenantRepository.getById(resolvedTenantId);
-      const distributionMode = tenant?.queueDistributionMode ?? "shared_pool";
       const attendantsForTenant = attendantsForQueueRouting(resolvedTenantId, tenant);
+      /** Typebot: lead vê tela de espera; atendente assume na fila ao vivo (ignora auto-assign do tenant). */
+      const handoffQueueDistributionMode = "shared_pool" as const;
       const displayFlowLabel = (
         inferredFlow?.displayLabel?.trim() ||
         inferredFlow?.nickname?.trim() ||
@@ -3195,7 +3192,7 @@ export const registerQueueRoutes = (app: Express) => {
         leadContext: storedLeadContext,
         leadWhatsapp: resolvedLeadWhatsapp,
       }, {
-        distributionMode,
+        distributionMode: handoffQueueDistributionMode,
         attendants: attendantsForTenant,
       });
       if (payload.initialMessage) {
