@@ -57,8 +57,6 @@ export const addLeadAttachmentSchema = z.object({
 });
 
 export class QueueService {
-  private readonly roundRobinCursorByTenant = new Map<string, number>();
-
   constructor(private readonly queueRepository: QueueRepository) {}
 
   enqueue(
@@ -81,30 +79,8 @@ export class QueueService {
       updatedAt: new Date().toISOString(),
     });
 
-    const distributionMode = options?.distributionMode ?? "shared_pool";
-    if (distributionMode === "shared_pool") return created;
-
-    const attendants = (options?.attendants ?? []).filter((attendant) => String(attendant.username).trim());
-    if (attendants.length === 0) return created;
-
-    let selectedIndex = 0;
-    if (distributionMode === "random") {
-      selectedIndex = Math.floor(Math.random() * attendants.length);
-    } else {
-      const previousCursor = this.roundRobinCursorByTenant.get(tenantId) ?? -1;
-      selectedIndex = (previousCursor + 1) % attendants.length;
-      this.roundRobinCursorByTenant.set(tenantId, selectedIndex);
-    }
-    const selected = attendants[selectedIndex];
-    if (!selected) return created;
-
-    const reserved = this.queueRepository.reserveAgent(
-      tenantId,
-      created.contactId,
-      selected.username,
-      selected.displayName,
-    );
-    return reserved ?? created;
+    // Novo lead permanece sem atendente até assumir no painel (fila "Não Atribuídos").
+    return created;
   }
 
   list(tenantId: string, options?: { includeClosed?: boolean }) {

@@ -4225,10 +4225,27 @@ button.danger-btn:not(.ghost-btn):hover {
 }
 
 .live-inbox-tab-count {
-  display: inline-block;
-  margin-left: 5px;
-  opacity: 0.85;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
   font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.75;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.live-inbox-tab-count--alert {
+  opacity: 1;
+  color: #ffffff;
+  background: #ef4444;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .live-inbox-list {

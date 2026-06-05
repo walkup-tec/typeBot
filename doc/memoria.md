@@ -1,4 +1,44 @@
-﻿## 2026-06-05 - Soma: viewer sem redirect (handoff patch agressivo v6)
+﻿## 2026-06-05 - Fila ao vivo: badges + Não Atribuídos (v17)
+
+- **UI:** badge vermelho com quantidade em abas **Hoje** e **Não Atribuídos** (`live-inbox-tab-count--alert`).
+- **Fila:** `unassigned` = todos `status: waiting`; **Minhas** só `in_service`/`closed` já assumidos.
+- **API:** enqueue não chama mais `reserveAgent` — lead novo sem `assignedAgentId` até assumir no painel.
+- **Markers:** `DEPLOY-2026-06-05-unassigned-queue-no-reserve-v17` (api), `DEPLOY-2026-06-05-live-inbox-queue-badges-v17` (admin).
+- **Próximo:** commit/push + deploy painel + rollout API v17.
+
+## 2026-06-05 - Deploy não sobe: v16 só no disco local
+
+- **Health prod:** `DEPLOY-2026-06-05-workspace-flow-dedupe-v14` / `gitSha a6a3514`.
+- **Causa:** commits v16 (API) e v15 (admin) **não foram para o GitHub** — Easypanel rebuilda o mesmo `master`.
+- **Build local:** `build:api` OK; admin falha só por `node_modules` incompleto (Easypanel `npm ci` resolve).
+- **Próximo:** commit + push → Implantar `api` + `painel-typebot-crm`.
+
+## 2026-06-05 - Fila ao vivo: um lead por handoff (v16 API)
+
+- **Sintoma:** Dois atendimentos "Em atendimento" no mesmo fluxo — "Lead" (errado) + "Marcelo Mozart" (correto com variáveis).
+- **Causa:** HTTP POST enfileira com variáveis; Redirect GET `/api/typebot/handoff?contactName=...` criava **segundo** contato sem `leadContext` (nome caía em "Lead").
+- **Fix v16:** `handoff-queue-dedupe.ts` — reutiliza contato existente, funde contexto, remove placeholders "Lead"; GET fino sem duplicata → 409; `{{Nome}}` não expandido não conta como nome válido.
+- **Marker:** `DEPLOY-2026-06-05-handoff-single-lead-v16`.
+- **Próximo:** deploy API → repair-handoff Soma → encerrar "Lead" manual se ainda na fila → teste handoff aba anônima.
+
+## 2026-06-05 - Etapa 6: dedupe UI biblioteca (v15 admin)
+
+- **Sintoma:** Typebot Soma = 1 bot Live; Painel Etapa 6 = 2 linhas idênticas em "Fluxos ativos na biblioteca".
+- **Causa:** `visibleLibraryFlowRows` renderiza **1 linha por item do catálogo** (`selectableFlowLibrary`); item da Biblioteca Master + item matriz Walkup casam o **mesmo** `linkedFlow` (por título/URL).
+- **Fix admin v15:** `dedupeLibraryFlowRows` por `typebotRemoteId`/`publicId`/URL; catálogo `selectableFlowLibrary` dedupe por título (prefere `isSystemDefault`).
+- **Arquivos:** `apps/admin/src/lib/libraryFlowRows.ts`, `apps/admin/src/App.tsx`, `ADMIN_BUILD_MARKER` = `DEPLOY-2026-06-05-library-flow-rows-dedupe-v15`.
+- **API v14** (dedupe disco) permanece necessário; este fix é **só renderização** Etapa 6.
+- **Próximo:** redeploy `painel-typebot-crm` → Soma Etapa 6 hard refresh; se ainda duplicar em "Fluxos do workspace", rodar `sync-workspace` com API v14.
+
+## 2026-06-05 - Retomada backup D→E + pré-deploy local
+
+- **Script:** `C:\Scripts\backup-d-para-e.ps1` — `typebot-Saas` exclui `node_modules` e `.git` (sync 15:57 copiava deps inteiras).
+- **Pré-deploy:** `backups/predeploy-20260605-161117` (`npm run backup:predeploy`; `saved-flows.json` local vazio).
+- **Espelho E:** sessão `backup_seletivo_para_E_2026-06-05__161124.log` — 6 pastas OK (exit 0); limpeza órfãos `node_modules`/`.git` em `E:\typebot-Saas`.
+- **Snapshot:** `doc/LOG-2026-06-05__162500__retomada-backup-d-para-e-e-predeploy.md`.
+- **Fluxos úteis:** ainda em `backups/predeploy-20260507-151140` (não no `apps/api/data` local).
+
+## 2026-06-05 - Soma: viewer sem redirect (handoff patch agressivo v6)
 
 - **Sintoma:** API `POST /api/typebot/handoff` OK (tenant Soma); viewer CLT não redireciona — fica na tela do fluxo.
 - **Causa provável:** patch antigo só corrigia Redirect se URL do webhook já contivesse `handoff`; cópias com HTTP+tenantId no body mas URL genérica não recebiam `{{url_direct}}` nem mapping `url_direct`.

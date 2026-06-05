@@ -208,11 +208,7 @@ export function filterInboxContacts(
   }
   if (tab === "all") return sortInboxByPinnedAndDate(items);
   if (tab === "unassigned") {
-    return sortInboxByPinnedAndDate(
-      items.filter(
-        (item) => item.status === "waiting" && !String(item.assignedAgentId ?? "").trim(),
-      ),
-    );
+    return sortInboxByPinnedAndDate(items.filter((item) => item.status === "waiting"));
   }
   return sortInboxByPinnedAndDate(
     items.filter((item) => {
@@ -221,7 +217,7 @@ export function filterInboxContacts(
           .trim()
           .toLowerCase() === agentKey;
       if (!assignedToMe) return false;
-      return item.status === "waiting" || item.status === "in_service" || item.status === "closed";
+      return item.status === "in_service" || item.status === "closed";
     }),
   );
 }

@@ -2,4 +2,4 @@
 export const MASTER_LIBRARY_LOGIC_VERSION = "workspace-flow-dedupe-library-v51";
 
 /** Altere a cada release que precise validar redeploy no Easypanel (serviço `api`). */
-export const API_DEPLOY_MARKER = "DEPLOY-2026-06-05-handoff-single-lead-v16";
+export const API_DEPLOY_MARKER = "DEPLOY-2026-06-05-unassigned-queue-no-reserve-v17";

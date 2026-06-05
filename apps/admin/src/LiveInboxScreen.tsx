@@ -208,6 +208,18 @@ export function LiveInboxScreen({
     return tags;
   };
 
+  const renderTabCount = (count: number, highlight: boolean) => {
+    const className =
+      highlight && count > 0
+        ? "live-inbox-tab-count live-inbox-tab-count--alert"
+        : "live-inbox-tab-count";
+    return (
+      <span className={className} aria-label={`${count} atendimento(s)`}>
+        {count}
+      </span>
+    );
+  };
+
   const labelTagsForItem = (item: QueueListItem) => {
     if (Array.isArray(item.labels) && item.labels.length > 0) {
       return item.labels.map((label) => ({
@@ -240,7 +252,7 @@ export function LiveInboxScreen({
               className={`live-inbox-tab ${activeTab === "today" ? "active" : ""}`}
               onClick={() => handleTabChange("today")}
             >
-              Hoje <span className="live-inbox-tab-count">{tabCounts.today}</span>
+              Hoje {renderTabCount(tabCounts.today, true)}
             </button>
             <button
               type="button"
@@ -249,7 +261,7 @@ export function LiveInboxScreen({
               className={`live-inbox-tab ${activeTab === "mine" ? "active" : ""}`}
               onClick={() => handleTabChange("mine")}
             >
-              Minhas <span className="live-inbox-tab-count">{tabCounts.mine}</span>
+              Minhas {renderTabCount(tabCounts.mine, false)}
             </button>
             <button
               type="button"
@@ -258,7 +270,7 @@ export function LiveInboxScreen({
               className={`live-inbox-tab ${activeTab === "unassigned" ? "active" : ""}`}
               onClick={() => handleTabChange("unassigned")}
             >
-              Não atribuídas <span className="live-inbox-tab-count">{tabCounts.unassigned}</span>
+              Não Atribuídos {renderTabCount(tabCounts.unassigned, true)}
             </button>
             <button
               type="button"
@@ -267,7 +279,7 @@ export function LiveInboxScreen({
               className={`live-inbox-tab ${activeTab === "all" ? "active" : ""}`}
               onClick={() => handleTabChange("all")}
             >
-              Todos <span className="live-inbox-tab-count">{tabCounts.all}</span>
+              Todos {renderTabCount(tabCounts.all, false)}
             </button>
           </div>
 
