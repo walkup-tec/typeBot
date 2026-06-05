@@ -31,6 +31,7 @@ import {
   refreshTenantWorkspaceFlowUrlsFromTypebot,
 } from "../typebot/typebot-flow-viewer-url-sync";
 import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
+import { isWalkupMasterTenant } from "../typebot/tenant-master-scope";
 import { repairTenantTypebotMediaOnTarget } from "../typebot/typebot-media-repair.service";
 import {
   listSubscriberTenantFlowsForMaster,
@@ -362,7 +363,10 @@ export const registerFlowRoutes = (app: Express) => {
       return res.status(400).json({ message: "tenantId obrigatório." });
     }
     try {
-      const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenantId);
+      const tenant = tenantRepository.getById(tenantId);
+      const recovery = tenant && isWalkupMasterTenant(tenant)
+        ? await recoverTenantWorkspaceTypebotsFromVestiges(tenantId)
+        : { skipped: true, reason: "recovery_only_for_walkup_master_tenant" };
       await syncSubscriberFlowsForListing(tenantId);
       const dedupe = await repairSubscriberTenantFlowsOnDisk(tenantId);
       let typebotMediaRepair: Awaited<ReturnType<typeof repairTenantTypebotMediaOnTarget>> | null = null;
@@ -374,8 +378,8 @@ export const registerFlowRoutes = (app: Express) => {
           repairError instanceof Error ? repairError.message : repairError,
         );
       }
-      const tenant = tenantRepository.getById(tenantId);
-      invalidateWorkspaceListCache(String(tenant?.typebotWorkspaceId ?? "").trim());
+      const tenantAfter = tenantRepository.getById(tenantId);
+      invalidateWorkspaceListCache(String(tenantAfter?.typebotWorkspaceId ?? "").trim());
       const flowCount = flowService.listByTenant(tenantId).length;
       return res.status(200).json({ status: "ok", flowCount, dedupe, recovery, typebotMediaRepair });
     } catch (error) {

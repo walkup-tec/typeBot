@@ -5,6 +5,7 @@ import { listSystemMasterLibrary } from "../flows/system-master-library.reposito
 import {
   syncSystemDefaultsToRealTypebotWorkspace,
 } from "./typebot-builder.service";
+import { isWalkupMasterTenant } from "./tenant-master-scope";
 
 const TYPEBOT_BUILDER_API_BASE_URL = String(process.env.TYPEBOT_BUILDER_API_BASE_URL ?? "").trim();
 const TYPEBOT_TARGET_BUILDER_API_BASE_URL = String(
@@ -149,7 +150,7 @@ const scanAllTargetTypebots = async (): Promise<GlobalTypebotHit[]> => {
   return hits;
 };
 
-const collectRecoveryCandidates = (tenantId: string): RecoveryCandidate[] => {
+const collectRecoveryCandidates = (tenantId: string, includeDraxVestiges: boolean): RecoveryCandidate[] => {
   const byId = new Map<string, RecoveryCandidate>();
 
   const add = (candidate: RecoveryCandidate): void => {
@@ -170,18 +171,23 @@ const collectRecoveryCandidates = (tenantId: string): RecoveryCandidate[] => {
     const publicId =
       String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(flow.url) || "";
     const name = String(flow.displayLabel ?? flow.nickname ?? "").trim() || "Fluxo";
+    if (!includeDraxVestiges && normalizeText(name) === normalizeText("Drax Sistemas")) {
+      continue;
+    }
     if (remoteId) {
       add({ sourceTypebotId: remoteId, name, desiredPublicId: publicId || undefined, source: "saved-flows" });
     }
   }
 
-  for (const remoteId of DRAX_KNOWN_REMOTE_IDS) {
-    add({
-      sourceTypebotId: remoteId,
-      name: "Drax Sistemas",
-      desiredPublicId: "drax-sistemas-d3hpop9",
-      source: "known-backup",
-    });
+  if (includeDraxVestiges) {
+    for (const remoteId of DRAX_KNOWN_REMOTE_IDS) {
+      add({
+        sourceTypebotId: remoteId,
+        name: "Drax Sistemas",
+        desiredPublicId: "drax-sistemas-d3hpop9",
+        source: "known-backup",
+      });
+    }
   }
 
   return [...byId.values()];
@@ -334,7 +340,8 @@ export const recoverTenantWorkspaceTypebotsFromVestiges = async (
   const workspaceRemoteIds = new Set(workspaceRows.map((row) => row.id));
   const workspaceNames = new Set(workspaceRows.map((row) => normalizeText(row.name)));
 
-  const candidates = collectRecoveryCandidates(tenantId);
+  const includeDraxVestiges = isWalkupMasterTenant(tenant);
+  const candidates = collectRecoveryCandidates(tenantId, includeDraxVestiges);
   const result: RecoverWorkspaceTypebotsResult = {
     tenantId,
     workspaceId,
@@ -399,6 +406,25 @@ export const recoverTenantWorkspaceTypebotsFromVestiges = async (
         `${candidate.name}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  if (!includeDraxVestiges) {
+    try {
+      const defaults = listSystemMasterLibrary().filter((item) => item.isSystemDefault);
+      if (defaults.length > 0) {
+        await syncSystemDefaultsToRealTypebotWorkspace(tenantId, defaults, { overwriteExisting: false });
+      }
+    } catch (error) {
+      result.errors.push(`sync padrões: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    try {
+      await syncWorkspaceTypebotFlowsForTenant(tenantId);
+    } catch (error) {
+      result.errors.push(`sync saved-flows: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    return result;
   }
 
   for (const publicId of DRAX_KNOWN_PUBLIC_IDS) {

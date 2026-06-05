@@ -27,6 +27,7 @@ import {
 } from "../flows/subscriber-default-flows.service";
 import { syncSystemDefaultsToRealTypebotWorkspace } from "../typebot/typebot-builder.service";
 import { recoverTenantWorkspaceTypebotsFromVestiges } from "../typebot/recover-tenant-workspace-typebots.service";
+import { isWalkupMasterTenant } from "../typebot/tenant-master-scope";
 import { repairTenantTypebotMediaOnTarget } from "../typebot/typebot-media-repair.service";
 import {
   clearTenantWorkspaceClearedFlag,
@@ -274,7 +275,9 @@ export const registerTenantRoutes = (app: Express) => {
     if (!tenant) return res.status(404).json({ message: "Tenant not found" });
     try {
       clearTenantWorkspaceClearedFlag(tenant.id);
-      const recovery = await recoverTenantWorkspaceTypebotsFromVestiges(tenant.id);
+      const recovery = isWalkupMasterTenant(tenant)
+        ? await recoverTenantWorkspaceTypebotsFromVestiges(tenant.id)
+        : { skipped: true, reason: "recovery_only_for_walkup_master_tenant" };
       await syncSubscriberFlowsForListing(tenant.id);
       const dedupe = await repairSubscriberTenantFlowsOnDisk(tenant.id);
       let typebotMediaRepair: Awaited<ReturnType<typeof repairTenantTypebotMediaOnTarget>> | null = null;

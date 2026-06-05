@@ -10,6 +10,7 @@ import {
 } from "./tenant-workspace-flows.service";
 import type { SavedFlow } from "./flow.repository";
 import {
+  pruneMasterExclusiveTypebotsFromTenantWorkspace,
   reapplyHandoffPatchesForTenantWorkspace,
   syncSystemDefaultsToRealTypebotWorkspace,
 } from "../typebot/typebot-builder.service";
@@ -177,6 +178,12 @@ export const syncSubscriberFlowsForListing = async (tenantId: string): Promise<v
   }
 
   await repairSubscriberTenantFlowsOnDisk(tenantId);
+
+  try {
+    await pruneMasterExclusiveTypebotsFromTenantWorkspace(tenantId);
+  } catch {
+    // best-effort
+  }
 
   try {
     await refreshTenantFlowViewerUrls(tenantId);

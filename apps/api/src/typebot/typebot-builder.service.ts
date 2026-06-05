@@ -16,6 +16,12 @@ import {
 import { fetchTypebotRecordOnTarget, mergeTypebotThemeHostAvatar } from "./typebot-share-metadata.service";
 import { patchHandoffRuntimeSetVariableBlocks } from "./typebot-handoff-runtime-variables.service.js";
 import { isTenantWorkspaceClearedForSync } from "./typebot-purge-tenant-workspace.service.js";
+import {
+  isMasterExclusiveTypebotLabel,
+  isMasterExclusiveTypebotPublicId,
+  isWalkupMasterTenant,
+} from "./tenant-master-scope";
+import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 
 type ImportMapEntry = {
   matchViewerUrl?: string;
@@ -1036,6 +1042,43 @@ const pruneNonDefaultTypebotsOnTarget = async (
   _strictMode: boolean,
 ): Promise<string[]> => {
   return [];
+};
+
+/**
+ * Remove do workspace Typebot do assinante bots exclusivos da matriz (ex.: Drax Sistemas).
+ * Chamado após sync da lista — evita cópias criadas por recovery antigo.
+ */
+export const pruneMasterExclusiveTypebotsFromTenantWorkspace = async (
+  tenantId: string,
+): Promise<{ removedRemote: string[]; removedLocal: number }> => {
+  const tenant = tenantRepository.getById(tenantId);
+  if (!tenant || isWalkupMasterTenant(tenant)) {
+    return { removedRemote: [], removedLocal: 0 };
+  }
+  const workspaceId = String(tenant.typebotWorkspaceId ?? "").trim();
+  const removedRemote: string[] = [];
+  if (workspaceId) {
+    const rows = await listWorkspaceTypebotsOnTarget(workspaceId);
+    for (const row of rows) {
+      if (!isMasterExclusiveTypebotLabel(row.name)) continue;
+      const deleted = await deleteTypebotOnTarget(row.id);
+      if (deleted) removedRemote.push(row.name);
+    }
+  }
+
+  let removedLocal = 0;
+  for (const flow of flowRepository.listByTenant(tenantId)) {
+    const label = String(flow.displayLabel ?? flow.nickname ?? "").trim();
+    const publicId =
+      String(flow.typebotPublicId ?? "").trim() || typebotPublicIdFromViewerUrl(flow.url) || "";
+    if (!isMasterExclusiveTypebotLabel(label) && !isMasterExclusiveTypebotPublicId(publicId)) {
+      continue;
+    }
+    flowRepository.removeById(flow.id);
+    removedLocal += 1;
+  }
+
+  return { removedRemote, removedLocal };
 };
 
 const publishAllWorkspaceTypebotsOnTarget = async (workspaceId: string): Promise<string[]> => {
