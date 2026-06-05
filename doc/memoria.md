@@ -8,6 +8,8 @@
 - **Repair Soma 05/06:** `repair-handoff` → `m5mhum7oxgcj272ssbxn7orp`, `patched:1`, webhook + `{{url_direct}}` OK no builder.
 - **Viewer ainda sem redirect:** `url_direct` provavelmente vazio (HTTP não roda ou ordem/tipo bloco). Fix v7: Redirect → GET `/api/typebot/handoff?...` (302); Webhook pausa → HTTP request; reordena blocos.
 - **Marker v7:** `DEPLOY-2026-06-05-soma-handoff-redirect-get-v7`.
+- **Repair v7 falhou (patched:0):** confundimos integração Typebot `type:"Webhook"` (HTTP Request) com pausa `webhook`; conversão para `HTTP request` quebrava PATCH. v8: não converte tipo; arestas handoff→Redirect; PATCH com `edges`.
+- **Marker v8:** `DEPLOY-2026-06-05-soma-handoff-typebot-webhook-fix-v8`.
 - **Próximo:** deploy v7 → repair Soma → teste viewer.
 
 ## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)

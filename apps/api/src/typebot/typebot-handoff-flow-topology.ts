@@ -5,19 +5,27 @@ import type { Tenant } from "../tenants/tenant.repository";
 
 const HANDOFF_API_NEEDLE = "api/typebot/handoff";
 
-const normalizeBlockType = (type: string): string => String(type ?? "").trim().toLowerCase();
+/** Bloco lógico que **pausa** até callback (Typebot `LogicBlockType.WEBHOOK`). */
+export const isPauseWebhookBlockType = (type: string): boolean => String(type ?? "").trim() === "webhook";
 
-export const isPauseWebhookBlockType = (type: string): boolean => normalizeBlockType(type) === "webhook";
+/**
+ * Integração HTTP Request no Typebot — o `type` no JSON é `"Webhook"` (não confundir com pausa).
+ * @see IntegrationBlockType.HTTP_REQUEST = "Webhook"
+ */
+export const isIntegrationHttpRequestBlockType = (type: string): boolean => String(type ?? "").trim() === "Webhook";
 
-export const isHttpRequestBlockType = (type: string): boolean => normalizeBlockType(type) === "http request";
+export const isRedirectBlockType = (type: string): boolean =>
+  String(type ?? "").trim().toLowerCase() === "redirect";
 
-export const isRedirectBlockType = (type: string): boolean => normalizeBlockType(type) === "redirect";
+export const isHandoffIntegrationOrHttpBlock = (type: string): boolean =>
+  isIntegrationHttpRequestBlockType(type) || String(type ?? "").trim().toLowerCase() === "http request";
 
 const blockSortRank = (type: string): number => {
-  const n = normalizeBlockType(type);
-  if (n === "set variable") return 10;
-  if (n === "http request" || n === "webhook") return 20;
-  if (n === "redirect") return 90;
+  const raw = String(type ?? "").trim();
+  const lower = raw.toLowerCase();
+  if (lower === "set variable") return 10;
+  if (isIntegrationHttpRequestBlockType(raw) || lower === "http request") return 20;
+  if (isRedirectBlockType(raw)) return 90;
   return 50;
 };
 
@@ -76,12 +84,20 @@ export const diagnoseHandoffFlowTopology = (schema: Record<string, unknown>): Ha
       const httpUrl = readHttpUrlFromBlock(blockRecord);
       const isHandoffHttp = httpUrl.toLowerCase().includes(HANDOFF_API_NEEDLE);
 
-      if (isPauseWebhookBlockType(type) && isHandoffHttp) {
+      if (isPauseWebhookBlockType(type)) {
         usesPauseWebhookBlock = true;
-        pauseWebhookWithHandoff = true;
+        if (isHandoffHttp) pauseWebhookWithHandoff = true;
       }
-      if (isHttpRequestBlockType(type) && isHandoffHttp) {
+      if (isHandoffIntegrationOrHttpBlock(type) && isHandoffHttp) {
         httpIndex = blockIndex;
+        blocks.push({
+          groupId,
+          groupTitle,
+          blockId,
+          blockIndex,
+          type,
+          httpUrl,
+        });
       }
       if (isRedirectBlockType(type)) {
         redirectIndex = blockIndex;
@@ -97,24 +113,13 @@ export const diagnoseHandoffFlowTopology = (schema: Record<string, unknown>): Ha
           blockIndex,
           type,
           redirectUrl,
-          httpUrl: httpUrl || undefined,
-        });
-      }
-      if (isHandoffHttp && (isHttpRequestBlockType(type) || isPauseWebhookBlockType(type))) {
-        blocks.push({
-          groupId,
-          groupTitle,
-          blockId,
-          blockIndex,
-          type,
-          httpUrl,
         });
       }
     });
 
     if (pauseWebhookWithHandoff) {
       issues.push(
-        `Grupo "${groupTitle || groupId}": bloco Webhook (pausa) com URL handoff — deve ser HTTP request síncrono.`,
+        `Grupo "${groupTitle || groupId}": bloco webhook (pausa) — não chama API handoff; use integração Webhook (HTTP Request).`,
       );
     }
     if (redirectIndex >= 0 && httpIndex >= 0 && redirectIndex < httpIndex) {
@@ -155,9 +160,74 @@ export const buildHandoffRedirectGetUrl = (
   return parts.join("&");
 };
 
-export const normalizeHandoffBlockTypesAndOrder = (
-  schema: Record<string, unknown>,
-): Record<string, unknown> => {
+const createTypebotEdgeId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`;
+};
+
+/** Garante aresta do bloco integração handoff → grupos Redirect (senão url_direct nunca é preenchido). */
+export const ensureHandoffEdgesToRedirectGroups = (schema: Record<string, unknown>): Record<string, unknown> => {
+  const groups = Array.isArray(schema.groups) ? schema.groups : [];
+  const edges = Array.isArray(schema.edges) ? [...schema.edges] : [];
+
+  let handoffBlockId = "";
+  let handoffGroupId = "";
+  const redirectGroupIds: string[] = [];
+
+  for (const group of groups) {
+    if (!group || typeof group !== "object") continue;
+    const groupRecord = group as Record<string, unknown>;
+    const groupId = String(groupRecord.id ?? "").trim();
+    const blocksRaw = groupRecord.blocks;
+    if (!Array.isArray(blocksRaw)) continue;
+    for (const block of blocksRaw) {
+      if (!block || typeof block !== "object") continue;
+      const blockRecord = block as Record<string, unknown>;
+      const type = String(blockRecord.type ?? "").trim();
+      const blockId = String(blockRecord.id ?? "").trim();
+      const httpUrl = readHttpUrlFromBlock(blockRecord);
+      if (isHandoffIntegrationOrHttpBlock(type) && httpUrl.toLowerCase().includes(HANDOFF_API_NEEDLE)) {
+        handoffBlockId = blockId;
+        handoffGroupId = groupId;
+      }
+      if (isRedirectBlockType(type) && groupId) {
+        redirectGroupIds.push(groupId);
+      }
+    }
+  }
+
+  if (!handoffBlockId || redirectGroupIds.length === 0) {
+    return schema;
+  }
+
+  const hasEdgeToRedirect = (redirectGroupId: string): boolean =>
+    edges.some((edge) => {
+      if (!edge || typeof edge !== "object") return false;
+      const record = edge as Record<string, unknown>;
+      const to = record.to;
+      const from = record.from;
+      if (!to || typeof to !== "object" || !from || typeof from !== "object") return false;
+      const toGroupId = String((to as Record<string, unknown>).groupId ?? "").trim();
+      const fromBlockId = String((from as Record<string, unknown>).blockId ?? "").trim();
+      return toGroupId === redirectGroupId && fromBlockId === handoffBlockId;
+    });
+
+  for (const redirectGroupId of redirectGroupIds) {
+    if (redirectGroupId === handoffGroupId) continue;
+    if (hasEdgeToRedirect(redirectGroupId)) continue;
+    edges.push({
+      id: createTypebotEdgeId(),
+      from: { blockId: handoffBlockId, groupId: handoffGroupId },
+      to: { groupId: redirectGroupId },
+    });
+  }
+
+  return { ...schema, edges };
+};
+
+export const normalizeHandoffBlockOrderInGroups = (schema: Record<string, unknown>): Record<string, unknown> => {
   const groupsRaw = schema.groups;
   if (!Array.isArray(groupsRaw)) return schema;
 
@@ -167,18 +237,7 @@ export const normalizeHandoffBlockTypesAndOrder = (
     const blocksRaw = groupRecord.blocks;
     if (!Array.isArray(blocksRaw)) return groupRecord;
 
-    const nextBlocks = blocksRaw.map((block) => {
-      if (!block || typeof block !== "object") return block;
-      const blockRecord = { ...(block as Record<string, unknown>) };
-      const type = String(blockRecord.type ?? "").trim();
-      if (!isPauseWebhookBlockType(type)) return blockRecord;
-      const httpUrl = readHttpUrlFromBlock(blockRecord);
-      if (!httpUrl.toLowerCase().includes(HANDOFF_API_NEEDLE)) return blockRecord;
-      blockRecord.type = "HTTP request";
-      return blockRecord;
-    });
-
-    const sorted = [...nextBlocks].sort((a, b) => {
+    const sorted = [...blocksRaw].sort((a, b) => {
       const aType = a && typeof a === "object" ? String((a as Record<string, unknown>).type ?? "") : "";
       const bType = b && typeof b === "object" ? String((b as Record<string, unknown>).type ?? "") : "";
       return blockSortRank(aType) - blockSortRank(bType);
@@ -189,4 +248,10 @@ export const normalizeHandoffBlockTypesAndOrder = (
   });
 
   return { ...schema, groups: nextGroups };
+};
+
+export const applyHandoffTopologyFixes = (schema: Record<string, unknown>): Record<string, unknown> => {
+  let next = normalizeHandoffBlockOrderInGroups(schema);
+  next = ensureHandoffEdgesToRedirectGroups(next);
+  return next;
 };

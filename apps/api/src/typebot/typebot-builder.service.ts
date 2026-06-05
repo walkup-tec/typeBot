@@ -16,9 +16,10 @@ import {
 import { fetchTypebotRecordOnTarget, mergeTypebotThemeHostAvatar } from "./typebot-share-metadata.service";
 import { patchHandoffRuntimeSetVariableBlocks } from "./typebot-handoff-runtime-variables.service.js";
 import {
+  applyHandoffTopologyFixes,
   buildHandoffRedirectGetUrl,
   diagnoseHandoffFlowTopology,
-  normalizeHandoffBlockTypesAndOrder,
+  isHandoffIntegrationOrHttpBlock,
 } from "./typebot-handoff-flow-topology.js";
 import { isTenantWorkspaceClearedForSync } from "./typebot-purge-tenant-workspace.service.js";
 import {
@@ -291,10 +292,8 @@ const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntim
   return nextBody;
 };
 
-const isWebhookLikeHttpBlock = (blockType: string): boolean => {
-  const n = blockType.trim().toLowerCase();
-  return n === "webhook" || n === "http request";
-};
+/** Integração HTTP Request do Typebot (`type`: `"Webhook"`). Não inclui bloco lógico `webhook` (pausa). */
+const isWebhookLikeHttpBlock = (blockType: string): boolean => isHandoffIntegrationOrHttpBlock(blockType);
 
 /** Redirect do Typebot deve usar variável do webhook handoff, nunca URL de imagem MinIO. */
 const HANDOFF_REDIRECT_URL_VARIABLE = "{{url_direct}}";
@@ -613,7 +612,7 @@ const patchHandoffWebhookAndRedirectConfig = (
   };
   const withRuntime = patchHandoffRuntimeSetVariableBlocks(withGroups, effectiveRuntime);
   if (aggressive) {
-    return normalizeHandoffBlockTypesAndOrder(withRuntime);
+    return applyHandoffTopologyFixes(withRuntime);
   }
   return withRuntime;
 };
@@ -1440,18 +1439,24 @@ const patchHandoffWebhookOnTarget = async (
   const patched = patchHandoffWebhookAndRedirectConfig(payload.typebot, tenant, runtimeVars, patchOptions);
   const groups = patched.groups;
   const variables = patched.variables;
+  const edges = patched.edges;
   if (!Array.isArray(groups)) return false;
+  const patchBody: Record<string, unknown> = { groups };
+  if (Array.isArray(variables)) patchBody.variables = variables;
+  if (Array.isArray(edges)) patchBody.edges = edges;
   const patchResponse = await fetch(`${TYPEBOT_TARGET_BUILDER_API_BASE_URL}/v1/typebots/${encodeURIComponent(typebotId)}`, {
     method: "PATCH",
     headers: buildTargetHeaders(),
-    body: JSON.stringify({
-      typebot: {
-        groups,
-        ...(Array.isArray(variables) ? { variables } : {}),
-      },
-    }),
+    body: JSON.stringify({ typebot: patchBody }),
   });
-  if (!patchResponse.ok) return false;
+  if (!patchResponse.ok) {
+    const errText = await patchResponse.text().catch(() => "");
+    console.warn(
+      `[handoff-patch] typebot=${typebotId} status=${patchResponse.status}`,
+      errText.slice(0, 500),
+    );
+    return false;
+  }
   await publishTypebotOnTarget(typebotId);
   return true;
 };
