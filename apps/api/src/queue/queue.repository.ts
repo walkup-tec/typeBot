@@ -278,6 +278,29 @@ export class QueueRepository {
     return updated;
   }
 
+  /**
+   * Reserva atendente sugerido (round-robin/aleatório) sem iniciar atendimento.
+   * Lead permanece em `waiting` até `assign()` no painel.
+   */
+  reserveAgent(tenantId: string, contactId: string, agentId: string, agentName?: string): QueueContact | null {
+    const contact = waitingQueue.get(contactId);
+    if (!contact || contact.tenantId !== tenantId) return null;
+    if (contact.status !== "waiting") return contact;
+
+    const nextAgentId = String(agentId ?? "").trim();
+    if (!nextAgentId) return contact;
+
+    const updated: QueueContact = {
+      ...contact,
+      assignedAgentId: nextAgentId,
+      assignedAgentName: String(agentName ?? "").trim() || contact.assignedAgentName,
+      updatedAt: new Date().toISOString(),
+    };
+    waitingQueue.set(contactId, updated);
+    saveQueueState(waitingQueue, liveMessages);
+    return updated;
+  }
+
   assign(tenantId: string, contactId: string, agentId: string, agentName?: string): QueueContact | null {
     const contact = waitingQueue.get(contactId);
     if (!contact || contact.tenantId !== tenantId) return null;

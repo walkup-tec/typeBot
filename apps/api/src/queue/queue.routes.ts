@@ -3165,9 +3165,8 @@ export const registerQueueRoutes = (app: Express) => {
           "Fluxo",
       ).trim();
       const tenant = tenantRepository.getById(resolvedTenantId);
+      const distributionMode = tenant?.queueDistributionMode ?? "shared_pool";
       const attendantsForTenant = attendantsForQueueRouting(resolvedTenantId, tenant);
-      /** Typebot: lead vê tela de espera; atendente assume na fila ao vivo (ignora auto-assign do tenant). */
-      const handoffQueueDistributionMode = "shared_pool" as const;
       const displayFlowLabel = (
         inferredFlow?.displayLabel?.trim() ||
         inferredFlow?.nickname?.trim() ||
@@ -3192,7 +3191,7 @@ export const registerQueueRoutes = (app: Express) => {
         leadContext: storedLeadContext,
         leadWhatsapp: resolvedLeadWhatsapp,
       }, {
-        distributionMode: handoffQueueDistributionMode,
+        distributionMode,
         attendants: attendantsForTenant,
       });
       if (payload.initialMessage) {

@@ -40,6 +40,7 @@ export type QueueListItem = {
   scheduledAt?: string;
   updatedAt: string;
   leadContext?: Record<string, string | number | boolean>;
+  leadWhatsapp?: string;
 };
 
 const toBrazilDateKey = (value: Date): string =>
@@ -137,11 +138,11 @@ export function buildInboxSearchHaystack(item: QueueListItem): string {
     resolveLeadWhatsapp(item.leadWhatsapp, item.leadContext),
     resolveLeadCpf(item.leadContext),
     formatBrazilianCpf(resolveLeadCpf(item.leadContext)),
-    item.priorityName,
-    item.kanbanColumnName,
-    item.assignedAgentName,
+    String(item.priorityName ?? ""),
+    String(item.kanbanColumnName ?? ""),
+    String(item.assignedAgentName ?? ""),
     resolveInboxFlowLabel(item),
-    item.labelName,
+    String(item.labelName ?? ""),
     ...(item.labels?.map((label) => label.name) ?? []),
   ];
   if (item.leadContext) {
@@ -207,7 +208,11 @@ export function filterInboxContacts(
   }
   if (tab === "all") return sortInboxByPinnedAndDate(items);
   if (tab === "unassigned") {
-    return sortInboxByPinnedAndDate(items.filter((item) => item.status === "waiting"));
+    return sortInboxByPinnedAndDate(
+      items.filter(
+        (item) => item.status === "waiting" && !String(item.assignedAgentId ?? "").trim(),
+      ),
+    );
   }
   return sortInboxByPinnedAndDate(
     items.filter((item) => {
@@ -216,7 +221,7 @@ export function filterInboxContacts(
           .trim()
           .toLowerCase() === agentKey;
       if (!assignedToMe) return false;
-      return item.status === "in_service" || item.status === "closed";
+      return item.status === "waiting" || item.status === "in_service" || item.status === "closed";
     }),
   );
 }

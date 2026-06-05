@@ -98,8 +98,13 @@ export class QueueService {
     const selected = attendants[selectedIndex];
     if (!selected) return created;
 
-    const autoAssigned = this.queueRepository.assign(tenantId, created.contactId, selected.username, selected.displayName);
-    return autoAssigned ?? created;
+    const reserved = this.queueRepository.reserveAgent(
+      tenantId,
+      created.contactId,
+      selected.username,
+      selected.displayName,
+    );
+    return reserved ?? created;
   }
 
   list(tenantId: string, options?: { includeClosed?: boolean }) {
