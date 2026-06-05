@@ -1,4 +1,27 @@
-﻿## 2026-06-04 - Fix build + handoff patch no Atualizar lista (Soma)
+﻿## 2026-06-05 - API nova no ar (stop + implantar)
+
+- **Fix Swarm:** Parar `api` → Implantar liberou porta 3333; task nova assumiu tráfego.
+- **`GET /health`:** `DEPLOY-2026-06-04-soma-dedupe-handoff-sync-v2` + `soma-flow-dedupe-handoff-v39` ✓
+- **`gitSha`:** `undefined` (env `GIT_SHA` não injetada no Easypanel — cosmético).
+- **Próximo:** Soma → Etapa 6 → **Atualizar lista** (dedupe + handoff patch).
+
+## 2026-06-05 - Deploy 4037077 OK mas /health ainda antigo
+
+- **Build Easypanel:** Success commit `4037077` (nixpacks: `build:api` + `deploy-marker.js` OK).
+- **Produção `GET /health`:** ainda `DEPLOY-2026-06-04-attendant-resend-route` / `attendant-resend-welcome-v30` — **sem** `gitSha`; código novo **não** atende tráfego.
+- **Esperado após runtime correto:** `DEPLOY-2026-06-04-soma-dedupe-handoff-sync-v2` + `soma-flow-dedupe-handoff-v39`.
+- **Hipótese:** container antigo na 3333 (`api-typebot-crm`) ou serviço `api` sem restart/porta 3333 publicada (ver `doc/EASYPANEL-PARIDADE-SERVICO-API.md`).
+- **Restart 05/06:** `/health` **inalterado** — padrão Swarm: porta **3333** presa por task antiga (ver `LOG-2026-06-03__151500__api-swarm-3333-host-port-pending.md`).
+- **Próximo:** Easypanel `api` → **Parar** (scale 0) → aguardar → **Implantar** de novo → validar `/health`.
+
+## 2026-06-04 - Soma: triplicação + handoff (causa real)
+
+- **Produção em 04/06:** `/health` ainda `DEPLOY-2026-06-04-attendant-resend-route` — commits dedupe/handoff **não estavam no ar** (deploy build falhou ou não rodou).
+- **Triplicação:** stub biblioteca (URL matriz) + 2 cópias workspace — dedupe só por `remoteId` não fundia; fix `dedupeTenantFlowsByDisplayTitle` + não criar stub se já existe bot no workspace.
+- **Handoff:** `syncSubscriberFlowsForListing` agora `overwriteExisting: true` + `reapplyHandoffPatchesForTenantWorkspace` no **Atualizar lista**.
+- **Marker:** `DEPLOY-2026-06-04-soma-dedupe-handoff-sync` — commit `3767181`.
+
+## 2026-06-04 - Fix build + handoff patch no Atualizar lista (Soma)
 
 - **Deploy falhou:** TS `SavedFlow` sem `updatedAt` em `flowKeeperScore` — corrigido (`createdAt`).
 - **Soma handoff auto:** `reapplyHandoffPatchesForTenantWorkspace` roda após import no **Atualizar lista** (tenantId/sourceFlowLabel/viewer_url + webhook + Redirect).

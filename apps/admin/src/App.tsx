@@ -1265,7 +1265,7 @@ export function App() {
     if (!tenantId || isRefreshingTenantFlows) return;
     setIsRefreshingTenantFlows(true);
     const controller = new AbortController();
-    const abortTimer = window.setTimeout(() => controller.abort(), 28_000);
+    const abortTimer = window.setTimeout(() => controller.abort(), 120_000);
     try {
       const syncResponse = await fetch(
         `${apiBase}/api/master/tenants/${encodeURIComponent(tenantId)}/flows/sync-workspace`,
@@ -1313,7 +1313,14 @@ export function App() {
         setStatusMessage("Lista de fluxos atualizada.");
       }
     } catch {
-      setStatusMessage(formatApiConnectionError(new Error("timeout ou rede")));
+      try {
+        await loadFlows(tenantId, { skipCache: true, forceSync: false });
+        setStatusMessage(
+          "A sincronização demorou no navegador; a lista foi recarregada da API. Confira os fluxos abaixo.",
+        );
+      } catch {
+        setStatusMessage(formatApiConnectionError(new Error("timeout ou rede")));
+      }
     } finally {
       window.clearTimeout(abortTimer);
       setIsRefreshingTenantFlows(false);

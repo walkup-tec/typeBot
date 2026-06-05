@@ -465,15 +465,17 @@ const applyWorkspaceRowToFlow = async (flow: SavedFlow, row: TypebotListRow, vie
   flowRepository.updateById(flow.id, patch);
 };
 
-const isLinkedToSystemMasterDefault = (flow: SavedFlow): boolean => {
+/** Cópia explícita da biblioteca master (tem librarySourceId no item padrão). */
+const isExplicitSystemDefaultLibraryCopy = (flow: SavedFlow): boolean => {
   const libId = String(flow.librarySourceId ?? "").trim();
-  if (libId) {
-    const byLib = listSystemMasterLibrary().some(
-      (item) =>
-        item.isSystemDefault && (item.id === libId || item.sourceFlowId === libId),
-    );
-    if (byLib) return true;
-  }
+  if (!libId) return false;
+  return listSystemMasterLibrary().some(
+    (item) => item.isSystemDefault && (item.id === libId || item.sourceFlowId === libId),
+  );
+};
+
+const isLinkedToSystemMasterDefault = (flow: SavedFlow): boolean => {
+  if (isExplicitSystemDefaultLibraryCopy(flow)) return true;
   return listSystemMasterLibrary().some(
     (item) =>
       item.isSystemDefault &&
@@ -672,7 +674,7 @@ export const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => 
   const groups = new Map<string, SavedFlow[]>();
 
   for (const flow of flows) {
-    if (isLinkedToSystemMasterDefault(flow)) continue;
+    if (isExplicitSystemDefaultLibraryCopy(flow)) continue;
     const key = flowIdentityKey(flow);
     if (!key) continue;
     const bucket = groups.get(key) ?? [];
@@ -698,7 +700,7 @@ export const dedupeTenantFlowsByDisplayTitle = (tenantId: string): number => {
   const groups = new Map<string, SavedFlow[]>();
 
   for (const flow of flows) {
-    if (isLinkedToSystemMasterDefault(flow)) continue;
+    if (isExplicitSystemDefaultLibraryCopy(flow)) continue;
     const title = normalizeText(String(flow.displayLabel ?? flow.nickname ?? "").trim());
     if (!title) continue;
     const bucket = groups.get(title) ?? [];
@@ -771,7 +773,7 @@ const pruneTenantFlowsToMatchWorkspace = async (
   const toRemove: string[] = [];
 
   for (const flow of flows) {
-    if (isLinkedToSystemMasterDefault(flow)) continue;
+    if (isExplicitSystemDefaultLibraryCopy(flow)) continue;
     if (String(flow.librarySourceId ?? "").trim()) continue;
 
     const remoteId = String(flow.typebotRemoteId ?? "").trim();
