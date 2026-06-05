@@ -39,6 +39,7 @@ import {
   isBrokenTypebotMediaUrl,
   resolveHandoffProfileImageUrl,
 } from "../typebot/typebot-media-sanitize.service";
+import { buildHandoffRedirectGetUrl } from "../typebot/typebot-handoff-flow-topology.js";
 
 function normalizeHandoffMatchToken(value: string): string {
   return value.trim().toLowerCase();
@@ -3099,6 +3100,13 @@ export const registerQueueRoutes = (app: Express) => {
             z.string(),
           ])
           .optional(),
+        /** POST prepare-only: não enfileira (Redirect GET faz um único enqueue). */
+        enqueue: z
+          .preprocess((value) => {
+            if (value === false || value === "false" || value === 0 || value === "0") return false;
+            return true;
+          }, z.boolean())
+          .optional(),
       })
       .passthrough();
       const payload = payloadSchema.parse(mergeHandoffRequestInput(req));
@@ -3184,6 +3192,44 @@ export const registerQueueRoutes = (app: Express) => {
         flowAlias: payload.flowAlias ?? inferredFlow?.displayLabel ?? inferredFlow?.nickname,
       });
 
+      const typebotViewerUrlFromBody = resolvedViewerUrlFromPayload;
+      const typebotViewerUrl = typebotViewerUrlFromBody || inferredFlow?.url;
+
+      const shouldSkipEnqueue =
+        req.method === "POST" && (payload as { enqueue?: boolean }).enqueue === false;
+
+      if (shouldSkipEnqueue && tenant) {
+        const prepareRedirectUrl = buildHandoffRedirectGetUrl(tenant, {
+          sourceFlowLabel: sourceFlowLabelCandidate || viewerPidFromBody || displayFlowLabel,
+          typebotViewerUrl: typebotViewerUrl && isSafeHttpUrl(typebotViewerUrl) ? typebotViewerUrl : undefined,
+        });
+        const preparePayload = {
+          tenantId: resolvedTenantId,
+          enqueue: false,
+          handoffUrl: prepareRedirectUrl,
+          redirectUrl: prepareRedirectUrl,
+          url: prepareRedirectUrl,
+          url_direct: prepareRedirectUrl,
+          redirectTarget: prepareRedirectUrl,
+          visitUrl: prepareRedirectUrl,
+          openUrl: prepareRedirectUrl,
+          handoffUrlFlat: prepareRedirectUrl,
+          redirectUrlFlat: prepareRedirectUrl,
+          urlFlat: prepareRedirectUrl,
+          data: {
+            handoffUrl: prepareRedirectUrl,
+            redirectUrl: prepareRedirectUrl,
+            url: prepareRedirectUrl,
+            url_direct: prepareRedirectUrl,
+            redirectTarget: prepareRedirectUrl,
+            visitUrl: prepareRedirectUrl,
+            openUrl: prepareRedirectUrl,
+          },
+          resolvedTypebotViewerUrl: typebotViewerUrl ?? null,
+        };
+        return res.status(200).json(preparePayload);
+      }
+
       const item = queueService.enqueue(resolvedTenantId, {
         contactName: resolvedContactName,
         source: "typebot",
@@ -3201,8 +3247,6 @@ export const registerQueueRoutes = (app: Express) => {
         });
       }
       const publicBaseUrl = getPublicBaseUrl(req, req.method === "GET" || Boolean(req.header("host")));
-      const typebotViewerUrlFromBody = resolvedViewerUrlFromPayload;
-      const typebotViewerUrl = typebotViewerUrlFromBody || inferredFlow?.url;
       const visualConfigFromFlow = inferredFlow?.redirectTheme;
       const visualConfigDetected =
         typebotViewerUrl && isSafeHttpUrl(typebotViewerUrl) ? await extractViewerVisualConfig(typebotViewerUrl) : DEFAULT_VISUAL_CONFIG;

@@ -248,7 +248,11 @@ const buildDefaultHandoffWebhookBody = (runtimeVars: HandoffRuntimeVars): Record
   return payload;
 };
 
-const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntimeVars): string => {
+const normalizeTypebotWebhookBody = (
+  rawBody: string,
+  runtimeVars: HandoffRuntimeVars,
+  options?: { prepareOnly?: boolean },
+): string => {
   const body = String(rawBody ?? "").trim();
   const tenantId = String(runtimeVars.tenantId ?? "").trim();
   const sourceFlowLabel = String(runtimeVars.sourceFlowLabel ?? "").trim();
@@ -266,6 +270,7 @@ const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntim
       if (typebotViewerUrl) parsed.typebotViewerUrl = typebotViewerUrl;
       if (!parsed.contactName) parsed.contactName = "{{Nome}}";
       if (!parsed.source) parsed.source = "typebot";
+      if (options?.prepareOnly) parsed.enqueue = false;
       return JSON.stringify(parsed, null, 2);
     }
   } catch {
@@ -289,6 +294,11 @@ const normalizeTypebotWebhookBody = (rawBody: string, runtimeVars: HandoffRuntim
   }
   if (!/"contactName"\s*:/i.test(nextBody)) {
     nextBody = nextBody.replace(/\{\s*\}/, '{"contactName": "{{Nome}}"');
+  }
+  if (options?.prepareOnly) {
+    nextBody = /"enqueue"\s*:/i.test(nextBody)
+      ? nextBody.replace(/"enqueue"\s*:\s*(true|false)/i, '"enqueue": false')
+      : nextBody.replace(/\{\s*/, '{"enqueue": false,');
   }
   return nextBody;
 };
@@ -588,11 +598,17 @@ const patchHandoffWebhookAndRedirectConfig = (
         webhook.url = HANDOFF_WEBHOOK_FALLBACK_URL;
       }
       const body = String(webhook.body ?? "");
-      const normalizedBody = normalizeTypebotWebhookBody(body, {
-        tenantId: String(tenant.id ?? "").trim(),
-        sourceFlowLabel: runtimeVars?.sourceFlowLabel,
-        typebotViewerUrl: runtimeVars?.typebotViewerUrl,
-      });
+      const prepareOnlyHttp =
+        aggressive && patchOptions?.redirectViaGetHandoff !== false && Boolean(tenant.id);
+      const normalizedBody = normalizeTypebotWebhookBody(
+        body,
+        {
+          tenantId: String(tenant.id ?? "").trim(),
+          sourceFlowLabel: runtimeVars?.sourceFlowLabel,
+          typebotViewerUrl: runtimeVars?.typebotViewerUrl,
+        },
+        { prepareOnly: prepareOnlyHttp },
+      );
       webhook.body = mergeHandoffWebhookLeadFields(normalizedBody, collectHandoffLeadVariableNames(withUrlDirectVar.schema));
       options.webhook = webhook;
       ensureUrlDirectResponseMapping(options, urlDirectVariableId);

@@ -16,6 +16,8 @@
 - **Marker v10:** `DEPLOY-2026-06-05-handoff-wait-until-assign-v10` (+ redeploy `painel-typebot-crm` para abas).
 - **Lead na fila sem handoff-view:** fluxo Soma só executou HTTP POST (entrou na fila); bloco Redirect ausente ou `{{url_direct}}` vazio. Fix v11: repair injeta Redirect GET + força URL + arestas.
 - **Marker v11:** `DEPLOY-2026-06-05-handoff-redirect-get-force-v11`.
+- **Duplicata Lead + nome:** HTTP POST enfileirava "Lead" e Redirect GET criava segundo contato. Fix v12: POST com `enqueue:false` (prepare); só GET enfileira. Repair reaplica body.
+- **Marker v12:** `DEPLOY-2026-06-05-handoff-single-enqueue-v12`.
 - **Próximo:** deploy v7 → repair Soma → teste viewer.
 
 ## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)
