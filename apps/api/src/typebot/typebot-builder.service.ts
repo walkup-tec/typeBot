@@ -15,6 +15,11 @@ import {
 } from "./typebot-media-sanitize.service";
 import { fetchTypebotRecordOnTarget, mergeTypebotThemeHostAvatar } from "./typebot-share-metadata.service";
 import { patchHandoffRuntimeSetVariableBlocks } from "./typebot-handoff-runtime-variables.service.js";
+import {
+  buildHandoffRedirectGetUrl,
+  diagnoseHandoffFlowTopology,
+  normalizeHandoffBlockTypesAndOrder,
+} from "./typebot-handoff-flow-topology.js";
 import { isTenantWorkspaceClearedForSync } from "./typebot-purge-tenant-workspace.service.js";
 import {
   isMasterExclusiveTypebotLabel,
@@ -483,13 +488,29 @@ const ensureUrlDirectResponseMapping = (
 };
 
 export type HandoffPatchOptions = {
-  /** Reaplica em assinantes: força Redirect → {{url_direct}} e patch de HTTP mesmo sem URL handoff no schema. */
+  /** Reaplica em assinantes: força Redirect → GET handoff ou {{url_direct}} e patch de HTTP. */
   aggressiveSubscriber?: boolean;
+  /**
+   * Assinante: Redirect aponta para GET /api/typebot/handoff (302 → handoff-view).
+   * Evita depender de url_direct preenchido pelo HTTP Request.
+   */
+  redirectViaGetHandoff?: boolean;
+};
+
+const redirectUrlUsesGetHandoffApi = (rawUrl: string): boolean => {
+  const lower = String(rawUrl ?? "").trim().toLowerCase();
+  return lower.includes("/api/typebot/handoff") && lower.includes("contactname=");
 };
 
 const patchHandoffRedirectBlock = (
   blockRecord: Record<string, unknown>,
-  patchOptions?: { forceHandoffVariable?: boolean },
+  patchOptions: {
+    forceHandoffVariable?: boolean;
+    aggressiveSubscriber?: boolean;
+    redirectViaGetHandoff?: boolean;
+    tenant?: Tenant;
+    runtimeVars?: HandoffRuntimeVars;
+  } = {},
 ): Record<string, unknown> => {
   const type = String(blockRecord.type ?? "").trim();
   if (type !== "Redirect") return blockRecord;
@@ -497,6 +518,22 @@ const patchHandoffRedirectBlock = (
   if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
   const blockOptions = { ...(optionsRaw as Record<string, unknown>) };
   const currentUrl = String(blockOptions.url ?? "").trim();
+
+  const useGetHandoff =
+    patchOptions.aggressiveSubscriber === true &&
+    patchOptions.redirectViaGetHandoff !== false &&
+    patchOptions.tenant?.id;
+
+  if (useGetHandoff) {
+    if (!redirectUrlUsesGetHandoffApi(currentUrl)) {
+      blockOptions.url = buildHandoffRedirectGetUrl(patchOptions.tenant!, {
+        sourceFlowLabel: patchOptions.runtimeVars?.sourceFlowLabel,
+        typebotViewerUrl: patchOptions.runtimeVars?.typebotViewerUrl,
+      });
+    }
+    return { ...blockRecord, options: blockOptions };
+  }
+
   const mustUseHandoffVar =
     patchOptions?.forceHandoffVariable === true
       ? !isHandoffRedirectUrl(currentUrl)
@@ -530,7 +567,13 @@ const patchHandoffWebhookAndRedirectConfig = (
       const blockRecord = { ...(block as Record<string, unknown>) };
       const type = String(blockRecord.type ?? "").trim();
       if (type === "Redirect") {
-        return patchHandoffRedirectBlock(blockRecord, { forceHandoffVariable: forceHandoffRedirect });
+        return patchHandoffRedirectBlock(blockRecord, {
+          forceHandoffVariable: forceHandoffRedirect,
+          aggressiveSubscriber: aggressive,
+          redirectViaGetHandoff: patchOptions?.redirectViaGetHandoff,
+          tenant,
+          runtimeVars,
+        });
       }
       if (!isWebhookLikeHttpBlock(type)) return blockRecord;
       const optionsRaw = blockRecord.options;
@@ -568,7 +611,11 @@ const patchHandoffWebhookAndRedirectConfig = (
     sourceFlowLabel: runtimeVars?.sourceFlowLabel,
     typebotViewerUrl: runtimeVars?.typebotViewerUrl,
   };
-  return patchHandoffRuntimeSetVariableBlocks(withGroups, effectiveRuntime);
+  const withRuntime = patchHandoffRuntimeSetVariableBlocks(withGroups, effectiveRuntime);
+  if (aggressive) {
+    return normalizeHandoffBlockTypesAndOrder(withRuntime);
+  }
+  return withRuntime;
 };
 
 const getReadableButtonTextColor = (hex: string): string => {
@@ -1478,6 +1525,7 @@ export type HandoffSchemaDiagnostics = {
   redirectUrls: string[];
   httpWebhookUrls: string[];
   hasUrlDirectVariable: boolean;
+  topology: ReturnType<typeof diagnoseHandoffFlowTopology>;
 };
 
 export const diagnoseHandoffSchema = (schema: Record<string, unknown>): HandoffSchemaDiagnostics => {
@@ -1520,6 +1568,7 @@ export const diagnoseHandoffSchema = (schema: Record<string, unknown>): HandoffS
     redirectUrls,
     httpWebhookUrls,
     hasUrlDirectVariable,
+    topology: diagnoseHandoffFlowTopology(schema),
   };
 };
 

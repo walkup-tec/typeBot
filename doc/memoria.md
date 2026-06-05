@@ -4,7 +4,11 @@
 - **Causa provável:** patch antigo só corrigia Redirect se URL do webhook já contivesse `handoff`; cópias com HTTP+tenantId no body mas URL genérica não recebiam `{{url_direct}}` nem mapping `url_direct`.
 - **Fix:** `patchHandoffWebhookAndRedirectConfig` modo `aggressiveSubscriber`; `reapplyHandoffPatches` sempre agressivo; variável/mapping `url_direct`; endpoint `POST /api/master/tenants/:tenantId/typebot/repair-handoff`.
 - **Marker:** `DEPLOY-2026-06-05-soma-handoff-redirect-patch-v6` / `soma-handoff-aggressive-patch-v43`.
-- **Próximo:** redeploy `api` → repair Soma → retestar viewer.
+- **Produção 05/06:** build Easypanel `660420c` Success; VPS rollout → `/health` v6 OK.
+- **Repair Soma 05/06:** `repair-handoff` → `m5mhum7oxgcj272ssbxn7orp`, `patched:1`, webhook + `{{url_direct}}` OK no builder.
+- **Viewer ainda sem redirect:** `url_direct` provavelmente vazio (HTTP não roda ou ordem/tipo bloco). Fix v7: Redirect → GET `/api/typebot/handoff?...` (302); Webhook pausa → HTTP request; reordena blocos.
+- **Marker v7:** `DEPLOY-2026-06-05-soma-handoff-redirect-get-v7`.
+- **Próximo:** deploy v7 → repair Soma → teste viewer.
 
 ## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)
 
