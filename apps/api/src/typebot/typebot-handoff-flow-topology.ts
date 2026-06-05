@@ -167,6 +167,93 @@ const createTypebotEdgeId = (): string => {
   return `e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`;
 };
 
+const createTypebotBlockId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`;
+};
+
+/**
+ * Alguns fluxos importados só têm HTTP handoff (POST) sem Redirect — o lead entra na fila mas
+ * permanece na tela do Typebot. Insere Redirect GET após o bloco HTTP no mesmo grupo.
+ */
+export const ensureHandoffRedirectBlockPresent = (
+  schema: Record<string, unknown>,
+  redirectUrl: string,
+): Record<string, unknown> => {
+  const url = String(redirectUrl ?? "").trim();
+  if (!url) return schema;
+
+  const topology = diagnoseHandoffFlowTopology(schema);
+  if (topology.blocks.some((block) => isRedirectBlockType(block.type))) {
+    return schema;
+  }
+
+  const handoffHttp = topology.blocks.find((block) => Boolean(block.httpUrl));
+  if (!handoffHttp) return schema;
+
+  const groupsRaw = schema.groups;
+  if (!Array.isArray(groupsRaw)) return schema;
+
+  const nextGroups = groupsRaw.map((group) => {
+    if (!group || typeof group !== "object") return group;
+    const groupRecord = group as Record<string, unknown>;
+    if (String(groupRecord.id ?? "").trim() !== handoffHttp.groupId) return groupRecord;
+
+    const blocksRaw = groupRecord.blocks;
+    if (!Array.isArray(blocksRaw)) return groupRecord;
+
+    const redirectBlock = {
+      id: createTypebotBlockId(),
+      type: "Redirect",
+      options: {
+        url,
+        isNewTab: false,
+      },
+    };
+
+    return {
+      ...groupRecord,
+      blocks: [...blocksRaw, redirectBlock],
+    };
+  });
+
+  return { ...schema, groups: nextGroups };
+};
+
+/** Garante aresta do bloco HTTP handoff → grupo que contém Redirect. */
+export const rewireHandoffHttpOutgoingToRedirect = (schema: Record<string, unknown>): Record<string, unknown> => {
+  const topology = diagnoseHandoffFlowTopology(schema);
+  const handoffHttp = topology.blocks.find((block) => Boolean(block.httpUrl));
+  const redirectBlock = topology.blocks.find((block) => isRedirectBlockType(block.type));
+  if (!handoffHttp || !redirectBlock) return schema;
+  if (handoffHttp.groupId === redirectBlock.groupId) return schema;
+
+  const edges = Array.isArray(schema.edges) ? [...schema.edges] : [];
+  const redirectGroupId = redirectBlock.groupId;
+
+  const alreadyWired = edges.some((edge) => {
+    if (!edge || typeof edge !== "object") return false;
+    const record = edge as Record<string, unknown>;
+    const from = record.from;
+    const to = record.to;
+    if (!from || typeof from !== "object" || !to || typeof to !== "object") return false;
+    const fromBlockId = String((from as Record<string, unknown>).blockId ?? "").trim();
+    const toGroupId = String((to as Record<string, unknown>).groupId ?? "").trim();
+    return fromBlockId === handoffHttp.blockId && toGroupId === redirectGroupId;
+  });
+  if (alreadyWired) return schema;
+
+  edges.push({
+    id: createTypebotEdgeId(),
+    from: { blockId: handoffHttp.blockId, groupId: handoffHttp.groupId },
+    to: { groupId: redirectGroupId },
+  });
+
+  return { ...schema, edges };
+};
+
 /** Garante aresta do bloco integração handoff → grupos Redirect (senão url_direct nunca é preenchido). */
 export const ensureHandoffEdgesToRedirectGroups = (schema: Record<string, unknown>): Record<string, unknown> => {
   const groups = Array.isArray(schema.groups) ? schema.groups : [];
@@ -250,8 +337,15 @@ export const normalizeHandoffBlockOrderInGroups = (schema: Record<string, unknow
   return { ...schema, groups: nextGroups };
 };
 
-export const applyHandoffTopologyFixes = (schema: Record<string, unknown>): Record<string, unknown> => {
+export const applyHandoffTopologyFixes = (
+  schema: Record<string, unknown>,
+  options?: { redirectUrl?: string },
+): Record<string, unknown> => {
   let next = normalizeHandoffBlockOrderInGroups(schema);
+  if (options?.redirectUrl) {
+    next = ensureHandoffRedirectBlockPresent(next, options.redirectUrl);
+  }
   next = ensureHandoffEdgesToRedirectGroups(next);
+  next = rewireHandoffHttpOutgoingToRedirect(next);
   return next;
 };

@@ -20,6 +20,7 @@ import {
   buildHandoffRedirectGetUrl,
   diagnoseHandoffFlowTopology,
   isHandoffIntegrationOrHttpBlock,
+  isRedirectBlockType,
 } from "./typebot-handoff-flow-topology.js";
 import { isTenantWorkspaceClearedForSync } from "./typebot-purge-tenant-workspace.service.js";
 import {
@@ -378,7 +379,7 @@ const schemaHasRedirectBlock = (schema: Record<string, unknown>): boolean => {
     if (!Array.isArray(blocksRaw)) continue;
     for (const block of blocksRaw) {
       if (!block || typeof block !== "object") continue;
-      if (String((block as Record<string, unknown>).type ?? "").trim() === "Redirect") return true;
+      if (isRedirectBlockType(String((block as Record<string, unknown>).type ?? ""))) return true;
     }
   }
   return false;
@@ -512,7 +513,7 @@ const patchHandoffRedirectBlock = (
   } = {},
 ): Record<string, unknown> => {
   const type = String(blockRecord.type ?? "").trim();
-  if (type !== "Redirect") return blockRecord;
+  if (!isRedirectBlockType(type)) return blockRecord;
   const optionsRaw = blockRecord.options;
   if (!optionsRaw || typeof optionsRaw !== "object") return blockRecord;
   const blockOptions = { ...(optionsRaw as Record<string, unknown>) };
@@ -524,13 +525,12 @@ const patchHandoffRedirectBlock = (
     patchOptions.tenant?.id;
 
   if (useGetHandoff) {
-    if (!redirectUrlUsesGetHandoffApi(currentUrl)) {
-      blockOptions.url = buildHandoffRedirectGetUrl(patchOptions.tenant!, {
-        sourceFlowLabel: patchOptions.runtimeVars?.sourceFlowLabel,
-        typebotViewerUrl: patchOptions.runtimeVars?.typebotViewerUrl,
-      });
-    }
-    return { ...blockRecord, options: blockOptions };
+    blockOptions.url = buildHandoffRedirectGetUrl(patchOptions.tenant!, {
+      sourceFlowLabel: patchOptions.runtimeVars?.sourceFlowLabel,
+      typebotViewerUrl: patchOptions.runtimeVars?.typebotViewerUrl,
+    });
+    blockOptions.isNewTab = false;
+    return { ...blockRecord, type: "Redirect", options: blockOptions };
   }
 
   const mustUseHandoffVar =
@@ -565,7 +565,7 @@ const patchHandoffWebhookAndRedirectConfig = (
       if (!block || typeof block !== "object") return block;
       const blockRecord = { ...(block as Record<string, unknown>) };
       const type = String(blockRecord.type ?? "").trim();
-      if (type === "Redirect") {
+      if (isRedirectBlockType(type)) {
         return patchHandoffRedirectBlock(blockRecord, {
           forceHandoffVariable: forceHandoffRedirect,
           aggressiveSubscriber: aggressive,
@@ -612,7 +612,14 @@ const patchHandoffWebhookAndRedirectConfig = (
   };
   const withRuntime = patchHandoffRuntimeSetVariableBlocks(withGroups, effectiveRuntime);
   if (aggressive) {
-    return applyHandoffTopologyFixes(withRuntime);
+    const redirectUrl =
+      patchOptions?.redirectViaGetHandoff !== false && tenant.id
+        ? buildHandoffRedirectGetUrl(tenant, {
+            sourceFlowLabel: effectiveRuntime.sourceFlowLabel,
+            typebotViewerUrl: effectiveRuntime.typebotViewerUrl,
+          })
+        : undefined;
+    return applyHandoffTopologyFixes(withRuntime, { redirectUrl });
   }
   return withRuntime;
 };
@@ -1554,7 +1561,7 @@ export const diagnoseHandoffSchema = (schema: Record<string, unknown>): HandoffS
       if (!block || typeof block !== "object") continue;
       const blockRecord = block as Record<string, unknown>;
       const type = String(blockRecord.type ?? "").trim();
-      if (type === "Redirect") {
+      if (isRedirectBlockType(type)) {
         const options = blockRecord.options;
         if (options && typeof options === "object") {
           redirectUrls.push(String((options as Record<string, unknown>).url ?? "").trim());
