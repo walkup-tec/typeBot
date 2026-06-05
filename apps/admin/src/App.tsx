@@ -20,6 +20,7 @@ import {
   type MasterWizardStepIndex,
 } from "./masterWizardProgress";
 import { resolveStatusToastTone } from "./lib/resolveStatusToastTone";
+import { dedupeLibraryFlowRows } from "./lib/libraryFlowRows";
 import { dedupeMasterLibraryFlows, MASTER_SOURCE_EMAIL } from "./lib/masterLibraryFlows";
 import { normalizePublicApiBaseUrl, PRODUCTION_API_BASE_URL } from "./lib/publicApiBase";
 import { ADMIN_BUILD_MARKER } from "./deploy-marker";
@@ -701,19 +702,28 @@ export function App() {
     const defaultLibraryIds = new Set(
       systemMasterLibrary.filter((entry) => entry.isSystemDefault).map((entry) => entry.id),
     );
+    const catalogItemScore = (item: FlowLibraryItem): number => {
+      let score = 0;
+      if (defaultLibraryIds.has(item.id)) score += 20;
+      if (String(item.viewerUrl ?? "").trim()) score += 1;
+      return score;
+    };
+    const pickCatalogItem = (existing: FlowLibraryItem, candidate: FlowLibraryItem): FlowLibraryItem =>
+      catalogItemScore(candidate) > catalogItemScore(existing) ? candidate : existing;
     const byId = new Map<string, FlowLibraryItem>();
-    for (const item of [...base, ...fromActiveMatrix]) byId.set(item.id, item);
-    const merged = [...byId.values()];
-    const titleOccurrences = new Map<string, number>();
-    for (const item of merged) {
+    const byTitle = new Map<string, FlowLibraryItem>();
+    for (const item of [...base, ...fromActiveMatrix]) {
+      byId.set(item.id, item);
       const titleKey = String(item.title ?? "").trim().toLowerCase();
       if (!titleKey) continue;
-      titleOccurrences.set(titleKey, (titleOccurrences.get(titleKey) ?? 0) + 1);
+      const previous = byTitle.get(titleKey);
+      byTitle.set(titleKey, previous ? pickCatalogItem(previous, item) : item);
     }
-    return merged.filter((item) => {
+    const keptTitleIds = new Set([...byTitle.values()].map((item) => item.id));
+    return [...byId.values()].filter((item) => {
       const titleKey = String(item.title ?? "").trim().toLowerCase();
-      if (!titleKey || (titleOccurrences.get(titleKey) ?? 0) <= 1) return true;
-      return !defaultLibraryIds.has(item.id);
+      if (!titleKey) return true;
+      return keptTitleIds.has(item.id) && byTitle.get(titleKey)?.id === item.id;
     });
   }, [flowLibrary, systemMasterLibrary, sourceMasterFlows]);
   const libraryLinkedFlows = useMemo(
@@ -836,13 +846,23 @@ export function App() {
       }),
     [selectableFlowLibrary, selectedTenantFlows, systemMasterLibrary, sourceMasterFlows, flowStatuses],
   );
+  const systemDefaultLibraryIds = useMemo(
+    () => new Set(systemMasterLibrary.filter((item) => item.isSystemDefault).map((item) => item.id)),
+    [systemMasterLibrary],
+  );
   /** Fluxos ativos no catálogo (etapa 6). Se vazio, a UI mostra o catálogo completo como fallback. */
   const activeLibraryFlowRows = useMemo(
-    () => libraryFlowRows.filter((row) => row.healthStatus === "active"),
-    [libraryFlowRows],
+    () =>
+      dedupeLibraryFlowRows(
+        libraryFlowRows.filter((row) => row.healthStatus === "active"),
+        systemDefaultLibraryIds,
+      ),
+    [libraryFlowRows, systemDefaultLibraryIds],
   );
-  const visibleLibraryFlowRows =
-    activeLibraryFlowRows.length > 0 ? activeLibraryFlowRows : libraryFlowRows;
+  const visibleLibraryFlowRows = useMemo(() => {
+    const rows = activeLibraryFlowRows.length > 0 ? activeLibraryFlowRows : libraryFlowRows;
+    return dedupeLibraryFlowRows(rows, systemDefaultLibraryIds);
+  }, [activeLibraryFlowRows, libraryFlowRows, systemDefaultLibraryIds]);
   /** Biblioteca Master: só fluxos Live do tenant matriz Walkup (typebotRemoteId + owner walkup). */
   const walkupMasterLibraryFlows = useMemo(
     () => dedupeMasterLibraryFlows(sourceMasterFlows),
@@ -864,10 +884,6 @@ export function App() {
         });
       }),
     [walkupMasterLibraryFlows, systemMasterLibrary],
-  );
-  const systemDefaultLibraryIds = useMemo(
-    () => new Set(systemMasterLibrary.filter((item) => item.isSystemDefault).map((item) => item.id)),
-    [systemMasterLibrary],
   );
   const activeCreatedFlows = useMemo(
     () => selectedTenantFlows.filter((flow) => flowStatuses[flow.id] === "active"),

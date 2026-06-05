@@ -372,6 +372,15 @@ export class QueueRepository {
     return liveMessages.get(contactId) ?? [];
   }
 
+  removeContact(tenantId: string, contactId: string): boolean {
+    const contact = waitingQueue.get(contactId);
+    if (!contact || contact.tenantId !== tenantId) return false;
+    waitingQueue.delete(contactId);
+    liveMessages.delete(contactId);
+    saveQueueState(waitingQueue, liveMessages);
+    return true;
+  }
+
   /** Remove contactos e mensagens da fila deste assinante (ao apagar o tenant). */
   deleteByTenantId(tenantId: string): void {
     const toRemove: string[] = [];

@@ -28,6 +28,7 @@ const isNomeCompletoKey = (key: string): boolean => {
 export const isMeaningfulLeadContactName = (value: unknown): boolean => {
   const normalized = String(value ?? "").trim();
   if (!normalized) return false;
+  if (/\{\{[^}]+\}\}/.test(normalized)) return false;
   return !PLACEHOLDER_CONTACT_NAMES.has(normalized.toLowerCase());
 };
 

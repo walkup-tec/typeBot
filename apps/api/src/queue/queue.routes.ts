@@ -23,7 +23,7 @@ import {
   resolveServiceStartedAt,
 } from "../lib/agent-session-meta";
 import { pruneLeadContext } from "../lib/lead-context";
-import { resolveLeadContactName } from "../lib/lead-contact-name";
+import { isMeaningfulLeadContactName, resolveLeadContactName } from "../lib/lead-contact-name";
 import { resolveSourceFlowDisplayName } from "../lib/source-flow-display";
 import { typebotPublicIdFromViewerUrl } from "../lib/typebot-public-id";
 import {
@@ -41,6 +41,13 @@ import {
 } from "../typebot/typebot-media-sanitize.service";
 import { buildHandoffRedirectGetUrl } from "../typebot/typebot-handoff-flow-topology.js";
 import { tenantFlowAlreadyRegistered } from "../typebot/typebot-flow-viewer-url-sync.js";
+import {
+  findHandoffQueueDuplicate,
+  isThinHandoffRequest,
+  listPlaceholderHandoffDuplicates,
+  mergeHandoffIntoExistingContact,
+} from "./handoff-queue-dedupe";
+import type { QueueContact } from "./queue.repository";
 
 function normalizeHandoffMatchToken(value: string): string {
   return value.trim().toLowerCase();
@@ -3077,8 +3084,8 @@ export const registerQueueRoutes = (app: Express) => {
       .object({
         contactName: z.preprocess((value) => {
           const normalized = typeof value === "string" ? value.trim() : "";
-          return normalized.length >= 2 ? normalized : "Lead";
-        }, z.string().min(2).max(120)),
+          return normalized.length >= 2 ? normalized : undefined;
+        }, z.string().min(2).max(120).optional()),
         source: z.enum(["typebot", "widget"]).default("typebot"),
         sourceFlowLabel: asOptionalNonEmptyString(150),
         source_flow_label: asOptionalNonEmptyString(150),
@@ -3165,8 +3172,8 @@ export const registerQueueRoutes = (app: Express) => {
 
       const payloadRecord = payload as Record<string, unknown>;
       const resolvedLeadContext = resolveLeadContextFromHandoffPayload(payloadRecord);
-      const storedLeadContext = pruneLeadContext(resolvedLeadContext);
-      const resolvedContactName = pickLeadNameFromPayload(payloadRecord, resolvedLeadContext);
+      let storedLeadContext = pruneLeadContext(resolvedLeadContext) ?? {};
+      let resolvedContactName = pickLeadNameFromPayload(payloadRecord, storedLeadContext);
       const resolvedLeadWhatsapp = pickLeadWhatsappFromContext(resolvedLeadContext, payloadRecord);
       const inferredFlow = matchingFlows.find((saved) => saved.tenantId === resolvedTenantId) ?? matchingFlows[0];
       const resolvedFlowLabel = String(
@@ -3236,16 +3243,86 @@ export const registerQueueRoutes = (app: Express) => {
         return res.status(200).json(preparePayload);
       }
 
-      const item = queueService.enqueue(resolvedTenantId, {
+      const handoffFlowLabel = displayFlowLabel || resolvedFlowLabel || "Fluxo";
+      const handoffResultId = String(payloadRecord.resultId ?? storedLeadContext.resultId ?? "").trim();
+      if (handoffResultId) {
+        storedLeadContext = { ...storedLeadContext, resultId: handoffResultId };
+      }
+      const thinHandoffRequest = isThinHandoffRequest(req.method, storedLeadContext, resolvedContactName);
+      const existingQueueContacts = queueRepository.listByTenant(resolvedTenantId);
+      const duplicateHandoffContact = findHandoffQueueDuplicate(existingQueueContacts, {
         contactName: resolvedContactName,
-        source: "typebot",
-        sourceFlowLabel: displayFlowLabel || resolvedFlowLabel || "Fluxo",
+        sourceFlowLabel: handoffFlowLabel,
         leadContext: storedLeadContext,
         leadWhatsapp: resolvedLeadWhatsapp,
-      }, {
-        distributionMode,
-        attendants: attendantsForTenant,
+        resultId: handoffResultId,
+        isThinRequest: thinHandoffRequest,
       });
+
+      let item: QueueContact;
+
+      if (duplicateHandoffContact) {
+        const merged = mergeHandoffIntoExistingContact(duplicateHandoffContact, {
+          contactName: resolvedContactName,
+          sourceFlowLabel: handoffFlowLabel,
+          leadContext: storedLeadContext,
+          leadWhatsapp: resolvedLeadWhatsapp,
+          resultId: handoffResultId,
+          isThinRequest: thinHandoffRequest,
+        });
+        resolvedContactName = merged.contactName;
+        storedLeadContext = merged.leadContext;
+        const updated =
+          queueRepository.updateContact(resolvedTenantId, duplicateHandoffContact.contactId, {
+            contactName: merged.contactName,
+            leadContext: merged.leadContext,
+            leadWhatsapp: merged.leadWhatsapp,
+          }) ?? duplicateHandoffContact;
+        item = updated;
+        for (const placeholderId of listPlaceholderHandoffDuplicates(
+          queueRepository.listByTenant(resolvedTenantId),
+          item.contactId,
+          handoffFlowLabel,
+        )) {
+          queueRepository.removeContact(resolvedTenantId, placeholderId);
+        }
+      } else if (thinHandoffRequest) {
+        const thinMessage =
+          "Handoff incompleto: este GET não traz variáveis do fluxo. O HTTP POST deve enfileirar o lead antes do Redirect ({{url_direct}}).";
+        if (req.method === "GET") {
+          return res.status(409).send(thinMessage);
+        }
+        return res.status(409).json({ message: thinMessage });
+      } else {
+        item = queueService.enqueue(
+          resolvedTenantId,
+          {
+            contactName: resolvedContactName,
+            source: "typebot",
+            sourceFlowLabel: handoffFlowLabel,
+            leadContext: storedLeadContext,
+            leadWhatsapp: resolvedLeadWhatsapp,
+          },
+          {
+            distributionMode,
+            attendants: attendantsForTenant,
+          },
+        );
+        for (const placeholderId of listPlaceholderHandoffDuplicates(
+          queueRepository.listByTenant(resolvedTenantId),
+          item.contactId,
+          handoffFlowLabel,
+        )) {
+          queueRepository.removeContact(resolvedTenantId, placeholderId);
+        }
+      }
+
+      if (!isMeaningfulLeadContactName(resolvedContactName)) {
+        return res.status(400).json({
+          message:
+            "Nome do lead inválido. Inclua contactName ou variáveis do fluxo (ex.: Nome, nome_contato) no webhook handoff.",
+        });
+      }
       if (payload.initialMessage) {
         queueService.sendMessage(resolvedTenantId, item.contactId, {
           sender: "visitor",
