@@ -58,9 +58,27 @@ desired_replicas() {
   echo "$want"
 }
 
+fetch_health_body() {
+  local url body
+  for url in \
+    "$API_HEALTH_URL" \
+    "http://127.0.0.1:3333/health" \
+    "http://172.17.0.1:3333/health"; do
+    [[ -z "$url" ]] && continue
+    body=$(curl -sS --max-time 12 "$url" 2>/dev/null || true)
+    if [[ -n "$body" && "$body" == *'"status"'* ]]; then
+      echo "$body"
+      return 0
+    fi
+  done
+  return 1
+}
+
 health_marker() {
-  curl -sS --max-time 15 "$API_HEALTH_URL" 2>/dev/null \
-    | grep -oE '"deployMarker":"[^"]+"' \
+  local body
+  body=$(fetch_health_body 2>/dev/null || true)
+  [[ -z "$body" ]] && return 0
+  grep -oE '"deployMarker":"[^"]+"' <<< "$body" \
     | head -1 \
     | sed 's/"deployMarker":"//;s/"$//' || true
 }
@@ -163,7 +181,7 @@ verify_health() {
         sleep 4
         continue
       fi
-      if curl -sS --max-time 12 "$API_HEALTH_URL" 2>/dev/null | grep -q '"status":"ok"'; then
+      if fetch_health_body 2>/dev/null | grep -q '"status":"ok"'; then
         log "health OK"
         return 0
       fi
@@ -204,13 +222,16 @@ should_rollout() {
     return 0
   fi
 
-  if [[ -n "$EXPECTED_MARKER" ]]; then
-    local current
-    current=$(health_marker || true)
-    if [[ -n "$current" && "$current" != "$EXPECTED_MARKER" ]]; then
-      log "auto: marker '$current' != esperado '$EXPECTED_MARKER'"
-      return 0
-    fi
+  local body current
+  body=$(fetch_health_body 2>/dev/null || true)
+  if [[ -z "$body" ]]; then
+    log "auto: health inacessível (público e 127.0.0.1:3333)"
+    return 0
+  fi
+  current=$(health_marker || true)
+  if [[ -n "$EXPECTED_MARKER" && "$current" != "$EXPECTED_MARKER" ]]; then
+    log "auto: marker '$current' != esperado '$EXPECTED_MARKER'"
+    return 0
   fi
 
   local running pending
@@ -242,7 +263,13 @@ main() {
   show_diagnose "$svc"
 
   if [[ "$mode" == "auto" ]] && ! should_rollout "$svc" "$mode"; then
-    log "auto: nada a fazer (task OK e marker compatível)"
+    local marker_ok
+    marker_ok=$(health_marker || true)
+    if [[ -n "$marker_ok" ]]; then
+      log "auto: nada a fazer — task OK, deployMarker=$marker_ok"
+    else
+      log "auto: task Swarm OK mas health sem marker — rode: $0 diagnose"
+    fi
     exit 0
   fi
 
