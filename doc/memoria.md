@@ -11,9 +11,9 @@
 - **Repair v7 falhou (patched:0):** confundimos integração Typebot `type:"Webhook"` (HTTP Request) com pausa `webhook`; conversão para `HTTP request` quebrava PATCH. v8: não converte tipo; arestas handoff→Redirect; PATCH com `edges`.
 - **Marker v8:** `DEPLOY-2026-06-05-soma-handoff-typebot-webhook-fix-v8`.
 - **Repair v8 OK:** `patched:1`, Redirect → GET handoff com tenant Soma + `empr-stimo-do-trabalhador-clt-bxn7orp`; `topology.issues` vazio.
-- **Handoff abriu chat direto:** tenant Soma com `assign_per_incoming`/`random` auto-atribuía no enqueue → `in_service` sem fila. Fix v9: handoff Typebot força `shared_pool`; lead só vê chat quando status `in_service`.
-- **Marker v9:** `DEPLOY-2026-06-05-typebot-handoff-wait-queue-v9`.
-- **Próximo:** deploy v9 → novo teste fluxo + assumir na fila ao vivo.
+- **Tela lead sempre aguarda:** `enqueue` não chama mais `assign()`; modos `assign_per_incoming`/`random` só `reserveAgent` (waiting + atendente sugerido). Chat lead só em `in_service` após assumir no painel.
+- **Fila ao vivo:** "Não atribuídas" = waiting sem reserva; "Minhas" = reservados/aguardando + em atendimento.
+- **Marker v10:** `DEPLOY-2026-06-05-handoff-wait-until-assign-v10` (+ redeploy `painel-typebot-crm` para abas).
 - **Próximo:** deploy v7 → repair Soma → teste viewer.
 
 ## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)
