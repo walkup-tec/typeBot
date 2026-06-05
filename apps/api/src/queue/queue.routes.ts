@@ -325,6 +325,7 @@ const resolveLeadContextFromHandoffPayload = (
     "answers",
     "resultId",
     "leadWhatsapp",
+    "enqueue",
   ]);
   const autoLeadContext = Object.entries(payload)
     .filter(([key]) => !knownKeys.has(key))
@@ -3276,7 +3277,7 @@ export const registerQueueRoutes = (app: Express) => {
         ? `&leadContext=${encodeURIComponent(JSON.stringify(storedLeadContext))}`
         : "";
       const handoffUrl = `${publicBaseUrl}/handoff-view?tenantId=${resolvedTenantId}&contactId=${item.contactId}&contactName=${encodeURIComponent(
-        payload.contactName,
+        resolvedContactName,
       )}&flow=${encodeURIComponent(displayFlowLabel)}${typebotQuery}${leadContextQuery}${visualQuery}`;
 
       const responsePayload = {

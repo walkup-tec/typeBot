@@ -111,6 +111,8 @@ export const repairSubscriberTenantHandoff = async (
         : diagnoseHandoffSchema({});
     const handoffPatched = await repairHandoffForTypebotOnTarget(row.id, tenant, {
       aggressiveSubscriber: true,
+      /** POST enfileira com variáveis do fluxo; Redirect abre {{url_direct}} (sem segundo GET). */
+      redirectViaGetHandoff: false,
     });
     if (handoffPatched) patched += 1;
     const schemaAfter = await fetchTypebotRecordOnTarget(row.id);
@@ -140,7 +142,7 @@ export const repairSubscriberTenantHandoff = async (
     typebots,
     message:
       patched > 0
-        ? `Handoff reparado em ${patched} typebot(s). Redirect via GET /api/typebot/handoff (302 → handoff-view). Teste o viewer em aba anônima.`
+        ? `Handoff reparado em ${patched} typebot(s). HTTP enfileira com dados do fluxo; Redirect → {{url_direct}}. Teste em aba anônima.`
         : "Nenhum typebot foi patchado. Verifique TYPEBOT_TARGET_BUILDER_API_* e se o fluxo tem blocos HTTP + Redirect.",
   };
 };

@@ -18,6 +18,8 @@
 - **Marker v11:** `DEPLOY-2026-06-05-handoff-redirect-get-force-v11`.
 - **Duplicata Lead + nome:** HTTP POST enfileirava "Lead" e Redirect GET criava segundo contato. Fix v12: POST com `enqueue:false` (prepare); só GET enfileira. Repair reaplica body.
 - **Marker v12:** `DEPLOY-2026-06-05-handoff-single-enqueue-v12`.
+- **Lead sem dados (v13):** GET handoff não envia leadContext; voltou POST enfileira + Redirect `{{url_direct}}`. Repair `redirectViaGetHandoff:false`. handoff-view usa `resolvedContactName`.
+- **Marker v13:** `DEPLOY-2026-06-05-handoff-post-urldirect-v13`.
 - **Próximo:** deploy v7 → repair Soma → teste viewer.
 
 ## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)

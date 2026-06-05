@@ -270,7 +270,11 @@ const normalizeTypebotWebhookBody = (
       if (typebotViewerUrl) parsed.typebotViewerUrl = typebotViewerUrl;
       if (!parsed.contactName) parsed.contactName = "{{Nome}}";
       if (!parsed.source) parsed.source = "typebot";
-      if (options?.prepareOnly) parsed.enqueue = false;
+      if (options?.prepareOnly) {
+        parsed.enqueue = false;
+      } else if (Object.prototype.hasOwnProperty.call(parsed, "enqueue")) {
+        delete parsed.enqueue;
+      }
       return JSON.stringify(parsed, null, 2);
     }
   } catch {
@@ -531,7 +535,7 @@ const patchHandoffRedirectBlock = (
 
   const useGetHandoff =
     patchOptions.aggressiveSubscriber === true &&
-    patchOptions.redirectViaGetHandoff !== false &&
+    patchOptions.redirectViaGetHandoff === true &&
     patchOptions.tenant?.id;
 
   if (useGetHandoff) {
@@ -599,7 +603,7 @@ const patchHandoffWebhookAndRedirectConfig = (
       }
       const body = String(webhook.body ?? "");
       const prepareOnlyHttp =
-        aggressive && patchOptions?.redirectViaGetHandoff !== false && Boolean(tenant.id);
+        aggressive && patchOptions?.redirectViaGetHandoff === true && Boolean(tenant.id);
       const normalizedBody = normalizeTypebotWebhookBody(
         body,
         {
@@ -629,12 +633,12 @@ const patchHandoffWebhookAndRedirectConfig = (
   const withRuntime = patchHandoffRuntimeSetVariableBlocks(withGroups, effectiveRuntime);
   if (aggressive) {
     const redirectUrl =
-      patchOptions?.redirectViaGetHandoff !== false && tenant.id
+      patchOptions?.redirectViaGetHandoff === true && tenant.id
         ? buildHandoffRedirectGetUrl(tenant, {
             sourceFlowLabel: effectiveRuntime.sourceFlowLabel,
             typebotViewerUrl: effectiveRuntime.typebotViewerUrl,
           })
-        : undefined;
+        : HANDOFF_REDIRECT_URL_VARIABLE;
     return applyHandoffTopologyFixes(withRuntime, { redirectUrl });
   }
   return withRuntime;
@@ -1910,6 +1914,7 @@ export const reapplyHandoffPatchesForTenantWorkspace = async (
     if (
       await patchHandoffWebhookOnTarget(typebotId, tenant, {
         aggressiveSubscriber: true,
+        redirectViaGetHandoff: false,
       })
     ) {
       patched += 1;
