@@ -20,6 +20,8 @@
 - **Marker v12:** `DEPLOY-2026-06-05-handoff-single-enqueue-v12`.
 - **Lead sem dados (v13):** GET handoff não envia leadContext; voltou POST enfileira + Redirect `{{url_direct}}`. Repair `redirectViaGetHandoff:false`. handoff-view usa `resolvedContactName`.
 - **Marker v13:** `DEPLOY-2026-06-05-handoff-post-urldirect-v13`.
+- **Duplicata biblioteca Soma:** cópia master (`librarySourceId`) + workspace não entravam no dedupe. Fix v14: `flowsShareDisplayIntent`, merge cluster, import/handoff não recriam.
+- **Marker v14:** `DEPLOY-2026-06-05-workspace-flow-dedupe-v14`.
 - **Próximo:** deploy v7 → repair Soma → teste viewer.
 
 ## 2026-06-05 - Fix dedupe titulo + timeout (commit 24c700f)

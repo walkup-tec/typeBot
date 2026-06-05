@@ -40,6 +40,7 @@ import {
   resolveHandoffProfileImageUrl,
 } from "../typebot/typebot-media-sanitize.service";
 import { buildHandoffRedirectGetUrl } from "../typebot/typebot-handoff-flow-topology.js";
+import { tenantFlowAlreadyRegistered } from "../typebot/typebot-flow-viewer-url-sync.js";
 
 function normalizeHandoffMatchToken(value: string): string {
   return value.trim().toLowerCase();
@@ -103,12 +104,16 @@ const ensureTenantFlowRegisteredFromHandoff = (params: {
   const sourceToken = normalizeHandoffMatchToken(sourceFlowLabel);
   const viewerToken = normalizeHandoffMatchToken(typebotPublicIdFromViewerUrl(viewerUrl));
   const byTenant = flowRepository.listByTenant(tenantId);
-  const alreadyExists = byTenant.some((flow) =>
-    savedFlowMatchesHandoffSource(flow, sourceToken || viewerToken, viewerToken),
-  );
+  const displayLabel = String(params.flowAlias ?? "").trim() || sourceFlowLabel || "Fluxo";
+  const alreadyExists =
+    tenantFlowAlreadyRegistered(byTenant, {
+      viewerUrl,
+      displayLabel,
+      sourceFlowLabel,
+    }) ||
+    byTenant.some((flow) => savedFlowMatchesHandoffSource(flow, sourceToken || viewerToken, viewerToken));
   if (alreadyExists) return;
 
-  const displayLabel = String(params.flowAlias ?? "").trim() || sourceFlowLabel || "Fluxo";
   const nicknameBase = sourceFlowLabel || viewerToken || displayLabel;
   let nickname = slugifyFlowNickname(nicknameBase);
   if (nickname.length < 2) nickname = `fluxo-${Date.now()}`;

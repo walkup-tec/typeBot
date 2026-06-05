@@ -641,6 +641,24 @@ const flowAlreadyLinkedToWorkspaceTypebot = (
     if (nn) {
       const label = normalizeText(String(f.displayLabel ?? f.nickname ?? "").trim());
       if (label && label === nn) return true;
+      for (const candidate of resolveNameMatchCandidates(f)) {
+        if (normalizeText(candidate) === nn) return true;
+      }
+    }
+    if (
+      nn &&
+      flowsShareDisplayIntent(f, {
+        id: "__linked__",
+        tenantId: f.tenantId,
+        nickname: nn,
+        displayLabel: nn,
+        url: viewerUrl,
+        typebotPublicId: publicId,
+        typebotRemoteId: typebotId,
+        createdAt: "",
+      })
+    ) {
+      return true;
     }
   }
   return false;
@@ -654,6 +672,120 @@ const flowKeeperScore = (flow: SavedFlow): number => {
   if (String(flow.displayLabel ?? "").trim()) score += 4;
   if (String(flow.createdAt ?? "").trim()) score += 1;
   return score;
+};
+
+const normalizeFlowTitle = (value: string | undefined): string =>
+  normalizeText(value).replace(/\s+/g, " ").trim();
+
+const isMasterCatalogViewerUrl = (url: string): boolean => {
+  const normalized = normalizeText(url);
+  if (!normalized) return false;
+  for (const item of listSystemMasterLibrary()) {
+    const catalogUrl = String(item.viewerUrl ?? "").trim();
+    if (catalogUrl && normalizeText(catalogUrl) === normalized) return true;
+  }
+  return normalized.includes("/emprestimo-clt") && !normalized.includes("bxn7orp");
+};
+
+const pickSubscriberViewerUrl = (left: string, right: string): string => {
+  const leftUrl = String(left ?? "").trim();
+  const rightUrl = String(right ?? "").trim();
+  if (!leftUrl) return rightUrl;
+  if (!rightUrl) return leftUrl;
+  const leftIsMaster = isMasterCatalogViewerUrl(leftUrl);
+  const rightIsMaster = isMasterCatalogViewerUrl(rightUrl);
+  if (leftIsMaster && !rightIsMaster) return rightUrl;
+  if (rightIsMaster && !leftIsMaster) return leftUrl;
+  return rightUrl.length >= leftUrl.length ? rightUrl : leftUrl;
+};
+
+/** Mesmo bot no assinante (biblioteca master + workspace, títulos parecidos ou mesmo publicId). */
+export const flowsShareDisplayIntent = (left: SavedFlow, right: SavedFlow): boolean => {
+  if (left.id === right.id) return false;
+
+  const leftRemote = String(left.typebotRemoteId ?? "").trim();
+  const rightRemote = String(right.typebotRemoteId ?? "").trim();
+  if (leftRemote && rightRemote && leftRemote === rightRemote) return true;
+
+  const leftPid = flowPublicIdKey(left);
+  const rightPid = flowPublicIdKey(right);
+  if (leftPid && rightPid && leftPid === rightPid) return true;
+
+  const leftTitle = normalizeFlowTitle(String(left.displayLabel ?? left.nickname ?? ""));
+  const rightTitle = normalizeFlowTitle(String(right.displayLabel ?? right.nickname ?? ""));
+  if (leftTitle && rightTitle) {
+    if (leftTitle === rightTitle) return true;
+    if (
+      leftTitle.length >= 12 &&
+      rightTitle.length >= 12 &&
+      (leftTitle.includes(rightTitle) || rightTitle.includes(leftTitle))
+    ) {
+      return true;
+    }
+  }
+
+  const leftCandidates = new Set(resolveNameMatchCandidates(left).map((name) => normalizeFlowTitle(name)));
+  const rightCandidates = new Set(resolveNameMatchCandidates(right).map((name) => normalizeFlowTitle(name)));
+  if (rightTitle && leftCandidates.has(rightTitle)) return true;
+  if (leftTitle && rightCandidates.has(leftTitle)) return true;
+
+  return false;
+};
+
+const mergeDuplicateFlowCluster = (cluster: SavedFlow[]): Partial<SavedFlow> => {
+  const sorted = [...cluster].sort((a, b) => flowKeeperScore(b) - flowKeeperScore(a));
+  let librarySourceId = "";
+  let typebotRemoteId = "";
+  let typebotPublicId = "";
+  let url = "";
+  let displayLabel = "";
+  let nickname = "";
+
+  for (const flow of sorted) {
+    librarySourceId = librarySourceId || String(flow.librarySourceId ?? "").trim();
+    typebotRemoteId = typebotRemoteId || String(flow.typebotRemoteId ?? "").trim();
+    typebotPublicId = typebotPublicId || String(flow.typebotPublicId ?? "").trim();
+    url = pickSubscriberViewerUrl(url, String(flow.url ?? "").trim());
+    displayLabel = displayLabel || String(flow.displayLabel ?? "").trim();
+    nickname = nickname || String(flow.nickname ?? "").trim();
+  }
+
+  const patch: Partial<SavedFlow> = {};
+  if (librarySourceId) patch.librarySourceId = librarySourceId;
+  if (typebotRemoteId) patch.typebotRemoteId = typebotRemoteId;
+  if (typebotPublicId) patch.typebotPublicId = typebotPublicId;
+  if (url) patch.url = url;
+  if (displayLabel) patch.displayLabel = displayLabel;
+  if (nickname) patch.nickname = nickname;
+  return patch;
+};
+
+/** Evita criar 3º registro no handoff quando biblioteca + workspace já existem. */
+export const tenantFlowAlreadyRegistered = (
+  flows: SavedFlow[],
+  params: { viewerUrl?: string; displayLabel?: string; sourceFlowLabel?: string },
+): boolean => {
+  const viewerUrl = String(params.viewerUrl ?? "").trim();
+  const viewerPid = normalizeText(typebotPublicIdFromViewerUrl(viewerUrl) ?? "");
+  const labelProbe = normalizeFlowTitle(params.displayLabel ?? params.sourceFlowLabel ?? "");
+
+  for (const flow of flows) {
+    if (viewerPid && flowPublicIdKey(flow) === viewerPid) return true;
+    if (viewerUrl && normalizeText(flow.url) === normalizeText(viewerUrl)) return true;
+    if (!labelProbe) continue;
+    const flowLabel = normalizeFlowTitle(String(flow.displayLabel ?? flow.nickname ?? ""));
+    if (flowLabel && (flowLabel === labelProbe || flowsShareDisplayIntent(flow, {
+      id: "__probe__",
+      tenantId: flow.tenantId,
+      nickname: labelProbe,
+      displayLabel: labelProbe,
+      url: viewerUrl,
+      createdAt: "",
+    }))) {
+      return true;
+    }
+  }
+  return false;
 };
 
 const flowIdentityKey = (flow: SavedFlow): string => {
@@ -674,7 +806,6 @@ export const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => 
   const groups = new Map<string, SavedFlow[]>();
 
   for (const flow of flows) {
-    if (isExplicitSystemDefaultLibraryCopy(flow)) continue;
     const key = flowIdentityKey(flow);
     if (!key) continue;
     const bucket = groups.get(key) ?? [];
@@ -686,6 +817,8 @@ export const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => 
   for (const bucket of groups.values()) {
     if (bucket.length <= 1) continue;
     const sorted = [...bucket].sort((a, b) => flowKeeperScore(b) - flowKeeperScore(a));
+    const keeper = sorted[0];
+    flowRepository.updateById(keeper.id, mergeDuplicateFlowCluster(sorted));
     for (const flow of sorted.slice(1)) {
       flowRepository.removeById(flow.id);
       removed += 1;
@@ -694,35 +827,39 @@ export const dedupeTenantFlowsByTypebotIdentity = (tenantId: string): number => 
   return removed;
 };
 
-/** Funde registros com o mesmo nome exibido (ex.: biblioteca com URL matriz + cópias workspace). */
+/** Funde biblioteca master + workspace (título/publicId parecidos) num único registro. */
 export const dedupeTenantFlowsByDisplayTitle = (tenantId: string): number => {
   const flows = flowRepository.listByTenant(tenantId);
-  const groups = new Map<string, SavedFlow[]>();
-
-  for (const flow of flows) {
-    if (isExplicitSystemDefaultLibraryCopy(flow)) continue;
-    const title = normalizeText(String(flow.displayLabel ?? flow.nickname ?? "").trim());
-    if (!title) continue;
-    const bucket = groups.get(title) ?? [];
-    bucket.push(flow);
-    groups.set(title, bucket);
-  }
-
+  const consumed = new Set<string>();
   let removed = 0;
-  for (const bucket of groups.values()) {
-    if (bucket.length <= 1) continue;
-    const sorted = [...bucket].sort((a, b) => flowKeeperScore(b) - flowKeeperScore(a));
-    for (const flow of sorted.slice(1)) {
-      flowRepository.removeById(flow.id);
+
+  for (let index = 0; index < flows.length; index += 1) {
+    const seed = flows[index];
+    if (!seed || consumed.has(seed.id)) continue;
+
+    const cluster = flows.filter(
+      (candidate) => !consumed.has(candidate.id) && flowsShareDisplayIntent(seed, candidate),
+    );
+    if (cluster.length <= 1) continue;
+
+    const sorted = [...cluster].sort((a, b) => flowKeeperScore(b) - flowKeeperScore(a));
+    const keeper = sorted[0];
+    flowRepository.updateById(keeper.id, mergeDuplicateFlowCluster(sorted));
+    consumed.add(keeper.id);
+
+    for (const duplicate of sorted.slice(1)) {
+      flowRepository.removeById(duplicate.id);
+      consumed.add(duplicate.id);
       removed += 1;
     }
   }
+
   return removed;
 };
 
 export const dedupeTenantFlowsCompletely = (tenantId: string): { byIdentity: number; byTitle: number } => {
-  const byIdentity = dedupeTenantFlowsByTypebotIdentity(tenantId);
   const byTitle = dedupeTenantFlowsByDisplayTitle(tenantId);
+  const byIdentity = dedupeTenantFlowsByTypebotIdentity(tenantId);
   return { byIdentity, byTitle };
 };
 
@@ -983,6 +1120,28 @@ export const importManualWorkspaceTypebotsIntoTenantFlows = async (
 
     const viewerUrl = buildViewerUrl(viewerBase, publicId);
     if (flowAlreadyLinkedToWorkspaceTypebot(existingFlows, typebotId, publicId, viewerUrl, displayName)) {
+      continue;
+    }
+
+    const workspaceProbe: SavedFlow = {
+      id: "__import_probe__",
+      tenantId,
+      nickname: displayName,
+      displayLabel: displayName,
+      url: viewerUrl,
+      typebotPublicId: publicId,
+      typebotRemoteId: typebotId,
+      createdAt: "",
+    };
+    const intentMatch = existingFlows.find((flow) => flowsShareDisplayIntent(flow, workspaceProbe));
+    if (intentMatch) {
+      await applyWorkspaceRowToFlow(intentMatch, row, viewerBase);
+      const refreshed = flowRepository.getById(intentMatch.id);
+      if (refreshed) {
+        const idx = existingFlows.findIndex((flow) => flow.id === intentMatch.id);
+        if (idx >= 0) existingFlows[idx] = refreshed;
+        else existingFlows.push(refreshed);
+      }
       continue;
     }
 
